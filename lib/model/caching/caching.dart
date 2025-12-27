@@ -1,11 +1,4 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-// This is the provider your SearchEngineNotifier watches.
-// We override it in main.dart with the real instance.
-final preferencesServiceProvider = Provider<PreferencesService>((ref) {
-  throw UnimplementedError('PreferencesService not initialized');
-});
 
 class PreferencesService {
   final SharedPreferences _prefs;
@@ -13,12 +6,30 @@ class PreferencesService {
   PreferencesService(this._prefs);
 
   static const _keySearchEngine = 'selected_search_engine';
+  static const _keySearchHistory = 'search_history'; // New Key
 
+  // --- Search Engine ---
   String? getSearchEngine() {
     return _prefs.getString(_keySearchEngine);
   }
 
   Future<void> setSearchEngine(String engineKey) async {
     await _prefs.setString(_keySearchEngine, engineKey);
+  }
+
+  // --- Search History ---
+  // Returns the list of stored history items (as JSON strings)
+  List<String> getHistory() {
+    return _prefs.getStringList(_keySearchHistory) ?? [];
+  }
+
+  // Saves the list of history items
+  Future<void> setHistory(List<String> historyJsonList) async {
+    await _prefs.setStringList(_keySearchHistory, historyJsonList);
+  }
+  
+  // Clears the history completely (for the Fire Button or manual clear)
+  Future<void> clearHistory() async {
+    await _prefs.remove(_keySearchHistory);
   }
 }

@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:mira/model/search_engine.dart';
-import 'package:mira/model/search_model.dart';
+import 'package:mira/model/search_model.dart'; // Ensure this path is correct for your Search Model
 import 'package:mira/pages/branding_screen.dart';
+import 'package:mira/pages/history_screen.dart';
 import 'package:mira/pages/settings_screen.dart';
 
 // Providers
@@ -17,7 +18,6 @@ class Mainscreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // 1. Listen to the URL state for the Text Field
     final searchState = ref.watch(searchProvider);
     final currentUrl = searchState.url; 
     
@@ -32,7 +32,6 @@ class Mainscreen extends ConsumerWidget {
           if (await controller.canGoBack()) {
             controller.goBack();
           } else {
-            // If we are at the root, clear URL to show branding or close app
             if (currentUrl.isNotEmpty) {
                ref.read(searchProvider.notifier).updateUrl('');
             } else {
@@ -61,7 +60,6 @@ class Mainscreen extends ConsumerWidget {
             style: const TextStyle(color: Colors.white),
             textInputAction: TextInputAction.go,
             
-            // This controller ensures the text field shows what is in the provider
             controller: TextEditingController(text: currentUrl), 
             
             onSubmitted: (value) {
@@ -73,7 +71,9 @@ class Mainscreen extends ConsumerWidget {
                     finalUrl = ref.read(formattedSearchUrlProvider(value));
                  }
                  
-                 // FIX PART 1: Update the Provider AND the Controller manually
+                 // 1. SAVE TO HISTORY HERE
+                 ref.read(historyProvider.notifier).addToHistory(value);
+
                  ref.read(searchProvider.notifier).updateUrl(finalUrl);
                  ref.read(webViewControllerProvider)?.loadUrl(
                    urlRequest: URLRequest(url: WebUri(finalUrl))
@@ -102,31 +102,23 @@ class Mainscreen extends ConsumerWidget {
         body: currentUrl.isEmpty 
             ? const BrandingScreen()
             : InAppWebView(
-                // FIX PART 2: REMOVED THE KEY
-                // key: ValueKey(currentUrl), <-- THIS WAS CAUSING THE LOOP
-                
                 initialUrlRequest: URLRequest(url: WebUri(currentUrl)),
                 initialSettings: InAppWebViewSettings(
                   incognito: true,   
                   clearCache: true,
                   useHybridComposition: true,
                 ),
-                
                 onWebViewCreated: (controller) {
                   ref.read(webViewControllerProvider.notifier).state = controller;
                 },
-
                 onProgressChanged: (controller, progress) {
                   ref.read(loadingProgressProvider.notifier).state = progress;
                 },
-                
                 onLoadStop: (controller, url) {
                    if (url != null) {
-                     // Sync the address bar with the actual page
                      ref.read(searchProvider.notifier).updateUrl(url.toString());
                    }
                 },
-                
                 onPermissionRequest: (controller, request) async {
                   return PermissionResponse(
                     resources: request.resources,
@@ -153,9 +145,25 @@ class Mainscreen extends ConsumerWidget {
               ),
             ),
           ),
+          
+          // --- History Button ---
           ListTile(
-            leading: const Icon(Icons.search_outlined, color: Colors.white70),
-            title: const Text('Search Engine', style: TextStyle(color: Colors.white)),
+            leading: const Icon(Icons.history, color: Colors.white70),
+            title: const Text('History', style: TextStyle(color: Colors.white)),
+            onTap: () {
+              Navigator.pop(context); // Close Drawer
+              // Navigate to History Page
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const HistoryPage()),
+              );
+            },
+          ),
+
+          // --- Settings Button ---
+          ListTile(
+            leading: const Icon(Icons.settings_outlined, color: Colors.white70),
+            title: const Text('Settings', style: TextStyle(color: Colors.white)),
             onTap: () {
               Navigator.pop(context);
               showModalBottomSheet(

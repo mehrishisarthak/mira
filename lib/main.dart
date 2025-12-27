@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // Import this
-import 'package:mira/model/caching/caching.dart'; // Import your caching model
+import 'package:mira/model/search_engine.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:mira/model/caching/caching.dart'; // Imports PreferencesService CLASS
 import 'package:mira/pages/mainscreen.dart';
 
 void main() async {
