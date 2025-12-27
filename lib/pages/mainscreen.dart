@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:mira/model/search_engine.dart';
-import 'package:mira/model/search_model.dart'; // Ensure this path is correct for your Search Model
-import 'package:mira/pages/branding_screen.dart';
+import 'package:mira/model/search_model.dart'; // Keep for search settings
+import 'package:mira/model/tab_model.dart';
 import 'package:mira/pages/history_screen.dart';
+import 'package:mira/pages/tab_screen.dart';
+import 'package:mira/pages/branding_screen.dart';
 import 'package:mira/pages/settings_screen.dart';
 
 // Providers
@@ -18,8 +20,9 @@ class Mainscreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final searchState = ref.watch(searchProvider);
-    final currentUrl = searchState.url; 
+    final activeUrl = ref.watch(activeUrlProvider); 
+    final tabsState = ref.watch(tabsProvider);
+    final tabCount = tabsState.tabs.length;
     
     final double progress = ref.watch(loadingProgressProvider) / 100;
 
@@ -32,10 +35,12 @@ class Mainscreen extends ConsumerWidget {
           if (await controller.canGoBack()) {
             controller.goBack();
           } else {
-            if (currentUrl.isNotEmpty) {
-               ref.read(searchProvider.notifier).updateUrl('');
+            // If root of tab, clear URL
+            if (activeUrl.isNotEmpty) {
+               ref.read(tabsProvider.notifier).updateUrl('');
             } else {
-               if (context.mounted) Navigator.pop(context);
+               // Minimize app (don't pop, or use SystemNavigator.pop())
+               // if (context.mounted) Navigator.pop(context); 
             }
           }
         }
@@ -45,22 +50,19 @@ class Mainscreen extends ConsumerWidget {
         endDrawer: _buildDrawer(context),
         
         appBar: AppBar(
+          titleSpacing: 0,
+          leading: const Icon(Icons.search, color: Colors.white54),
           title: TextField(
             decoration: InputDecoration(
               hintText: 'Search or enter address',
               border: InputBorder.none,
-              prefixIcon: const Icon(Icons.search),
-              filled: true,
-              fillColor: Colors.white10,
-              contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-              isDense: true,
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide.none),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide.none),
+              hintStyle: const TextStyle(color: Colors.white30),
             ),
             style: const TextStyle(color: Colors.white),
             textInputAction: TextInputAction.go,
             
-            controller: TextEditingController(text: currentUrl), 
+            // Sync with Active Tab URL
+            controller: TextEditingController(text: activeUrl)..selection = TextSelection.collapsed(offset: activeUrl.length),
             
             onSubmitted: (value) {
               if (value.isNotEmpty) {
@@ -71,10 +73,13 @@ class Mainscreen extends ConsumerWidget {
                     finalUrl = ref.read(formattedSearchUrlProvider(value));
                  }
                  
-                 // 1. SAVE TO HISTORY HERE
+                 // Save to History
                  ref.read(historyProvider.notifier).addToHistory(value);
 
-                 ref.read(searchProvider.notifier).updateUrl(finalUrl);
+                 // UPDATE TAB PROVIDER
+                 ref.read(tabsProvider.notifier).updateUrl(finalUrl);
+                 
+                 // Load in WebView
                  ref.read(webViewControllerProvider)?.loadUrl(
                    urlRequest: URLRequest(url: WebUri(finalUrl))
                  );
@@ -82,6 +87,34 @@ class Mainscreen extends ConsumerWidget {
             },
           ),
           actions: [
+            // --- TAB SWITCHER BUTTON ---
+            InkWell(
+              onTap: () {
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (context) => const FractionallySizedBox(
+                    heightFactor: 0.8, // Take up 80% of screen
+                    child: TabsSheet(),
+                  ),
+                );
+              },
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.white24, width: 1.5),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  "$tabCount", 
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+
+            // Menu Button
             IconButton(
               icon: const Icon(Icons.more_vert),
               onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
@@ -99,10 +132,14 @@ class Mainscreen extends ConsumerWidget {
             : null,
         ),
 
-        body: currentUrl.isEmpty 
+        // 2. BODY DEPENDS ON ACTIVE TAB URL
+        body: activeUrl.isEmpty 
             ? const BrandingScreen()
             : InAppWebView(
-                initialUrlRequest: URLRequest(url: WebUri(currentUrl)),
+                // Key ensures WebView rebuilds when switching tabs (Pseudo-tabs strategy)
+                key: ValueKey(tabsState.activeTab.id), 
+                
+                initialUrlRequest: URLRequest(url: WebUri(activeUrl)),
                 initialSettings: InAppWebViewSettings(
                   incognito: true,   
                   clearCache: true,
@@ -116,7 +153,13 @@ class Mainscreen extends ConsumerWidget {
                 },
                 onLoadStop: (controller, url) {
                    if (url != null) {
-                     ref.read(searchProvider.notifier).updateUrl(url.toString());
+                     // Sync Tab Title and URL
+                     ref.read(tabsProvider.notifier).updateUrl(url.toString());
+                   }
+                },
+                onTitleChanged: (controller, title) {
+                   if (title != null) {
+                     ref.read(tabsProvider.notifier).updateTitle(title);
                    }
                 },
                 onPermissionRequest: (controller, request) async {
@@ -146,13 +189,11 @@ class Mainscreen extends ConsumerWidget {
             ),
           ),
           
-          // --- History Button ---
           ListTile(
             leading: const Icon(Icons.history, color: Colors.white70),
             title: const Text('History', style: TextStyle(color: Colors.white)),
             onTap: () {
-              Navigator.pop(context); // Close Drawer
-              // Navigate to History Page
+              Navigator.pop(context); 
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const HistoryPage()),
@@ -160,7 +201,6 @@ class Mainscreen extends ConsumerWidget {
             },
           ),
 
-          // --- Settings Button ---
           ListTile(
             leading: const Icon(Icons.settings_outlined, color: Colors.white70),
             title: const Text('Settings', style: TextStyle(color: Colors.white)),
