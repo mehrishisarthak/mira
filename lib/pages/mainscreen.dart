@@ -1,17 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+
+// Models & Providers
 import 'package:mira/model/ghost_model.dart';
 import 'package:mira/model/search_engine.dart';
-import 'package:mira/model/security_model.dart'; // Ensure this file exists
-import 'package:mira/model/tab_model.dart'; // Ensure this file exists
+import 'package:mira/model/security_model.dart'; 
+import 'package:mira/model/tab_model.dart';
+import 'package:mira/pages/fire_overlay.dart'; 
+
+// UI Pages
 import 'package:mira/pages/branding_screen.dart';
 import 'package:mira/pages/history_screen.dart';
 import 'package:mira/pages/settings_screen.dart';
-import 'package:mira/pages/tab_screen.dart'; // Ensure this matches your filename (tabs_sheet.dart?)
+import 'package:mira/pages/tab_screen.dart'; 
 
+// Local Providers
 final loadingProgressProvider = StateProvider<int>((ref) => 0);
 final webViewControllerProvider = StateProvider<InAppWebViewController?>((ref) => null);
+final isNukingProvider = StateProvider<bool>((ref) => false); 
 
 class Mainscreen extends ConsumerWidget {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
@@ -20,26 +27,24 @@ class Mainscreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // 1. WATCH THE MODE
+    // 1. WATCH STATE
     final isGhost = ref.watch(isGhostModeProvider);
-    
-    // 2. USE SMART PROVIDERS
     final activeTab = ref.watch(currentActiveTabProvider);
     final activeUrl = activeTab.url;
-    
     final currentTabsList = ref.watch(currentTabListProvider);
     final tabCount = currentTabsList.length;
-
-    // 3. WATCH SECURITY
     final securityState = ref.watch(securityProvider);
     final double progress = ref.watch(loadingProgressProvider) / 100;
+    
+    // Watch Nuke State
+    final isNuking = ref.watch(isNukingProvider);
 
-    // --- THEME LOGIC ---
+    // 2. THEME LOGIC
     final backgroundColor = isGhost ? Colors.black : const Color(0xFF121212);
     final appBarColor = isGhost ? const Color(0xFF100000) : const Color(0xFF1E1E1E);
     final accentColor = isGhost ? Colors.redAccent : Colors.white;
 
-    // --- CRASH FIX: LISTENER ---
+    // 3. CRASH FIX: LISTENER
     ref.listen(securityProvider, (previous, next) async {
       final controller = ref.read(webViewControllerProvider);
       if (controller == null) return;
@@ -69,7 +74,6 @@ class Mainscreen extends ConsumerWidget {
             controller.goBack();
           } else {
             if (activeUrl.isNotEmpty) {
-               // Standardized Update Call
                if (isGhost) {
                  ref.read(ghostTabsProvider.notifier).updateUrl('');
                } else {
@@ -110,12 +114,9 @@ class Mainscreen extends ConsumerWidget {
                     finalUrl = ref.read(formattedSearchUrlProvider(value));
                  }
                  
-                 // --- BRANCH LOGIC ---
                  if (isGhost) {
-                    // Update Ghost Tab (No History)
                     ref.read(ghostTabsProvider.notifier).updateUrl(finalUrl);
                  } else {
-                    // Update Normal Tab & Save History
                     ref.read(historyProvider.notifier).addToHistory(value);
                     ref.read(tabsProvider.notifier).updateUrl(finalUrl);
                  }
@@ -127,7 +128,17 @@ class Mainscreen extends ConsumerWidget {
             },
           ),
           actions: [
-            // Tab Switcher
+            // --- FIRE NUKE BUTTON (Top Right) ---
+            if (!isNuking) 
+              IconButton(
+                icon: const Icon(Icons.local_fire_department, color: Colors.redAccent),
+                tooltip: "Clear All Data",
+                onPressed: () {
+                   ref.read(isNukingProvider.notifier).state = true;
+                },
+              ),
+
+            // --- TAB SWITCHER ---
             InkWell(
               onTap: () {
                 showModalBottomSheet(
@@ -153,6 +164,8 @@ class Mainscreen extends ConsumerWidget {
                 ),
               ),
             ),
+            
+            // --- MENU ---
             IconButton(
               icon: Icon(Icons.more_vert, color: accentColor),
               onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
@@ -170,72 +183,95 @@ class Mainscreen extends ConsumerWidget {
             : null,
         ),
 
-        body: activeUrl.isEmpty 
-            ? const BrandingScreen()
-            : InAppWebView(
-                // Use Key to force rebuild when switching modes
-                key: ValueKey("${isGhost ? 'G' : 'N'}_${activeTab.id}"),
-                
-                initialUrlRequest: URLRequest(url: WebUri(activeUrl)),
-                
-                initialSettings: InAppWebViewSettings(
-                  incognito: isGhost || securityState.isIncognito, 
-                  clearCache: isGhost || securityState.isIncognito,
-                  useHybridComposition: true,
-                  userAgent: securityState.isDesktopMode 
-                      ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" 
-                      : "",
-                  preferredContentMode: securityState.isDesktopMode 
-                      ? UserPreferredContentMode.DESKTOP 
-                      : UserPreferredContentMode.MOBILE,
-                ),
-                
-                onWebViewCreated: (controller) {
-                  ref.read(webViewControllerProvider.notifier).state = controller;
-                },
-                onProgressChanged: (controller, progress) {
-                  ref.read(loadingProgressProvider.notifier).state = progress;
-                },
-                onLoadStop: (controller, url) {
-                   if (url != null) {
-                     if (isGhost) {
-                        ref.read(ghostTabsProvider.notifier).updateUrl(url.toString());
-                     } else {
-                        ref.read(tabsProvider.notifier).updateUrl(url.toString());
+        // --- BODY STACK ---
+        body: Stack(
+          children: [
+            // Layer 1: The Browser Content
+            activeUrl.isEmpty 
+              ? const BrandingScreen()
+              : InAppWebView(
+                  key: ValueKey("${isGhost ? 'G' : 'N'}_${activeTab.id}"),
+                  initialUrlRequest: URLRequest(url: WebUri(activeUrl)),
+                  initialSettings: InAppWebViewSettings(
+                    incognito: isGhost || securityState.isIncognito, 
+                    clearCache: isGhost || securityState.isIncognito,
+                    useHybridComposition: true,
+                    userAgent: securityState.isDesktopMode 
+                        ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" 
+                        : "",
+                    preferredContentMode: securityState.isDesktopMode 
+                        ? UserPreferredContentMode.DESKTOP 
+                        : UserPreferredContentMode.MOBILE,
+                  ),
+                  onWebViewCreated: (controller) {
+                    ref.read(webViewControllerProvider.notifier).state = controller;
+                  },
+                  onProgressChanged: (controller, progress) {
+                    ref.read(loadingProgressProvider.notifier).state = progress;
+                  },
+                  onLoadStop: (controller, url) {
+                     if (url != null) {
+                       if (isGhost) {
+                          ref.read(ghostTabsProvider.notifier).updateUrl(url.toString());
+                       } else {
+                          ref.read(tabsProvider.notifier).updateUrl(url.toString());
+                       }
                      }
-                   }
-                },
-                onTitleChanged: (controller, title) {
-                   if (title != null) {
-                     if (isGhost) {
-                        ref.read(ghostTabsProvider.notifier).updateTitle(title);
-                     } else {
-                        ref.read(tabsProvider.notifier).updateTitle(title);
+                  },
+                  onTitleChanged: (controller, title) {
+                     if (title != null) {
+                       if (isGhost) {
+                          ref.read(ghostTabsProvider.notifier).updateTitle(title);
+                       } else {
+                          ref.read(tabsProvider.notifier).updateTitle(title);
+                       }
                      }
-                   }
-                },
-                
-                // Security Gates
-                onPermissionRequest: (controller, request) async {
-                  final resources = request.resources;
-                  if (securityState.isLocationBlocked && resources.contains(PermissionResourceType.DEVICE_ORIENTATION_AND_MOTION)) {
-                      return PermissionResponse(resources: resources, action: PermissionResponseAction.DENY);
-                  }
-                  if (securityState.isCameraBlocked) {
-                    if (resources.contains(PermissionResourceType.CAMERA) || 
-                        resources.contains(PermissionResourceType.MICROPHONE)) {
-                      return PermissionResponse(resources: resources, action: PermissionResponseAction.DENY);
+                  },
+                  onPermissionRequest: (controller, request) async {
+                    final resources = request.resources;
+                    if (securityState.isLocationBlocked && resources.contains(PermissionResourceType.DEVICE_ORIENTATION_AND_MOTION)) {
+                        return PermissionResponse(resources: resources, action: PermissionResponseAction.DENY);
                     }
-                  }
-                  return PermissionResponse(resources: resources, action: PermissionResponseAction.DENY);
-                },
-                onGeolocationPermissionsShowPrompt: (controller, origin) async {
-                   if (securityState.isLocationBlocked) {
-                     return GeolocationPermissionShowPromptResponse(origin: origin, allow: false, retain: false);
-                   }
-                   return GeolocationPermissionShowPromptResponse(origin: origin, allow: true, retain: false);
-                },
-              ),
+                    if (securityState.isCameraBlocked) {
+                      if (resources.contains(PermissionResourceType.CAMERA) || 
+                          resources.contains(PermissionResourceType.MICROPHONE)) {
+                        return PermissionResponse(resources: resources, action: PermissionResponseAction.DENY);
+                      }
+                    }
+                    return PermissionResponse(resources: resources, action: PermissionResponseAction.DENY);
+                  },
+                  onGeolocationPermissionsShowPrompt: (controller, origin) async {
+                     if (securityState.isLocationBlocked) {
+                       return GeolocationPermissionShowPromptResponse(origin: origin, allow: false, retain: false);
+                     }
+                     return GeolocationPermissionShowPromptResponse(origin: origin, allow: true, retain: false);
+                  },
+                ),
+
+            // Layer 2: The Fire Animation
+            CinematicNukeOverlay(
+              isTriggered: isNuking,
+              onAnimationComplete: () async {
+                 // --- CLEANUP LOGIC ---
+                 
+                 // 1. Clear Web Cache & Cookies
+                 await InAppWebViewController.clearAllCache();
+                 final cookieManager = CookieManager.instance();
+                 await cookieManager.deleteAllCookies();
+
+                 // 2. Clear History
+                 ref.read(historyProvider.notifier).clearHistory();
+
+                 // 3. Nuke All Tabs
+                 ref.read(tabsProvider.notifier).nuke();
+                 ref.read(ghostTabsProvider.notifier).nuke();
+
+                 // 4. Reset UI
+                 ref.read(isNukingProvider.notifier).state = false;
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -266,25 +302,14 @@ class Mainscreen extends ConsumerWidget {
             child: Text("SECURITY PROTOCOLS", style: TextStyle(color: isGhost ? Colors.redAccent : Colors.greenAccent, fontSize: 12, fontWeight: FontWeight.bold)),
           ),
 
-          // GHOST MODE SWITCH
-          SwitchListTile(
-            title: const Text("Ghost Mode", style: TextStyle(color: Colors.white)),
-            subtitle: const Text("Separate session, RAM only", style: TextStyle(color: Colors.white54, fontSize: 12)),
-            secondary: Icon(Icons.privacy_tip, color: isGhost ? Colors.redAccent : Colors.white54),
-            value: isGhost,
-            activeColor: Colors.redAccent,
-            onChanged: (val) {
-               // 1. Toggle Mode
-               ref.read(isGhostModeProvider.notifier).state = val;
-               
-               // 2. LOGIC FIX: Do NOT overwrite the user's permanent Incognito preference.
-               // The WebView automatically handles incognito logic via (isGhost || pref.isIncognito)
-               
-               // 3. Clear ghost tabs when turning off?
-               if (!val) {
-                 ref.read(ghostTabsProvider.notifier).nuke();
-               }
-
+          // GHOST MODE BUTTON
+          ListTile(
+            title: const Text("New Ghost Tab", style: TextStyle(color: Colors.white)),
+            subtitle: const Text("Start a private session", style: TextStyle(color: Colors.white54, fontSize: 12)),
+            leading: const Icon(Icons.privacy_tip_outlined, color: Colors.white70),
+            onTap: () {
+               ref.read(isGhostModeProvider.notifier).state = true;
+               ref.read(ghostTabsProvider.notifier).addTab();
                Navigator.pop(context);
             },
           ),
@@ -320,7 +345,7 @@ class Mainscreen extends ConsumerWidget {
 
           const Divider(color: Colors.white24),
 
-          // History (Disabled in Ghost Mode)
+          // History
           ListTile(
             leading: Icon(Icons.history, color: isGhost ? Colors.white24 : Colors.white70),
             title: Text('History', style: TextStyle(color: isGhost ? Colors.white24 : Colors.white)),

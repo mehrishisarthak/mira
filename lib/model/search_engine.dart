@@ -1,11 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mira/model/caching/caching.dart'; 
 import 'package:mira/model/history_model.dart';
-import '../constants/search_engines.dart';
+import '../constants/search_engines.dart'; // Ensure this path is correct
 
-// --- 0. PREFERENCES PROVIDER (The Missing Link) ---
-// We define it here so other providers can watch it.
-// It throws an error until you override it in main.dart.
+// --- 0. PREFERENCES PROVIDER ---
+// Needs to be overridden in main.dart
 final preferencesServiceProvider = Provider<PreferencesService>((ref) {
   throw UnimplementedError('PreferencesService must be overridden in main.dart');
 });
@@ -38,7 +37,7 @@ final searchEngineProvider = StateNotifierProvider<SearchEngineNotifier, String>
   return SearchEngineNotifier(prefsService);
 });
 
-// --- 2. HISTORY PROVIDER (New!) ---
+// --- 2. HISTORY PROVIDER ---
 class HistoryNotifier extends StateNotifier<List<HistoryItem>> {
   final PreferencesService _prefsService;
 
@@ -79,7 +78,8 @@ class HistoryNotifier extends StateNotifier<List<HistoryItem>> {
     _saveToPrefs();
   }
 
-  Future<void> clearAllHistory() async {
+  // Updated name to match Mainscreen call
+  Future<void> clearHistory() async {
     state = [];
     await _prefsService.clearHistory();
   }
@@ -95,10 +95,7 @@ final historyProvider = StateNotifierProvider<HistoryNotifier, List<HistoryItem>
   return HistoryNotifier(prefsService);
 });
 
-// --- 3. CURRENT URL PROVIDER ---
-final currentUrlProvider = StateProvider<String>((ref) => '');
-
-// --- 4. COMPUTED LOGIC ---
+// --- 3. COMPUTED LOGIC ---
 final formattedSearchUrlProvider = Provider.family<String, String>((ref, query) {
   final currentEngine = ref.watch(searchEngineProvider);
   final baseUrl = SearchEngines.getSearchUrl(currentEngine);

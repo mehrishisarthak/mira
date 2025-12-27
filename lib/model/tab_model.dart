@@ -2,9 +2,9 @@ import 'dart:convert'; // Required for JSON
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mira/model/search_engine.dart';
 import 'package:uuid/uuid.dart';
-import 'package:mira/model/caching/caching.dart';
+import 'package:mira/model/caching/caching.dart'; 
 
-// --- 1. THE MODEL (With JSON Support) ---
+// --- 1. THE MODEL ---
 class BrowserTab {
   final String id;
   final String url;
@@ -32,7 +32,6 @@ class BrowserTab {
     );
   }
 
-  // Convert to Map for saving
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -41,7 +40,6 @@ class BrowserTab {
     };
   }
 
-  // Create from Map for loading
   factory BrowserTab.fromMap(Map<String, dynamic> map) {
     return BrowserTab(
       id: map['id'],
@@ -64,16 +62,13 @@ class TabsState {
   BrowserTab get activeTab => tabs[activeIndex];
 }
 
-// --- 3. THE NOTIFIER (With Persistence) ---
+// --- 3. THE NOTIFIER ---
 class TabsNotifier extends StateNotifier<TabsState> {
   final PreferencesService _prefsService;
 
-  // Constructor loads saved tabs immediately
   TabsNotifier(this._prefsService) : super(TabsState(tabs: [BrowserTab()], activeIndex: 0)) {
     _loadTabs();
   }
-
-  // --- PERSISTENCE HELPERS ---
 
   void _loadTabs() {
     final savedJsonList = _prefsService.getSavedTabs();
@@ -82,16 +77,13 @@ class TabsNotifier extends StateNotifier<TabsState> {
     if (savedJsonList.isNotEmpty) {
       try {
         final loadedTabs = savedJsonList.map((str) => BrowserTab.fromJson(str)).toList();
-        
-        // Safety check: ensure index is within bounds
         int safeIndex = savedIndex;
         if (safeIndex < 0 || safeIndex >= loadedTabs.length) {
           safeIndex = 0;
         }
-
         state = TabsState(tabs: loadedTabs, activeIndex: safeIndex);
       } catch (e) {
-        // If data is corrupted, start fresh (silent fail)
+        // Corrupted data, start fresh
       }
     }
   }
@@ -101,22 +93,18 @@ class TabsNotifier extends StateNotifier<TabsState> {
     _prefsService.saveTabs(jsonList, state.activeIndex);
   }
 
-  // --- TAB ACTIONS ---
+  // --- ACTIONS ---
 
   void addTab({String url = ''}) {
     final newTab = BrowserTab(url: url);
-    final newList = [...state.tabs, newTab];
-    
-    state = TabsState(
-      tabs: newList,
-      activeIndex: newList.length - 1, 
-    );
+    final newTabs = [...state.tabs, newTab];
+    state = TabsState(tabs: newTabs, activeIndex: newTabs.length - 1);
     _saveToPrefs();
   }
 
   void closeTab(String tabId) {
     if (state.tabs.length == 1) {
-      updateUrl(''); // Don't close last tab, just clear it
+      updateUrl(''); 
       return;
     }
 
@@ -152,26 +140,29 @@ class TabsNotifier extends StateNotifier<TabsState> {
      _updateActiveTab((tab) => tab.copyWith(title: newTitle));
   }
 
-  // Helper function to update the active tab cleanly
+  // --- THE MISSING NUKE METHOD ---
+  // This resets the persistent tabs to a single blank tab
+  void nuke() {
+    state = TabsState(tabs: [BrowserTab()], activeIndex: 0);
+    _saveToPrefs(); // Save the "empty" state to disk immediately
+  }
+
   void _updateActiveTab(BrowserTab Function(BrowserTab) updater) {
     final currentTabs = [...state.tabs];
     final activeTab = currentTabs[state.activeIndex];
-    
     currentTabs[state.activeIndex] = updater(activeTab);
-    
     state = TabsState(tabs: currentTabs, activeIndex: state.activeIndex);
     _saveToPrefs();
   }
 }
 
 // --- 4. THE PROVIDER ---
-// Now watches the preferences service to inject into the notifier
 final tabsProvider = StateNotifierProvider<TabsNotifier, TabsState>((ref) {
   final prefsService = ref.watch(preferencesServiceProvider);
   return TabsNotifier(prefsService);
 });
 
-// --- 5. HELPER PROVIDER ---
+// --- 5. HELPER ---
 final activeUrlProvider = Provider<String>((ref) {
   final tabsState = ref.watch(tabsProvider);
   return tabsState.activeTab.url;

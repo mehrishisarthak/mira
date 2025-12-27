@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mira/model/search_engine.dart';
-import 'package:mira/model/search_model.dart';
+import 'package:mira/model/tab_model.dart';
 import 'package:mira/pages/mainscreen.dart';
 
 class HistoryPage extends ConsumerWidget {
@@ -11,7 +11,7 @@ class HistoryPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      backgroundColor: const Color(0xFF121212), // Match theme
+      backgroundColor: const Color(0xFF121212), 
       appBar: AppBar(
         title: const Text("History", style: TextStyle(color: Colors.white)),
         backgroundColor: const Color(0xFF1E1E1E),
@@ -23,7 +23,8 @@ class HistoryPage extends ConsumerWidget {
           IconButton(
             icon: const Icon(Icons.delete_sweep, color: Colors.redAccent),
             onPressed: () {
-               ref.read(historyProvider.notifier).clearAllHistory();
+               // FIX 1: Method name is clearHistory() in our provider
+               ref.read(historyProvider.notifier).clearHistory();
             },
             tooltip: "Clear All History",
           )
@@ -44,7 +45,6 @@ class HistoryList extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // 1. Watch the History Data
     final history = ref.watch(historyProvider);
 
     if (history.isEmpty) {
@@ -57,8 +57,8 @@ class HistoryList extends ConsumerWidget {
     }
 
     return ListView.separated(
-      shrinkWrap: true, // Important if inside another ScrollView
-      physics: const NeverScrollableScrollPhysics(), // Let the parent scroll
+      shrinkWrap: true, 
+      physics: const NeverScrollableScrollPhysics(), 
       itemCount: history.length,
       separatorBuilder: (context, index) => const Divider(height: 1, color: Colors.white10),
       itemBuilder: (context, index) {
@@ -73,19 +73,16 @@ class HistoryList extends ConsumerWidget {
             },
           ),
           
-          // 3. CLICK -> GO LOGIC
           onTap: () {
-            // A. Close keyboard/sheets if open
+            // 1. Close keyboard
             FocusManager.instance.primaryFocus?.unfocus();
             
-            // B. If we are on the History Page, we might need to pop back to Main
-            // But usually, we just update the provider and the Mainscreen (if active) reacts.
-            // If HistoryPage is a full screen route, we should pop it first.
+            // 2. Close History Page (Go back to Browser)
             if (Navigator.canPop(context)) {
                Navigator.pop(context);
             }
 
-            // C. Format the URL
+            // 3. Format URL
             String finalUrl;
             if (item.text.contains('.') && !item.text.contains(' ')) {
                finalUrl = "https://${item.text}";
@@ -93,8 +90,10 @@ class HistoryList extends ConsumerWidget {
                finalUrl = ref.read(formattedSearchUrlProvider(item.text));
             }
 
-            // D. Load it!
-            ref.read(searchProvider.notifier).updateUrl(finalUrl);
+            // FIX 2: Update the TAB provider, not the old search provider
+            ref.read(tabsProvider.notifier).updateUrl(finalUrl);
+            
+            // 4. Load in WebView
             ref.read(webViewControllerProvider)?.loadUrl(
                urlRequest: URLRequest(url: WebUri(finalUrl))
             );
