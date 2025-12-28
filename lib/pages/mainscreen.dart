@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:mira/model/ad_block_model.dart';
+import 'package:mira/model/book_mark_model.dart';
 import 'package:mira/model/download_model.dart';
 
 // Models & Providers
@@ -9,12 +10,14 @@ import 'package:mira/model/ghost_model.dart';
 import 'package:mira/model/search_engine.dart';
 import 'package:mira/model/security_model.dart'; 
 import 'package:mira/model/tab_model.dart';
+import 'package:mira/pages/book_marks_screen.dart';
 import 'package:mira/pages/downlaods_screen.dart';
+
 // UI Pages
 import 'package:mira/pages/branding_screen.dart';
 import 'package:mira/pages/history_screen.dart';
 import 'package:mira/pages/settings_screen.dart';
-import 'package:mira/pages/tab_screen.dart';
+import 'package:mira/pages/tab_screen.dart'; 
 
 // Local Providers
 final loadingProgressProvider = StateProvider<int>((ref) => 0);
@@ -36,6 +39,10 @@ class Mainscreen extends ConsumerWidget {
     final securityState = ref.watch(securityProvider);
     final double progress = ref.watch(loadingProgressProvider) / 100;
     
+    // Watch Bookmarks to update Star Icon color
+    final bookmarks = ref.watch(bookmarksProvider);
+    final isBookmarked = bookmarks.any((b) => b.url == activeUrl);
+
     // 2. THEME LOGIC
     final backgroundColor = isGhost ? Colors.black : const Color(0xFF121212);
     final appBarColor = isGhost ? const Color(0xFF100000) : const Color(0xFF1E1E1E);
@@ -100,6 +107,20 @@ class Mainscreen extends ConsumerWidget {
               hintText: isGhost ? 'Ghost Mode Active' : 'Search or enter address',
               border: InputBorder.none,
               hintStyle: TextStyle(color: isGhost ? Colors.red.withOpacity(0.3) : Colors.white30),
+              
+              // NEW: BOOKMARK STAR ICON
+              suffixIcon: activeUrl.isNotEmpty && !isGhost
+                  ? IconButton(
+                      icon: Icon(
+                        isBookmarked ? Icons.star : Icons.star_border,
+                        color: isBookmarked ? Colors.yellowAccent : Colors.white30,
+                        size: 20,
+                      ),
+                      onPressed: () {
+                         ref.read(bookmarksProvider.notifier).toggleBookmark(activeUrl, activeTab.title);
+                      },
+                    )
+                  : null,
             ),
             style: TextStyle(color: accentColor),
             textInputAction: TextInputAction.go,
@@ -128,6 +149,7 @@ class Mainscreen extends ConsumerWidget {
             },
           ),
           actions: [
+            // TAB SWITCHER
             InkWell(
               onTap: () {
                 showModalBottomSheet(
@@ -154,6 +176,7 @@ class Mainscreen extends ConsumerWidget {
               ),
             ),
             
+            // MENU BUTTON
             IconButton(
               icon: Icon(Icons.more_vert, color: accentColor),
               onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
@@ -171,6 +194,7 @@ class Mainscreen extends ConsumerWidget {
             : null,
         ),
 
+        // BODY - Clean, no animation overlays
         body: activeUrl.isEmpty 
           ? const BrandingScreen()
           : InAppWebView(
@@ -288,6 +312,20 @@ class Mainscreen extends ConsumerWidget {
             },
           ),
 
+          // NEW: BOOKMARKS
+          ListTile(
+            leading: const Icon(Icons.bookmark_border, color: Colors.white70),
+            title: const Text('Bookmarks', style: TextStyle(color: Colors.white)),
+            enabled: !isGhost,
+            onTap: isGhost ? null : () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const BookmarksPage()),
+              );
+            },
+          ),
+
           // Downloads
           ListTile(
             leading: const Icon(Icons.download, color: Colors.white70),
@@ -301,7 +339,7 @@ class Mainscreen extends ConsumerWidget {
             },
           ),
 
-          // Search Engine (Formerly Settings)
+          // Search Engine
           ListTile(
             leading: const Icon(Icons.search, color: Colors.white70),
             title: const Text('Search Engine', style: TextStyle(color: Colors.white)),

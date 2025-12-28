@@ -16,7 +16,10 @@ class PreferencesService {
   static const _keyLocation = 'mode_location'; 
   static const _keyCamera = 'mode_camera';     
   static const _keyDesktop = 'mode_desktop';
-  static const _keyAdBlock = 'mode_adblock'; // NEW: The Shield Key
+  static const _keyAdBlock = 'mode_adblock'; 
+  
+  // Bookmarks Key (NEW)
+  static const _keyBookmarks = 'saved_bookmarks';
 
   // --- SEARCH ENGINE ---
   String? getSearchEngine() => _prefs.getString(_keySearchEngine);
@@ -26,6 +29,10 @@ class PreferencesService {
   List<String> getHistory() => _prefs.getStringList(_keySearchHistory) ?? [];
   Future<void> setHistory(List<String> history) async => await _prefs.setStringList(_keySearchHistory, history);
   Future<void> clearHistory() async => await _prefs.remove(_keySearchHistory);
+
+  // --- BOOKMARKS (NEW) ---
+  List<String> getBookmarks() => _prefs.getStringList(_keyBookmarks) ?? [];
+  Future<void> setBookmarks(List<String> bookmarks) async => await _prefs.setStringList(_keyBookmarks, bookmarks);
 
   // --- TABS PERSISTENCE ---
   List<String> getSavedTabs() {
