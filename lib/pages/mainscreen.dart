@@ -1,24 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:mira/model/ad_block_model.dart';
+import 'package:mira/model/download_model.dart';
 
 // Models & Providers
 import 'package:mira/model/ghost_model.dart';
 import 'package:mira/model/search_engine.dart';
 import 'package:mira/model/security_model.dart'; 
 import 'package:mira/model/tab_model.dart';
-import 'package:mira/pages/fire_overlay.dart'; 
-
+import 'package:mira/pages/downlaods_screen.dart';
 // UI Pages
 import 'package:mira/pages/branding_screen.dart';
 import 'package:mira/pages/history_screen.dart';
 import 'package:mira/pages/settings_screen.dart';
-import 'package:mira/pages/tab_screen.dart'; 
+import 'package:mira/pages/tab_screen.dart';
 
 // Local Providers
 final loadingProgressProvider = StateProvider<int>((ref) => 0);
 final webViewControllerProvider = StateProvider<InAppWebViewController?>((ref) => null);
-final isNukingProvider = StateProvider<bool>((ref) => false); 
 
 class Mainscreen extends ConsumerWidget {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
@@ -36,20 +36,19 @@ class Mainscreen extends ConsumerWidget {
     final securityState = ref.watch(securityProvider);
     final double progress = ref.watch(loadingProgressProvider) / 100;
     
-    // Watch Nuke State
-    final isNuking = ref.watch(isNukingProvider);
-
     // 2. THEME LOGIC
     final backgroundColor = isGhost ? Colors.black : const Color(0xFF121212);
     final appBarColor = isGhost ? const Color(0xFF100000) : const Color(0xFF1E1E1E);
     final accentColor = isGhost ? Colors.redAccent : Colors.white;
 
-    // 3. CRASH FIX: LISTENER
+    // 3. SECURITY LISTENER
     ref.listen(securityProvider, (previous, next) async {
       final controller = ref.read(webViewControllerProvider);
       if (controller == null) return;
 
-      if (previous?.isDesktopMode != next.isDesktopMode) {
+      if (previous?.isDesktopMode != next.isDesktopMode || 
+          previous?.isAdBlockEnabled != next.isAdBlockEnabled) {
+        
         await controller.setSettings(
           settings: InAppWebViewSettings(
             preferredContentMode: next.isDesktopMode 
@@ -58,6 +57,7 @@ class Mainscreen extends ConsumerWidget {
             userAgent: next.isDesktopMode 
                 ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" 
                 : "",
+            contentBlockers: next.isAdBlockEnabled ? AdBlockService.adBlockRules : [],
           ),
         );
         controller.reload();
@@ -128,7 +128,6 @@ class Mainscreen extends ConsumerWidget {
             },
           ),
           actions: [
-            // --- TAB SWITCHER ---
             InkWell(
               onTap: () {
                 showModalBottomSheet(
@@ -155,7 +154,6 @@ class Mainscreen extends ConsumerWidget {
               ),
             ),
             
-            // --- MENU ---
             IconButton(
               icon: Icon(Icons.more_vert, color: accentColor),
               onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
@@ -173,72 +171,82 @@ class Mainscreen extends ConsumerWidget {
             : null,
         ),
 
-        // --- BODY STACK ---
-        body: Stack(
-          children: [
-            // Layer 1: The Browser Content
-            activeUrl.isEmpty 
-              ? const BrandingScreen()
-              : InAppWebView(
-                  key: ValueKey("${isGhost ? 'G' : 'N'}_${activeTab.id}"),
-                  initialUrlRequest: URLRequest(url: WebUri(activeUrl)),
-                  initialSettings: InAppWebViewSettings(
-                    incognito: isGhost || securityState.isIncognito, 
-                    clearCache: isGhost || securityState.isIncognito,
-                    useHybridComposition: true,
-                    userAgent: securityState.isDesktopMode 
-                        ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" 
-                        : "",
-                    preferredContentMode: securityState.isDesktopMode 
-                        ? UserPreferredContentMode.DESKTOP 
-                        : UserPreferredContentMode.MOBILE,
-                  ),
-                  onWebViewCreated: (controller) {
-                    ref.read(webViewControllerProvider.notifier).state = controller;
-                  },
-                  onProgressChanged: (controller, progress) {
-                    ref.read(loadingProgressProvider.notifier).state = progress;
-                  },
-                  onLoadStop: (controller, url) {
-                     if (url != null) {
-                       if (isGhost) {
-                          ref.read(ghostTabsProvider.notifier).updateUrl(url.toString());
-                       } else {
-                          ref.read(tabsProvider.notifier).updateUrl(url.toString());
-                       }
-                     }
-                  },
-                  onTitleChanged: (controller, title) {
-                     if (title != null) {
-                       if (isGhost) {
-                          ref.read(ghostTabsProvider.notifier).updateTitle(title);
-                       } else {
-                          ref.read(tabsProvider.notifier).updateTitle(title);
-                       }
-                     }
-                  },
-                  onPermissionRequest: (controller, request) async {
-                    final resources = request.resources;
-                    if (securityState.isLocationBlocked && resources.contains(PermissionResourceType.DEVICE_ORIENTATION_AND_MOTION)) {
-                        return PermissionResponse(resources: resources, action: PermissionResponseAction.DENY);
+        body: activeUrl.isEmpty 
+          ? const BrandingScreen()
+          : InAppWebView(
+              key: ValueKey("${isGhost ? 'G' : 'N'}_${activeTab.id}"),
+              initialUrlRequest: URLRequest(url: WebUri(activeUrl)),
+              initialSettings: InAppWebViewSettings(
+                incognito: isGhost || securityState.isIncognito, 
+                clearCache: isGhost || securityState.isIncognito,
+                useHybridComposition: true,
+                userAgent: securityState.isDesktopMode 
+                    ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" 
+                    : "",
+                preferredContentMode: securityState.isDesktopMode 
+                    ? UserPreferredContentMode.DESKTOP 
+                    : UserPreferredContentMode.MOBILE,
+                contentBlockers: securityState.isAdBlockEnabled ? AdBlockService.adBlockRules : [],
+              ),
+              onWebViewCreated: (controller) {
+                ref.read(webViewControllerProvider.notifier).state = controller;
+              },
+              onProgressChanged: (controller, progress) {
+                ref.read(loadingProgressProvider.notifier).state = progress;
+              },
+              onLoadStop: (controller, url) {
+                  if (url != null) {
+                    if (isGhost) {
+                      ref.read(ghostTabsProvider.notifier).updateUrl(url.toString());
+                    } else {
+                      ref.read(tabsProvider.notifier).updateUrl(url.toString());
                     }
-                    if (securityState.isCameraBlocked) {
-                      if (resources.contains(PermissionResourceType.CAMERA) || 
-                          resources.contains(PermissionResourceType.MICROPHONE)) {
-                        return PermissionResponse(resources: resources, action: PermissionResponseAction.DENY);
-                      }
+                  }
+              },
+              onTitleChanged: (controller, title) {
+                  if (title != null) {
+                    if (isGhost) {
+                      ref.read(ghostTabsProvider.notifier).updateTitle(title);
+                    } else {
+                      ref.read(tabsProvider.notifier).updateTitle(title);
                     }
+                  }
+              },
+              onDownloadStartRequest: (controller, downloadRequest) async {
+                  await DownloadManager.download(
+                      downloadRequest.url.toString(),
+                      filename: downloadRequest.suggestedFilename
+                  );
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text("Downloading ${downloadRequest.suggestedFilename ?? 'file'}..."),
+                        backgroundColor: Colors.green,
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  }
+              },
+              onPermissionRequest: (controller, request) async {
+                final resources = request.resources;
+                if (securityState.isLocationBlocked && resources.contains(PermissionResourceType.DEVICE_ORIENTATION_AND_MOTION)) {
                     return PermissionResponse(resources: resources, action: PermissionResponseAction.DENY);
-                  },
-                  onGeolocationPermissionsShowPrompt: (controller, origin) async {
-                     if (securityState.isLocationBlocked) {
-                       return GeolocationPermissionShowPromptResponse(origin: origin, allow: false, retain: false);
-                     }
-                     return GeolocationPermissionShowPromptResponse(origin: origin, allow: true, retain: false);
-                  },
-                ),
-          ],
-        ),
+                }
+                if (securityState.isCameraBlocked) {
+                  if (resources.contains(PermissionResourceType.CAMERA) || 
+                      resources.contains(PermissionResourceType.MICROPHONE)) {
+                    return PermissionResponse(resources: resources, action: PermissionResponseAction.DENY);
+                  }
+                }
+                return PermissionResponse(resources: resources, action: PermissionResponseAction.DENY);
+              },
+              onGeolocationPermissionsShowPrompt: (controller, origin) async {
+                  if (securityState.isLocationBlocked) {
+                    return GeolocationPermissionShowPromptResponse(origin: origin, allow: false, retain: false);
+                  }
+                  return GeolocationPermissionShowPromptResponse(origin: origin, allow: true, retain: false);
+              },
+            ),
       ),
     );
   }
@@ -264,111 +272,8 @@ class Mainscreen extends ConsumerWidget {
             ),
           ),
           
-          Padding(
-            padding: const EdgeInsets.only(left: 16, top: 10, bottom: 5),
-            child: Text("SECURITY PROTOCOLS", style: TextStyle(color: isGhost ? Colors.redAccent : Colors.greenAccent, fontSize: 12, fontWeight: FontWeight.bold)),
-          ),
-
-          // GHOST MODE BUTTON
-          ListTile(
-            title: const Text("New Ghost Tab", style: TextStyle(color: Colors.white)),
-            subtitle: const Text("Start a private session", style: TextStyle(color: Colors.white54, fontSize: 12)),
-            leading: const Icon(Icons.privacy_tip_outlined, color: Colors.white70),
-            onTap: () {
-               ref.read(isGhostModeProvider.notifier).state = true;
-               ref.read(ghostTabsProvider.notifier).addTab();
-               Navigator.pop(context);
-            },
-          ),
-
-          // NUKE BUTTON
-          //TODO : replace nuke icon with radioactive icon
-          ListTile(
-            title: const Text("Nuke", style: TextStyle(color: Colors.white)),
-            leading: const Icon(Icons.dangerous, color: Colors.redAccent),
-            trailing: IconButton(
-              icon: const Icon(Icons.info_outline, color: Colors.white70),
-              onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text("What is Nuke?"),
-                    content: const Text("Nuke clears all browsing data, including history, cache, and cookies. It also closes all tabs, giving you a fresh start."),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text("OK"),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-            onTap: () async {
-              // --- CLEANUP LOGIC ---
-              // 1. Clear Web Cache & Cookies
-              await InAppWebViewController.clearAllCache();
-              final cookieManager = CookieManager.instance();
-              await cookieManager.deleteAllCookies();
-
-              // 2. Clear History
-              ref.read(historyProvider.notifier).clearHistory();
-
-              // 3. Nuke All Tabs
-              ref.read(tabsProvider.notifier).nuke();
-              ref.read(ghostTabsProvider.notifier).nuke();
-
-              // 4. Show Snackbar
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: const Text("History and cache has been cleared."),
-                  backgroundColor: Colors.green,
-                ),
-              );
-
-              // 5. Close Drawer
-              Navigator.pop(context);
-            },
-          ),
-
-          // LOCATION LOCK
-          SwitchListTile(
-            title: const Text("Location Lock", style: TextStyle(color: Colors.white)),
-            secondary: Icon(Icons.location_off, color: securityState.isLocationBlocked ? Colors.greenAccent : Colors.white54),
-            value: securityState.isLocationBlocked,
-            activeColor: Colors.greenAccent,
-            onChanged: (val) => ref.read(securityProvider.notifier).toggleLocation(val),
-          ),
-
-          // SENSOR LOCK
-          SwitchListTile(
-            title: const Text("Sensor Lock", style: TextStyle(color: Colors.white)),
-            secondary: Icon(Icons.mic_off, color: securityState.isCameraBlocked ? Colors.greenAccent : Colors.white54),
-            value: securityState.isCameraBlocked,
-            activeColor: Colors.greenAccent,
-            onChanged: (val) => ref.read(securityProvider.notifier).toggleCamera(val),
-          ),
-
-          const Divider(color: Colors.white24),
-
-          Padding(
-            padding: const EdgeInsets.only(left: 16, top: 10, bottom: 5),
-            child: Text("CUSTOMIZATION", style: TextStyle(color: Colors.blueAccent, fontSize: 12, fontWeight: FontWeight.bold)),
-          ),
-
-           // DESKTOP MODE
-          SwitchListTile(
-            title: const Text("Desktop Mode", style: TextStyle(color: Colors.white)),
-            secondary: Icon(Icons.desktop_windows, color: securityState.isDesktopMode ? Colors.blueAccent : Colors.white54),
-            value: securityState.isDesktopMode,
-            activeColor: Colors.blueAccent,
-            onChanged: (val) {
-               ref.read(securityProvider.notifier).toggleDesktop(val);
-            },
-          ),
-
-          const Divider(color: Colors.white24),
-
+          // --- SECTION 1: ESSENTIALS (Top) ---
+          
           // History
           ListTile(
             leading: Icon(Icons.history, color: isGhost ? Colors.white24 : Colors.white70),
@@ -383,6 +288,20 @@ class Mainscreen extends ConsumerWidget {
             },
           ),
 
+          // Downloads
+          ListTile(
+            leading: const Icon(Icons.download, color: Colors.white70),
+            title: const Text('Downloads', style: TextStyle(color: Colors.white)),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const DownloadsPage()),
+              );
+            },
+          ),
+
+          // Search Engine (Formerly Settings)
           ListTile(
             leading: const Icon(Icons.search, color: Colors.white70),
             title: const Text('Search Engine', style: TextStyle(color: Colors.white)),
@@ -393,6 +312,113 @@ class Mainscreen extends ConsumerWidget {
                 backgroundColor: Colors.transparent,
                 builder: (context) => const SettingsSheet(),
               );
+            },
+          ),
+
+          const Divider(color: Colors.white24),
+
+          // --- SECTION 2: SECURITY PROTOCOLS ---
+          
+          Padding(
+            padding: const EdgeInsets.only(left: 16, top: 10, bottom: 5),
+            child: Text("SECURITY PROTOCOLS", style: TextStyle(color: isGhost ? Colors.redAccent : Colors.greenAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+          ),
+
+          // Ghost Tab
+          ListTile(
+            title: const Text("New Ghost Tab", style: TextStyle(color: Colors.white)),
+            subtitle: const Text("Start a private session", style: TextStyle(color: Colors.white54, fontSize: 12)),
+            leading: const Icon(Icons.privacy_tip_outlined, color: Colors.white70),
+            onTap: () {
+               ref.read(isGhostModeProvider.notifier).state = true;
+               ref.read(ghostTabsProvider.notifier).addTab();
+               Navigator.pop(context);
+            },
+          ),
+
+          // Nuke Data
+          ListTile(
+            title: const Text("Nuke Data", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+            leading: const Icon(Icons.delete_forever, color: Colors.redAccent),
+            onTap: () async {
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  backgroundColor: const Color(0xFF2C2C2C),
+                  title: const Text("Nuke Everything?", style: TextStyle(color: Colors.white)),
+                  content: const Text("This will wipe all history, cookies, cache, and close all tabs. This cannot be undone.", style: TextStyle(color: Colors.white70)),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancel", style: TextStyle(color: Colors.white54))),
+                    TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("NUKE IT", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold))),
+                  ],
+                ),
+              );
+
+              if (confirm == true) {
+                await InAppWebViewController.clearAllCache();
+                final cookieManager = CookieManager.instance();
+                await cookieManager.deleteAllCookies();
+                ref.read(historyProvider.notifier).clearHistory();
+                ref.read(tabsProvider.notifier).nuke();
+                ref.read(ghostTabsProvider.notifier).nuke();
+
+                if (context.mounted) {
+                   Navigator.pop(context); 
+                   ScaffoldMessenger.of(context).showSnackBar(
+                     const SnackBar(content: Text("System Purged."), backgroundColor: Colors.redAccent),
+                   );
+                }
+              }
+            },
+          ),
+
+          // Location Lock
+          SwitchListTile(
+            title: const Text("Location Lock", style: TextStyle(color: Colors.white)),
+            secondary: Icon(Icons.location_off, color: securityState.isLocationBlocked ? Colors.greenAccent : Colors.white54),
+            value: securityState.isLocationBlocked,
+            activeColor: Colors.greenAccent,
+            onChanged: (val) => ref.read(securityProvider.notifier).toggleLocation(val),
+          ),
+
+          // Sensor Lock
+          SwitchListTile(
+            title: const Text("Sensor Lock", style: TextStyle(color: Colors.white)),
+            secondary: Icon(Icons.mic_off, color: securityState.isCameraBlocked ? Colors.greenAccent : Colors.white54),
+            value: securityState.isCameraBlocked,
+            activeColor: Colors.greenAccent,
+            onChanged: (val) => ref.read(securityProvider.notifier).toggleCamera(val),
+          ),
+          
+          // The Shield
+          SwitchListTile(
+            title: const Text("The Shield", style: TextStyle(color: Colors.white)),
+            secondary: Icon(Icons.shield, color: securityState.isAdBlockEnabled ? Colors.greenAccent : Colors.white54),
+            value: securityState.isAdBlockEnabled,
+            activeColor: Colors.greenAccent,
+            onChanged: (val) {
+               ref.read(securityProvider.notifier).toggleAdBlock(val);
+               ref.read(webViewControllerProvider)?.reload();
+            },
+          ),
+
+          const Divider(color: Colors.white24),
+
+          // --- SECTION 3: CUSTOMIZATION ---
+          
+          Padding(
+            padding: const EdgeInsets.only(left: 16, top: 10, bottom: 5),
+            child: Text("CUSTOMIZATION", style: TextStyle(color: Colors.blueAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+          ),
+
+          // Desktop Mode
+          SwitchListTile(
+            title: const Text("Desktop Mode", style: TextStyle(color: Colors.white)),
+            secondary: Icon(Icons.desktop_windows, color: securityState.isDesktopMode ? Colors.blueAccent : Colors.white54),
+            value: securityState.isDesktopMode,
+            activeColor: Colors.blueAccent,
+            onChanged: (val) {
+               ref.read(securityProvider.notifier).toggleDesktop(val);
             },
           ),
         ],

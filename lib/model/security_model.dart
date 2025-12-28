@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mira/model/caching/caching.dart';
+import 'package:mira/model/caching/caching.dart'; // Ensure this points to your PreferencesService
 import 'package:mira/model/search_engine.dart';
 
 class SecurityState {
@@ -7,12 +7,14 @@ class SecurityState {
   final bool isLocationBlocked;
   final bool isCameraBlocked;
   final bool isDesktopMode;
+  final bool isAdBlockEnabled;
 
   SecurityState({
     required this.isIncognito,
     required this.isLocationBlocked,
     required this.isCameraBlocked,
     required this.isDesktopMode,
+    required this.isAdBlockEnabled,
   });
 
   SecurityState copyWith({
@@ -20,12 +22,14 @@ class SecurityState {
     bool? isLocationBlocked,
     bool? isCameraBlocked,
     bool? isDesktopMode,
+    bool? isAdBlockEnabled,
   }) {
     return SecurityState(
       isIncognito: isIncognito ?? this.isIncognito,
       isLocationBlocked: isLocationBlocked ?? this.isLocationBlocked,
       isCameraBlocked: isCameraBlocked ?? this.isCameraBlocked,
       isDesktopMode: isDesktopMode ?? this.isDesktopMode,
+      isAdBlockEnabled: isAdBlockEnabled ?? this.isAdBlockEnabled,
     );
   }
 }
@@ -38,6 +42,7 @@ class SecurityNotifier extends StateNotifier<SecurityState> {
     isLocationBlocked: true,
     isCameraBlocked: true,
     isDesktopMode: false,
+    isAdBlockEnabled: true, // Default to Safe
   )) {
     _loadSettings();
   }
@@ -48,6 +53,7 @@ class SecurityNotifier extends StateNotifier<SecurityState> {
       isLocationBlocked: _prefs.getLocationBlock(),
       isCameraBlocked: _prefs.getCameraBlock(),
       isDesktopMode: _prefs.getDesktopMode(),
+      isAdBlockEnabled: _prefs.getAdBlock(), // Load Shield State
     );
   }
 
@@ -69,6 +75,12 @@ class SecurityNotifier extends StateNotifier<SecurityState> {
   void toggleDesktop(bool value) {
     state = state.copyWith(isDesktopMode: value);
     _prefs.setDesktopMode(value);
+  }
+  
+  // NEW: Toggle The Shield
+  void toggleAdBlock(bool value) {
+    state = state.copyWith(isAdBlockEnabled: value);
+    _prefs.setAdBlock(value);
   }
 }
 

@@ -11,11 +11,12 @@ class PreferencesService {
   static const _keySavedTabs = 'saved_tabs';     
   static const _keyActiveTabIndex = 'active_tab_index';
   
-  // Security Keys (New)
+  // Security Keys
   static const _keyIncognito = 'mode_incognito';
   static const _keyLocation = 'mode_location'; 
   static const _keyCamera = 'mode_camera';     
   static const _keyDesktop = 'mode_desktop';
+  static const _keyAdBlock = 'mode_adblock'; // NEW: The Shield Key
 
   // --- SEARCH ENGINE ---
   String? getSearchEngine() => _prefs.getString(_keySearchEngine);
@@ -40,7 +41,7 @@ class PreferencesService {
     await _prefs.setInt(_keyActiveTabIndex, activeIndex);
   }
 
-  // --- SECURITY MODES (NEW) ---
+  // --- SECURITY MODES ---
 
   // Incognito (Default: false -> We want logins to work by default)
   bool getIncognito() => _prefs.getBool(_keyIncognito) ?? false;
@@ -57,4 +58,8 @@ class PreferencesService {
   // Desktop Mode (Default: false)
   bool getDesktopMode() => _prefs.getBool(_keyDesktop) ?? false;
   Future<void> setDesktopMode(bool value) async => await _prefs.setBool(_keyDesktop, value);
+
+  // AdBlock / The Shield (Default: true -> MIRA protects you out of the box)
+  bool getAdBlock() => _prefs.getBool(_keyAdBlock) ?? true;
+  Future<void> setAdBlock(bool value) async => await _prefs.setBool(_keyAdBlock, value);
 }

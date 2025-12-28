@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mira/model/download_model.dart';
 import 'package:mira/model/search_engine.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mira/model/caching/caching.dart'; // Imports PreferencesService CLASS
@@ -12,6 +13,8 @@ void main() async {
   // 2. Initialize SharedPreferences
   final prefs = await SharedPreferences.getInstance();
   final preferencesService = PreferencesService(prefs);
+  // 3. Downlaod Manager
+  await DownloadManager.init();
 
   runApp(
     ProviderScope(
