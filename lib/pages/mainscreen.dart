@@ -128,16 +128,6 @@ class Mainscreen extends ConsumerWidget {
             },
           ),
           actions: [
-            // --- FIRE NUKE BUTTON (Top Right) ---
-            if (!isNuking) 
-              IconButton(
-                icon: const Icon(Icons.local_fire_department, color: Colors.redAccent),
-                tooltip: "Clear All Data",
-                onPressed: () {
-                   ref.read(isNukingProvider.notifier).state = true;
-                },
-              ),
-
             // --- TAB SWITCHER ---
             InkWell(
               onTap: () {
@@ -247,29 +237,6 @@ class Mainscreen extends ConsumerWidget {
                      return GeolocationPermissionShowPromptResponse(origin: origin, allow: true, retain: false);
                   },
                 ),
-
-            // Layer 2: The Fire Animation
-            CinematicNukeOverlay(
-              isTriggered: isNuking,
-              onAnimationComplete: () async {
-                 // --- CLEANUP LOGIC ---
-                 
-                 // 1. Clear Web Cache & Cookies
-                 await InAppWebViewController.clearAllCache();
-                 final cookieManager = CookieManager.instance();
-                 await cookieManager.deleteAllCookies();
-
-                 // 2. Clear History
-                 ref.read(historyProvider.notifier).clearHistory();
-
-                 // 3. Nuke All Tabs
-                 ref.read(tabsProvider.notifier).nuke();
-                 ref.read(ghostTabsProvider.notifier).nuke();
-
-                 // 4. Reset UI
-                 ref.read(isNukingProvider.notifier).state = false;
-              },
-            ),
           ],
         ),
       ),
@@ -314,6 +281,56 @@ class Mainscreen extends ConsumerWidget {
             },
           ),
 
+          // NUKE BUTTON
+          //TODO : replace nuke icon with radioactive icon
+          ListTile(
+            title: const Text("Nuke", style: TextStyle(color: Colors.white)),
+            leading: const Icon(Icons.dangerous, color: Colors.redAccent),
+            trailing: IconButton(
+              icon: const Icon(Icons.info_outline, color: Colors.white70),
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text("What is Nuke?"),
+                    content: const Text("Nuke clears all browsing data, including history, cache, and cookies. It also closes all tabs, giving you a fresh start."),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text("OK"),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+            onTap: () async {
+              // --- CLEANUP LOGIC ---
+              // 1. Clear Web Cache & Cookies
+              await InAppWebViewController.clearAllCache();
+              final cookieManager = CookieManager.instance();
+              await cookieManager.deleteAllCookies();
+
+              // 2. Clear History
+              ref.read(historyProvider.notifier).clearHistory();
+
+              // 3. Nuke All Tabs
+              ref.read(tabsProvider.notifier).nuke();
+              ref.read(ghostTabsProvider.notifier).nuke();
+
+              // 4. Show Snackbar
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text("History and cache has been cleared."),
+                  backgroundColor: Colors.green,
+                ),
+              );
+
+              // 5. Close Drawer
+              Navigator.pop(context);
+            },
+          ),
+
           // LOCATION LOCK
           SwitchListTile(
             title: const Text("Location Lock", style: TextStyle(color: Colors.white)),
@@ -330,6 +347,13 @@ class Mainscreen extends ConsumerWidget {
             value: securityState.isCameraBlocked,
             activeColor: Colors.greenAccent,
             onChanged: (val) => ref.read(securityProvider.notifier).toggleCamera(val),
+          ),
+
+          const Divider(color: Colors.white24),
+
+          Padding(
+            padding: const EdgeInsets.only(left: 16, top: 10, bottom: 5),
+            child: Text("CUSTOMIZATION", style: TextStyle(color: Colors.blueAccent, fontSize: 12, fontWeight: FontWeight.bold)),
           ),
 
            // DESKTOP MODE
@@ -360,8 +384,8 @@ class Mainscreen extends ConsumerWidget {
           ),
 
           ListTile(
-            leading: const Icon(Icons.settings_outlined, color: Colors.white70),
-            title: const Text('Settings', style: TextStyle(color: Colors.white)),
+            leading: const Icon(Icons.search, color: Colors.white70),
+            title: const Text('Search Engine', style: TextStyle(color: Colors.white)),
             onTap: () {
               Navigator.pop(context);
               showModalBottomSheet(

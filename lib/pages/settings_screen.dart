@@ -69,21 +69,6 @@ class SettingsSheet extends ConsumerWidget {
               },
             );
           }),
-
-          const Divider(color: Colors.white24),
-
-          // Placeholder for future features
-          ListTile(
-            leading: const Icon(Icons.delete_outline, color: Colors.redAccent),
-            title: const Text("Clear Data", style: TextStyle(color: Colors.redAccent)),
-            onTap: () {
-               // We will add the logic to clear cookies later
-               Navigator.pop(context); 
-               ScaffoldMessenger.of(context).showSnackBar(
-                 const SnackBar(content: Text("Data Cleared (Simulation)")),
-               );
-            },
-          ),
         ],
       ),
     );
