@@ -18,8 +18,12 @@ class PreferencesService {
   static const _keyDesktop = 'mode_desktop';
   static const _keyAdBlock = 'mode_adblock'; 
   
-  // Bookmarks Key (NEW)
+  // Bookmarks Key
   static const _keyBookmarks = 'saved_bookmarks';
+
+  // Theme Keys
+  static const _keyTheme = 'app_theme_style'; // For Color Accent
+  static const _keyThemeMode = 'app_theme_mode'; // For Light/Dark/System
 
   // --- SEARCH ENGINE ---
   String? getSearchEngine() => _prefs.getString(_keySearchEngine);
@@ -30,7 +34,7 @@ class PreferencesService {
   Future<void> setHistory(List<String> history) async => await _prefs.setStringList(_keySearchHistory, history);
   Future<void> clearHistory() async => await _prefs.remove(_keySearchHistory);
 
-  // --- BOOKMARKS (NEW) ---
+  // --- BOOKMARKS ---
   List<String> getBookmarks() => _prefs.getStringList(_keyBookmarks) ?? [];
   Future<void> setBookmarks(List<String> bookmarks) async => await _prefs.setStringList(_keyBookmarks, bookmarks);
 
@@ -69,4 +73,14 @@ class PreferencesService {
   // AdBlock / The Shield (Default: true -> MIRA protects you out of the box)
   bool getAdBlock() => _prefs.getBool(_keyAdBlock) ?? true;
   Future<void> setAdBlock(bool value) async => await _prefs.setBool(_keyAdBlock, value);
+
+  // --- THEME (COLORS) ---
+  // Returns the index of the selected theme (0 = Green, 1 = Yellow, etc.)
+  int getThemeStyle() => _prefs.getInt(_keyTheme) ?? 0; 
+  Future<void> setThemeStyle(int index) async => await _prefs.setInt(_keyTheme, index);
+
+  // --- THEME MODE (LIGHT/DARK/SYSTEM) ---
+  // Default to 0 (ThemeMode.system in Flutter is usually index 0)
+  int getThemeMode() => _prefs.getInt(_keyThemeMode) ?? 0;
+  Future<void> setThemeMode(int index) async => await _prefs.setInt(_keyThemeMode, index);
 }

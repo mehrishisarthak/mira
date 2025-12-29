@@ -3,6 +3,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mira/model/search_engine.dart';
 import 'package:mira/model/tab_model.dart';
+import 'package:mira/model/theme_model.dart';
 import 'package:mira/pages/mainscreen.dart';
 
 class HistoryPage extends ConsumerWidget {
@@ -10,20 +11,23 @@ class HistoryPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final appTheme = ref.watch(themeProvider);
+    final isLightMode = appTheme.mode == ThemeMode.light;
+    final contentColor = isLightMode ? Colors.black87 : Colors.white;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF121212), 
+      backgroundColor: appTheme.backgroundColor, 
       appBar: AppBar(
-        title: const Text("History", style: TextStyle(color: Colors.white)),
-        backgroundColor: const Color(0xFF1E1E1E),
+        title: Text("History", style: TextStyle(color: contentColor)),
+        backgroundColor: appTheme.surfaceColor,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: Icon(Icons.arrow_back, color: contentColor),
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
           IconButton(
             icon: const Icon(Icons.delete_sweep, color: Colors.redAccent),
             onPressed: () {
-               // FIX 1: Method name is clearHistory() in our provider
                ref.read(historyProvider.notifier).clearHistory();
             },
             tooltip: "Clear All History",
@@ -46,12 +50,15 @@ class HistoryList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final history = ref.watch(historyProvider);
+    final appTheme = ref.watch(themeProvider);
+    final isLightMode = appTheme.mode == ThemeMode.light;
+    final contentColor = isLightMode ? Colors.black87 : Colors.white;
 
     if (history.isEmpty) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(20.0),
-          child: Text("No history yet", style: TextStyle(color: Colors.white54)),
+          padding: const EdgeInsets.all(20.0),
+          child: Text("No history yet", style: TextStyle(color: contentColor.withAlpha(128))),
         ),
       );
     }
@@ -60,29 +67,26 @@ class HistoryList extends ConsumerWidget {
       shrinkWrap: true, 
       physics: const NeverScrollableScrollPhysics(), 
       itemCount: history.length,
-      separatorBuilder: (context, index) => const Divider(height: 1, color: Colors.white10),
+      separatorBuilder: (context, index) => Divider(height: 1, color: contentColor.withAlpha(26)),
       itemBuilder: (context, index) {
         final item = history[index];
         return ListTile(
-          leading: const Icon(Icons.history, color: Colors.white30, size: 20),
-          title: Text(item.text, style: const TextStyle(color: Colors.white70)),
+          leading: Icon(Icons.history, color: contentColor.withAlpha(77), size: 20),
+          title: Text(item.text, style: TextStyle(color: contentColor.withAlpha(179))),
           trailing: IconButton(
-            icon: const Icon(Icons.close, color: Colors.white12, size: 18),
+            icon: Icon(Icons.close, color: contentColor.withAlpha(51), size: 18),
             onPressed: () {
                ref.read(historyProvider.notifier).removeFromHistory(item);
             },
           ),
           
           onTap: () {
-            // 1. Close keyboard
             FocusManager.instance.primaryFocus?.unfocus();
             
-            // 2. Close History Page (Go back to Browser)
             if (Navigator.canPop(context)) {
                Navigator.pop(context);
             }
 
-            // 3. Format URL
             String finalUrl;
             if (item.text.contains('.') && !item.text.contains(' ')) {
                finalUrl = "https://${item.text}";
@@ -90,10 +94,8 @@ class HistoryList extends ConsumerWidget {
                finalUrl = ref.read(formattedSearchUrlProvider(item.text));
             }
 
-            // FIX 2: Update the TAB provider, not the old search provider
             ref.read(tabsProvider.notifier).updateUrl(finalUrl);
             
-            // 4. Load in WebView
             ref.read(webViewControllerProvider)?.loadUrl(
                urlRequest: URLRequest(url: WebUri(finalUrl))
             );

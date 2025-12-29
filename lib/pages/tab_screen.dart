@@ -2,27 +2,27 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mira/model/ghost_model.dart';
 import 'package:mira/model/tab_model.dart';
+import 'package:mira/model/theme_model.dart';
 
 class TabsSheet extends ConsumerWidget {
   const TabsSheet({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // 1. WATCH ALL DATA
     final isGhostModeActive = ref.watch(isGhostModeProvider);
     
-    // Normal Tabs
     final normalTabsState = ref.watch(tabsProvider);
     final normalTabs = normalTabsState.tabs;
     final activeNormalTab = normalTabsState.activeTab;
 
-    // Ghost Tabs
     final ghostTabsState = ref.watch(ghostTabsProvider);
     final ghostTabs = ghostTabsState.tabs;
     final activeGhostTab = ghostTabsState.activeTab;
 
-    // --- THEME ---
-    final overallBgColor = isGhostModeActive ? const Color(0xFF100000) : const Color(0xFF1E1E1E);
+    final appTheme = ref.watch(themeProvider);
+    final isLightMode = appTheme.mode == ThemeMode.light;
+    final contentColor = isLightMode ? Colors.black87 : Colors.white;
+    final overallBgColor = isGhostModeActive ? const Color(0xFF100000) : appTheme.surfaceColor;
 
     return Container(
       decoration: BoxDecoration(
@@ -33,45 +33,47 @@ class TabsSheet extends ConsumerWidget {
       child: Column(
         children: [
           const SizedBox(height: 10),
-          Container(height: 5, width: 40, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10))),
+          Container(height: 5, width: 40, decoration: BoxDecoration(color: contentColor.withOpacity(0.2), borderRadius: BorderRadius.circular(10))),
           
           Expanded(
             child: SingleChildScrollView(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // --- NORMAL TABS SECTION ---
                   _buildSectionHeader(
                     context,
                     ref,
                     title: "Open Tabs",
                     isGhost: false,
                     onAdd: () => ref.read(tabsProvider.notifier).addTab(),
+                    appTheme: appTheme,
                   ),
                   _buildTabGrid(
                     context,
                     ref,
                     tabs: normalTabs,
-                    activeTabId: isGhostModeActive ? '' : activeNormalTab.id, // Only active if not in ghost mode
+                    activeTabId: isGhostModeActive ? '' : activeNormalTab.id,
                     isGhost: false,
+                    appTheme: appTheme,
                   ),
 
-                  const Divider(color: Colors.white24, height: 30),
+                  Divider(color: contentColor.withOpacity(0.2), height: 30),
 
-                  // --- GHOST TABS SECTION ---
                   _buildSectionHeader(
                     context,
                     ref,
                     title: "Ghost Tabs (RAM Only)",
                     isGhost: true,
                     onAdd: () => ref.read(ghostTabsProvider.notifier).addTab(),
+                    appTheme: appTheme,
                   ),
                   _buildTabGrid(
                     context,
                     ref,
                     tabs: ghostTabs,
-                    activeTabId: isGhostModeActive ? activeGhostTab.id : '', // Only active if in ghost mode
+                    activeTabId: isGhostModeActive ? activeGhostTab.id : '',
                     isGhost: true,
+                    appTheme: appTheme,
                   ),
                 ],
               ),
@@ -82,8 +84,8 @@ class TabsSheet extends ConsumerWidget {
     );
   }
 
-  Widget _buildSectionHeader(BuildContext context, WidgetRef ref, {required String title, required bool isGhost, required VoidCallback onAdd}) {
-    final color = isGhost ? Colors.redAccent : Colors.white;
+  Widget _buildSectionHeader(BuildContext context, WidgetRef ref, {required String title, required bool isGhost, required VoidCallback onAdd, required MiraTheme appTheme}) {
+    final color = isGhost ? Colors.redAccent : (appTheme.mode == ThemeMode.light ? Colors.black87 : Colors.white);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Row(
@@ -94,7 +96,6 @@ class TabsSheet extends ConsumerWidget {
             icon: Icon(Icons.add, color: color),
             onPressed: () {
               onAdd();
-              // If we add a tab, we should switch to that mode
               ref.read(isGhostModeProvider.notifier).state = isGhost;
               Navigator.pop(context);
             },
@@ -104,13 +105,16 @@ class TabsSheet extends ConsumerWidget {
     );
   }
 
-  Widget _buildTabGrid(BuildContext context, WidgetRef ref, {required List<BrowserTab> tabs, required String activeTabId, required bool isGhost}) {
+  Widget _buildTabGrid(BuildContext context, WidgetRef ref, {required List<BrowserTab> tabs, required String activeTabId, required bool isGhost, required MiraTheme appTheme}) {
+    final isLightMode = appTheme.mode == ThemeMode.light;
+    final contentColor = isLightMode ? Colors.black87 : Colors.white;
+
     if (tabs.isEmpty) {
-      return const Center(child: Text("No tabs in this mode.", style: TextStyle(color: Colors.white54)));
+      return Center(child: Text("No tabs in this mode.", style: TextStyle(color: contentColor.withOpacity(0.5))));
     }
 
-    final activeBorder = isGhost ? Colors.redAccent : Colors.greenAccent;
-    final cardColor = isGhost ? const Color(0xFF330000) : Colors.white10;
+    final activeBorder = isGhost ? Colors.redAccent : appTheme.accentColor;
+    final cardColor = isGhost ? const Color(0xFF330000) : (isLightMode ? Colors.grey.shade200 : Colors.white10);
 
     return GridView.builder(
       shrinkWrap: true,
@@ -129,17 +133,14 @@ class TabsSheet extends ConsumerWidget {
 
         return GestureDetector(
           onTap: () {
-            // 1. Set the mode
             ref.read(isGhostModeProvider.notifier).state = isGhost;
             
-            // 2. Switch to the correct tab index
             if (isGhost) {
               ref.read(ghostTabsProvider.notifier).switchTab(index);
             } else {
               ref.read(tabsProvider.notifier).switchTab(index);
             }
             
-            // 3. Close the sheet
             Navigator.pop(context);
           },
           child: Container(
@@ -157,7 +158,7 @@ class TabsSheet extends ConsumerWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: isActive ? activeBorder : Colors.white,
+                    color: isActive ? activeBorder : contentColor,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -166,13 +167,13 @@ class TabsSheet extends ConsumerWidget {
                   tab.url.isEmpty ? "Start Page" : tab.url,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white54, fontSize: 12),
+                  style: TextStyle(color: contentColor.withOpacity(0.5), fontSize: 12),
                 ),
                 const Spacer(),
                 Align(
                   alignment: Alignment.bottomRight,
                   child: IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white30, size: 20),
+                    icon: Icon(Icons.close, color: contentColor.withOpacity(0.3), size: 20),
                     onPressed: () {
                       if (isGhost) {
                         ref.read(ghostTabsProvider.notifier).closeTab(tab.id);

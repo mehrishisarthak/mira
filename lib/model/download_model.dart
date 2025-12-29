@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_downloader/flutter_downloader.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
@@ -17,12 +18,12 @@ class DownloadManager {
 
   // 2. THE MAIN FUNCTION
   static Future<void> download(String url, {String? filename}) async {
-    print("Attempting to download: $url");
+    debugPrint("Attempting to download: $url");
 
     // A. Check Permissions (The tricky part)
     final hasPermission = await _checkPermission();
     if (!hasPermission) {
-      print("Permission denied.");
+      debugPrint("Permission denied.");
       return;
     }
 
@@ -40,7 +41,7 @@ class DownloadManager {
       saveInPublicStorage: true, // REQUIRED for Android 10+ visibility
     );
     
-    print("Download task started: $taskId");
+    debugPrint("Download task started: $taskId");
   }
 
   // 3. PERMISSION LOGIC (READ THIS CAREFULLY)
@@ -82,7 +83,7 @@ class DownloadManager {
         directory = await getApplicationDocumentsDirectory();
       }
     } catch (e) {
-      print("Path error: $e");
+      debugPrint("Path error: $e");
       directory = await getExternalStorageDirectory();
     }
     return directory?.path ?? '';
@@ -123,7 +124,7 @@ class DownloadsNotifier extends StateNotifier<List<DownloadTask>> {
   
   // 4. Retry Failed Task
   Future<void> retryTask(DownloadTask task) async {
-    final newId = await FlutterDownloader.retry(taskId: task.taskId);
+    await FlutterDownloader.retry(taskId: task.taskId);
     await loadTasks();
   }
 }

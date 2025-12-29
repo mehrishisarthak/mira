@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_downloader/flutter_downloader.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mira/model/download_model.dart';
+import 'package:mira/model/theme_model.dart';
 
 class DownloadsPage extends ConsumerStatefulWidget {
   const DownloadsPage({super.key});
@@ -24,19 +25,22 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
   @override
   Widget build(BuildContext context) {
     final tasks = ref.watch(downloadsProvider);
+    final appTheme = ref.watch(themeProvider);
+    final isLightMode = appTheme.mode == ThemeMode.light;
+    final contentColor = isLightMode ? Colors.black87 : Colors.white;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: appTheme.backgroundColor,
       appBar: AppBar(
-        title: const Text("Downloads", style: TextStyle(color: Colors.white)),
-        backgroundColor: const Color(0xFF1E1E1E),
+        title: Text("Downloads", style: TextStyle(color: contentColor)),
+        backgroundColor: appTheme.surfaceColor,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: Icon(Icons.arrow_back, color: contentColor),
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white70),
+            icon: Icon(Icons.refresh, color: contentColor.withAlpha(179)),
             onPressed: () {
                ref.read(downloadsProvider.notifier).loadTasks();
             },
@@ -44,19 +48,19 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
         ],
       ),
       body: tasks.isEmpty
-          ? const Center(child: Text("No downloads yet", style: TextStyle(color: Colors.white54)))
+          ? Center(child: Text("No downloads yet", style: TextStyle(color: contentColor.withAlpha(128))))
           : ListView.separated(
               itemCount: tasks.length,
-              separatorBuilder: (_, __) => const Divider(height: 1, color: Colors.white10),
+              separatorBuilder: (_, __) => Divider(height: 1, color: contentColor.withAlpha(26)),
               itemBuilder: (context, index) {
                 final task = tasks[index];
-                return _buildDownloadItem(task);
+                return _buildDownloadItem(task, appTheme, contentColor);
               },
             ),
     );
   }
 
-  Widget _buildDownloadItem(DownloadTask task) {
+  Widget _buildDownloadItem(DownloadTask task, MiraTheme appTheme, Color contentColor) {
     IconData statusIcon;
     Color statusColor;
     String statusText;
@@ -72,21 +76,21 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
       statusText = "Failed";
     } else if (task.status == DownloadTaskStatus.running) {
       statusIcon = Icons.downloading;
-      statusColor = Colors.blueAccent;
+      statusColor = appTheme.accentColor;
       statusText = "${task.progress}%";
     } else {
       statusIcon = Icons.hourglass_empty;
-      statusColor = Colors.white54;
+      statusColor = contentColor.withAlpha(128);
       statusText = "Pending";
     }
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      leading: Icon(Icons.insert_drive_file, color: Colors.white30, size: 32),
+      leading: Icon(Icons.insert_drive_file, color: contentColor.withAlpha(77), size: 32),
       
       title: Text(
         task.filename ?? "Unknown File",
-        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        style: TextStyle(color: contentColor, fontWeight: FontWeight.bold),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
@@ -103,7 +107,7 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
       ),
       
       trailing: IconButton(
-        icon: const Icon(Icons.delete_outline, color: Colors.white38),
+        icon: Icon(Icons.delete_outline, color: contentColor.withAlpha(128)),
         onPressed: () {
           ref.read(downloadsProvider.notifier).deleteTask(task);
         },
