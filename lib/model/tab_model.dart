@@ -16,7 +16,7 @@ class BrowserTab {
     this.url = '',
     this.title = 'New Tab',
     this.isLoading = false,
-  }) : id = id ?? const Uuid().v4(); 
+  }) : id = id ?? const Uuid().v4(); //giving  tabs an id
 
   BrowserTab copyWith({
     String? id,

@@ -10,14 +10,15 @@ import 'package:mira/model/ghost_model.dart';
 import 'package:mira/model/search_engine.dart';
 import 'package:mira/model/security_model.dart'; 
 import 'package:mira/model/tab_model.dart';
-import 'package:mira/pages/book_marks_screen.dart';
-import 'package:mira/pages/downlaods_screen.dart';
 
 // UI Pages
+// (Keeping your exact imports to prevent breaking paths)
 import 'package:mira/pages/branding_screen.dart';
 import 'package:mira/pages/history_screen.dart';
 import 'package:mira/pages/settings_screen.dart';
 import 'package:mira/pages/tab_screen.dart'; 
+import 'package:mira/pages/downlaods_screen.dart'; // Kept your spelling
+import 'package:mira/pages/book_marks_screen.dart'; // Kept your spelling
 
 // Local Providers
 final loadingProgressProvider = StateProvider<int>((ref) => 0);
@@ -39,7 +40,7 @@ class Mainscreen extends ConsumerWidget {
     final securityState = ref.watch(securityProvider);
     final double progress = ref.watch(loadingProgressProvider) / 100;
     
-    // Watch Bookmarks to update Star Icon color
+    // Watch Bookmarks
     final bookmarks = ref.watch(bookmarksProvider);
     final isBookmarked = bookmarks.any((b) => b.url == activeUrl);
 
@@ -48,26 +49,34 @@ class Mainscreen extends ConsumerWidget {
     final appBarColor = isGhost ? const Color(0xFF100000) : const Color(0xFF1E1E1E);
     final accentColor = isGhost ? Colors.redAccent : Colors.white;
 
-    // 3. SECURITY LISTENER
+    // 3. SECURITY LISTENER (FIXED FOR CRASHES)
     ref.listen(securityProvider, (previous, next) async {
+      // <--- CRASH FIX: If we are on Branding Screen, the WebView doesn't exist. Stop.
+      if (activeUrl.isEmpty) return; 
+
       final controller = ref.read(webViewControllerProvider);
       if (controller == null) return;
 
       if (previous?.isDesktopMode != next.isDesktopMode || 
           previous?.isAdBlockEnabled != next.isAdBlockEnabled) {
         
-        await controller.setSettings(
-          settings: InAppWebViewSettings(
-            preferredContentMode: next.isDesktopMode 
-                ? UserPreferredContentMode.DESKTOP 
-                : UserPreferredContentMode.MOBILE,
-            userAgent: next.isDesktopMode 
-                ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" 
-                : "",
-            contentBlockers: next.isAdBlockEnabled ? AdBlockService.adBlockRules : [],
-          ),
-        );
-        controller.reload();
+        try {
+          // Wrap in try-catch to handle any potential native detachment issues
+          await controller.setSettings(
+            settings: InAppWebViewSettings(
+              preferredContentMode: next.isDesktopMode 
+                  ? UserPreferredContentMode.DESKTOP 
+                  : UserPreferredContentMode.MOBILE,
+              userAgent: next.isDesktopMode 
+                  ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" 
+                  : "",
+              contentBlockers: next.isAdBlockEnabled ? AdBlockService.adBlockRules : [],
+            ),
+          );
+          controller.reload();
+        } catch (e) {
+          debugPrint("Safe fail: Controller might be detached. $e");
+        }
       }
     });
 
@@ -77,16 +86,26 @@ class Mainscreen extends ConsumerWidget {
         if (didPop) return;
         final controller = ref.read(webViewControllerProvider);
         if (controller != null) {
-          if (await controller.canGoBack()) {
-            controller.goBack();
-          } else {
-            if (activeUrl.isNotEmpty) {
-               if (isGhost) {
-                 ref.read(ghostTabsProvider.notifier).updateUrl('');
-               } else {
-                 ref.read(tabsProvider.notifier).updateUrl('');
-               }
+          // Guard against zombie controller calls here too
+          try {
+            if (await controller.canGoBack()) {
+              controller.goBack();
+            } else {
+              if (activeUrl.isNotEmpty) {
+                 if (isGhost) {
+                   ref.read(ghostTabsProvider.notifier).updateUrl('');
+                 } else {
+                   ref.read(tabsProvider.notifier).updateUrl('');
+                 }
+              }
             }
+          } catch (e) {
+             // If controller fails, just exit to branding
+             if (isGhost) {
+               ref.read(ghostTabsProvider.notifier).updateUrl('');
+             } else {
+               ref.read(tabsProvider.notifier).updateUrl('');
+             }
           }
         }
       },
@@ -108,7 +127,7 @@ class Mainscreen extends ConsumerWidget {
               border: InputBorder.none,
               hintStyle: TextStyle(color: isGhost ? Colors.red.withOpacity(0.3) : Colors.white30),
               
-              // NEW: BOOKMARK STAR ICON
+              // BOOKMARK STAR ICON
               suffixIcon: activeUrl.isNotEmpty && !isGhost
                   ? IconButton(
                       icon: Icon(
@@ -149,7 +168,6 @@ class Mainscreen extends ConsumerWidget {
             },
           ),
           actions: [
-            // TAB SWITCHER
             InkWell(
               onTap: () {
                 showModalBottomSheet(
@@ -176,7 +194,6 @@ class Mainscreen extends ConsumerWidget {
               ),
             ),
             
-            // MENU BUTTON
             IconButton(
               icon: Icon(Icons.more_vert, color: accentColor),
               onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
@@ -194,7 +211,7 @@ class Mainscreen extends ConsumerWidget {
             : null,
         ),
 
-        // BODY - Clean, no animation overlays
+        // BODY 
         body: activeUrl.isEmpty 
           ? const BrandingScreen()
           : InAppWebView(
@@ -312,7 +329,7 @@ class Mainscreen extends ConsumerWidget {
             },
           ),
 
-          // NEW: BOOKMARKS
+          // BOOKMARKS
           ListTile(
             leading: const Icon(Icons.bookmark_border, color: Colors.white70),
             title: const Text('Bookmarks', style: TextStyle(color: Colors.white)),
@@ -428,7 +445,7 @@ class Mainscreen extends ConsumerWidget {
             onChanged: (val) => ref.read(securityProvider.notifier).toggleCamera(val),
           ),
           
-          // The Shield
+          // The Shield (CRASH FIX: Removed manual reload)
           SwitchListTile(
             title: const Text("The Shield", style: TextStyle(color: Colors.white)),
             secondary: Icon(Icons.shield, color: securityState.isAdBlockEnabled ? Colors.greenAccent : Colors.white54),
@@ -436,7 +453,7 @@ class Mainscreen extends ConsumerWidget {
             activeColor: Colors.greenAccent,
             onChanged: (val) {
                ref.read(securityProvider.notifier).toggleAdBlock(val);
-               ref.read(webViewControllerProvider)?.reload();
+               // Removed redundant .reload() call here. The listener in build() handles it safely now.
             },
           ),
 
@@ -449,7 +466,7 @@ class Mainscreen extends ConsumerWidget {
             child: Text("CUSTOMIZATION", style: TextStyle(color: Colors.blueAccent, fontSize: 12, fontWeight: FontWeight.bold)),
           ),
 
-          // Desktop Mode
+          // Desktop Mode (Listener handles the reload)
           SwitchListTile(
             title: const Text("Desktop Mode", style: TextStyle(color: Colors.white)),
             secondary: Icon(Icons.desktop_windows, color: securityState.isDesktopMode ? Colors.blueAccent : Colors.white54),
