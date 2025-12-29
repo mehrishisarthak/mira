@@ -4,6 +4,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:mira/model/ad_block_model.dart';
 import 'package:mira/model/book_mark_model.dart';
 import 'package:mira/model/download_model.dart';
+import 'package:url_launcher/url_launcher.dart'; // REQUIRED FOR OS HANDLING
 
 // Models & Providers
 import 'package:mira/model/ghost_model.dart';
@@ -12,13 +13,12 @@ import 'package:mira/model/security_model.dart';
 import 'package:mira/model/tab_model.dart';
 
 // UI Pages
-// (Keeping your exact imports to prevent breaking paths)
 import 'package:mira/pages/branding_screen.dart';
 import 'package:mira/pages/history_screen.dart';
 import 'package:mira/pages/settings_screen.dart';
 import 'package:mira/pages/tab_screen.dart'; 
-import 'package:mira/pages/downlaods_screen.dart'; // Kept your spelling
-import 'package:mira/pages/book_marks_screen.dart'; // Kept your spelling
+import 'package:mira/pages/downlaods_screen.dart'; 
+import 'package:mira/pages/book_marks_screen.dart'; 
 
 // Local Providers
 final loadingProgressProvider = StateProvider<int>((ref) => 0);
@@ -49,9 +49,28 @@ class Mainscreen extends ConsumerWidget {
     final appBarColor = isGhost ? const Color(0xFF100000) : const Color(0xFF1E1E1E);
     final accentColor = isGhost ? Colors.redAccent : Colors.white;
 
-    // 3. SECURITY LISTENER (FIXED FOR CRASHES)
+    // 3. ADDRESS BAR CONTROLLER (Created here to handle selection logic)
+    final textController = TextEditingController(text: activeUrl);
+    // Default cursor position: End of text
+    textController.selection = TextSelection.collapsed(offset: activeUrl.length);
+
+    // 4. CALCULATE SECURITY ICON
+    IconData securityIcon;
+    Color securityColor;
+
+    if (activeUrl.isEmpty) {
+      securityIcon = isGhost ? Icons.privacy_tip : Icons.search;
+      securityColor = isGhost ? Colors.redAccent : Colors.white54;
+    } else if (activeUrl.startsWith("https://")) {
+      securityIcon = Icons.lock;
+      securityColor = Colors.greenAccent;
+    } else {
+      securityIcon = Icons.no_encryption;
+      securityColor = Colors.redAccent;
+    }
+
+    // 5. SECURITY LISTENER
     ref.listen(securityProvider, (previous, next) async {
-      // <--- CRASH FIX: If we are on Branding Screen, the WebView doesn't exist. Stop.
       if (activeUrl.isEmpty) return; 
 
       final controller = ref.read(webViewControllerProvider);
@@ -59,9 +78,7 @@ class Mainscreen extends ConsumerWidget {
 
       if (previous?.isDesktopMode != next.isDesktopMode || 
           previous?.isAdBlockEnabled != next.isAdBlockEnabled) {
-        
         try {
-          // Wrap in try-catch to handle any potential native detachment issues
           await controller.setSettings(
             settings: InAppWebViewSettings(
               preferredContentMode: next.isDesktopMode 
@@ -75,7 +92,7 @@ class Mainscreen extends ConsumerWidget {
           );
           controller.reload();
         } catch (e) {
-          debugPrint("Safe fail: Controller might be detached. $e");
+          debugPrint("Safe fail: Controller detached. $e");
         }
       }
     });
@@ -86,7 +103,6 @@ class Mainscreen extends ConsumerWidget {
         if (didPop) return;
         final controller = ref.read(webViewControllerProvider);
         if (controller != null) {
-          // Guard against zombie controller calls here too
           try {
             if (await controller.canGoBack()) {
               controller.goBack();
@@ -100,7 +116,6 @@ class Mainscreen extends ConsumerWidget {
               }
             }
           } catch (e) {
-             // If controller fails, just exit to branding
              if (isGhost) {
                ref.read(ghostTabsProvider.notifier).updateUrl('');
              } else {
@@ -117,17 +132,39 @@ class Mainscreen extends ConsumerWidget {
         appBar: AppBar(
           backgroundColor: appBarColor,
           titleSpacing: 0,
-          leading: Icon(
-            isGhost ? Icons.privacy_tip : Icons.search, 
-            color: isGhost ? Colors.redAccent : Colors.white54
+          
+          leading: IconButton(
+            icon: Icon(securityIcon, color: securityColor),
+            onPressed: () {
+              if (activeUrl.isNotEmpty) {
+                showDialog(
+                  context: context, 
+                  builder: (ctx) => AlertDialog(
+                    backgroundColor: const Color(0xFF2C2C2C),
+                    title: Text(
+                      activeUrl.startsWith("https://") ? "Connection Secure" : "Connection Not Secure",
+                      style: TextStyle(color: securityColor),
+                    ),
+                    content: Text(
+                      activeUrl.startsWith("https://") 
+                        ? "MIRA verified this site uses a valid SSL certificate."
+                        : "This site uses HTTP. Your data is not encrypted.",
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                    actions: [TextButton(onPressed: ()=>Navigator.pop(ctx), child: const Text("Got it"))],
+                  )
+                );
+              }
+            },
           ),
+
           title: TextField(
+            controller: textController,
             decoration: InputDecoration(
               hintText: isGhost ? 'Ghost Mode Active' : 'Search or enter address',
               border: InputBorder.none,
               hintStyle: TextStyle(color: isGhost ? Colors.red.withOpacity(0.3) : Colors.white30),
               
-              // BOOKMARK STAR ICON
               suffixIcon: activeUrl.isNotEmpty && !isGhost
                   ? IconButton(
                       icon: Icon(
@@ -143,7 +180,14 @@ class Mainscreen extends ConsumerWidget {
             ),
             style: TextStyle(color: accentColor),
             textInputAction: TextInputAction.go,
-            controller: TextEditingController(text: activeUrl)..selection = TextSelection.collapsed(offset: activeUrl.length),
+            
+            // --- FEATURE: SELECT ALL ON TAP ---
+            onTap: () {
+              textController.selection = TextSelection(
+                baseOffset: 0,
+                extentOffset: textController.text.length,
+              );
+            },
             
             onSubmitted: (value) {
               if (value.isNotEmpty) {
@@ -193,7 +237,6 @@ class Mainscreen extends ConsumerWidget {
                 ),
               ),
             ),
-            
             IconButton(
               icon: Icon(Icons.more_vert, color: accentColor),
               onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
@@ -211,7 +254,6 @@ class Mainscreen extends ConsumerWidget {
             : null,
         ),
 
-        // BODY 
         body: activeUrl.isEmpty 
           ? const BrandingScreen()
           : InAppWebView(
@@ -253,6 +295,38 @@ class Mainscreen extends ConsumerWidget {
                     }
                   }
               },
+              
+              // --- FEATURE: DEEP LINKING (OS Handling) ---
+              shouldOverrideUrlLoading: (controller, navigationAction) async {
+                final uri = navigationAction.request.url;
+                if (uri == null) return NavigationActionPolicy.ALLOW;
+
+                final url = uri.toString();
+                
+                // 1. Allow HTTP/HTTPS to load in WebView
+                if (uri.scheme == 'http' || uri.scheme == 'https') {
+                  return NavigationActionPolicy.ALLOW;
+                }
+
+                // 2. Handle System Links (Mail, Tel, SMS)
+                if (['mailto', 'tel', 'sms'].contains(uri.scheme)) {
+                  if (await canLaunchUrl(uri)) {
+                    await launchUrl(uri);
+                    return NavigationActionPolicy.CANCEL;
+                  }
+                }
+
+                // 3. Handle App Intents (Maps, WhatsApp, etc.)
+                try {
+                  // LaunchMode.externalApplication asks Android to open the default app
+                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  return NavigationActionPolicy.CANCEL;
+                } catch (e) {
+                  // Fallback: If no app can handle it, do nothing or show toast
+                  return NavigationActionPolicy.CANCEL; 
+                }
+              },
+
               onDownloadStartRequest: (controller, downloadRequest) async {
                   await DownloadManager.download(
                       downloadRequest.url.toString(),
@@ -268,6 +342,7 @@ class Mainscreen extends ConsumerWidget {
                     );
                   }
               },
+              // Permission handlers remain the same...
               onPermissionRequest: (controller, request) async {
                 final resources = request.resources;
                 if (securityState.isLocationBlocked && resources.contains(PermissionResourceType.DEVICE_ORIENTATION_AND_MOTION)) {
@@ -292,6 +367,7 @@ class Mainscreen extends ConsumerWidget {
     );
   }
 
+  // _buildDrawer remains unchanged from the previous robust version...
   Widget _buildDrawer(BuildContext context, WidgetRef ref, SecurityState securityState, bool isGhost) {
     return Drawer(
       backgroundColor: const Color(0xFF1E1E1E),
@@ -313,50 +389,35 @@ class Mainscreen extends ConsumerWidget {
             ),
           ),
           
-          // --- SECTION 1: ESSENTIALS (Top) ---
-          
-          // History
           ListTile(
             leading: Icon(Icons.history, color: isGhost ? Colors.white24 : Colors.white70),
             title: Text('History', style: TextStyle(color: isGhost ? Colors.white24 : Colors.white)),
             enabled: !isGhost,
             onTap: isGhost ? null : () {
               Navigator.pop(context); 
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const HistoryPage()),
-              );
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const HistoryPage()));
             },
           ),
 
-          // BOOKMARKS
           ListTile(
             leading: const Icon(Icons.bookmark_border, color: Colors.white70),
             title: const Text('Bookmarks', style: TextStyle(color: Colors.white)),
             enabled: !isGhost,
             onTap: isGhost ? null : () {
               Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const BookmarksPage()),
-              );
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const BookmarksPage()));
             },
           ),
 
-          // Downloads
           ListTile(
             leading: const Icon(Icons.download, color: Colors.white70),
             title: const Text('Downloads', style: TextStyle(color: Colors.white)),
             onTap: () {
               Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const DownloadsPage()),
-              );
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const DownloadsPage()));
             },
           ),
 
-          // Search Engine
           ListTile(
             leading: const Icon(Icons.search, color: Colors.white70),
             title: const Text('Search Engine', style: TextStyle(color: Colors.white)),
@@ -372,14 +433,11 @@ class Mainscreen extends ConsumerWidget {
 
           const Divider(color: Colors.white24),
 
-          // --- SECTION 2: SECURITY PROTOCOLS ---
-          
           Padding(
             padding: const EdgeInsets.only(left: 16, top: 10, bottom: 5),
             child: Text("SECURITY PROTOCOLS", style: TextStyle(color: isGhost ? Colors.redAccent : Colors.greenAccent, fontSize: 12, fontWeight: FontWeight.bold)),
           ),
 
-          // Ghost Tab
           ListTile(
             title: const Text("New Ghost Tab", style: TextStyle(color: Colors.white)),
             subtitle: const Text("Start a private session", style: TextStyle(color: Colors.white54, fontSize: 12)),
@@ -391,7 +449,6 @@ class Mainscreen extends ConsumerWidget {
             },
           ),
 
-          // Nuke Data
           ListTile(
             title: const Text("Nuke Data", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
             leading: const Icon(Icons.delete_forever, color: Colors.redAccent),
@@ -427,7 +484,6 @@ class Mainscreen extends ConsumerWidget {
             },
           ),
 
-          // Location Lock
           SwitchListTile(
             title: const Text("Location Lock", style: TextStyle(color: Colors.white)),
             secondary: Icon(Icons.location_off, color: securityState.isLocationBlocked ? Colors.greenAccent : Colors.white54),
@@ -436,7 +492,6 @@ class Mainscreen extends ConsumerWidget {
             onChanged: (val) => ref.read(securityProvider.notifier).toggleLocation(val),
           ),
 
-          // Sensor Lock
           SwitchListTile(
             title: const Text("Sensor Lock", style: TextStyle(color: Colors.white)),
             secondary: Icon(Icons.mic_off, color: securityState.isCameraBlocked ? Colors.greenAccent : Colors.white54),
@@ -445,7 +500,6 @@ class Mainscreen extends ConsumerWidget {
             onChanged: (val) => ref.read(securityProvider.notifier).toggleCamera(val),
           ),
           
-          // The Shield (CRASH FIX: Removed manual reload)
           SwitchListTile(
             title: const Text("The Shield", style: TextStyle(color: Colors.white)),
             secondary: Icon(Icons.shield, color: securityState.isAdBlockEnabled ? Colors.greenAccent : Colors.white54),
@@ -453,20 +507,16 @@ class Mainscreen extends ConsumerWidget {
             activeColor: Colors.greenAccent,
             onChanged: (val) {
                ref.read(securityProvider.notifier).toggleAdBlock(val);
-               // Removed redundant .reload() call here. The listener in build() handles it safely now.
             },
           ),
 
           const Divider(color: Colors.white24),
 
-          // --- SECTION 3: CUSTOMIZATION ---
-          
           Padding(
             padding: const EdgeInsets.only(left: 16, top: 10, bottom: 5),
             child: Text("CUSTOMIZATION", style: TextStyle(color: Colors.blueAccent, fontSize: 12, fontWeight: FontWeight.bold)),
           ),
 
-          // Desktop Mode (Listener handles the reload)
           SwitchListTile(
             title: const Text("Desktop Mode", style: TextStyle(color: Colors.white)),
             secondary: Icon(Icons.desktop_windows, color: securityState.isDesktopMode ? Colors.blueAccent : Colors.white54),
