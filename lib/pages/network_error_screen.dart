@@ -20,47 +20,52 @@ class ErrorScreen extends ConsumerWidget {
     final isLightMode = appTheme.mode == ThemeMode.light;
     final contentColor = isLightMode ? Colors.black87 : Colors.white;
 
-    return Container(
-      color: appTheme.backgroundColor,
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.signal_wifi_bad, size: 64, color: Colors.redAccent),
-          const SizedBox(height: 24),
-          const Text(
-            "CONNECTION FAILED",
-            style: TextStyle(
-              color: Colors.redAccent,
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 2,
+    // FIX: Use SizedBox.expand to force full screen
+    return SizedBox.expand( 
+      child: Container(
+        color: appTheme.backgroundColor,
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center, // Ensure children are centered horizontally
+          children: [
+            const Icon(Icons.signal_wifi_bad, size: 64, color: Colors.redAccent),
+            const SizedBox(height: 24),
+            const Text(
+              "CONNECTION FAILED",
+              style: TextStyle(
+                color: Colors.redAccent,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 2,
+              ),
+              textAlign: TextAlign.center,
             ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            "Target: $url",
-            style: TextStyle(color: contentColor.withOpacity(0.5), fontSize: 12),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 24),
-          Text(
-            error,
-            style: TextStyle(color: contentColor.withOpacity(0.7)),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 48),
-          
-          OutlinedButton.icon(
-            onPressed: onRetry,
-            icon: Icon(Icons.refresh, color: appTheme.primaryColor),
-            label: Text("RE-ESTABLISH", style: TextStyle(color: appTheme.primaryColor)),
-            style: OutlinedButton.styleFrom(
-              side: BorderSide(color: appTheme.primaryColor),
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            const SizedBox(height: 12),
+            Text(
+              "Target: $url",
+              style: TextStyle(color: contentColor.withOpacity(0.5), fontSize: 12),
+              textAlign: TextAlign.center,
             ),
-          )
-        ],
+            const SizedBox(height: 24),
+            Text(
+              error,
+              style: TextStyle(color: contentColor.withOpacity(0.7)),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 48),
+            
+            OutlinedButton.icon(
+              onPressed: onRetry,
+              icon: Icon(Icons.refresh, color: appTheme.primaryColor),
+              label: Text("RE-ESTABLISH", style: TextStyle(color: appTheme.primaryColor)),
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: appTheme.primaryColor),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              ),
+            )
+          ],
+        ),
       ),
     );
   }
