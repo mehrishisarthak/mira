@@ -5,7 +5,6 @@ import 'package:mira/model/ad_block_model.dart';
 import 'package:mira/model/book_mark_model.dart';
 import 'package:mira/model/download_model.dart';
 import 'package:mira/model/theme_model.dart';
-import 'package:mira/pages/browser_sheet.dart';
 import 'package:mira/pages/skelleton_loader.dart';
 import 'package:url_launcher/url_launcher.dart'; 
 
@@ -18,6 +17,7 @@ import 'package:mira/model/tab_model.dart';
 // UI Pages
 import 'package:mira/pages/branding_screen.dart';
 import 'package:mira/pages/history_screen.dart';
+import 'package:mira/pages/browser_sheet.dart'; 
 import 'package:mira/pages/tab_screen.dart'; 
 import 'package:mira/pages/downloads_screen.dart'; 
 import 'package:mira/pages/book_marks_screen.dart'; 
@@ -28,13 +28,53 @@ final loadingProgressProvider = StateProvider<int>((ref) => 0);
 final webViewControllerProvider = StateProvider<InAppWebViewController?>((ref) => null);
 final webErrorProvider = StateProvider<String?>((ref) => null); 
 
-class Mainscreen extends ConsumerWidget {
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-
-  Mainscreen({super.key});
+// 1. CHANGED TO STATEFUL WIDGET FOR LIFECYCLE MANAGEMENT
+class Mainscreen extends ConsumerStatefulWidget {
+  const Mainscreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<Mainscreen> createState() => _MainscreenState();
+}
+
+// 2. MIXIN WidgetsBindingObserver TO LISTEN TO APP STATE
+class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObserver {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  
+  // We track the last error time to prevent spamming
+  DateTime? _lastErrorTime;
+
+  @override
+  void initState() {
+    super.initState();
+    // Register this class to listen to OS events
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    // Stop listening when the screen dies
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  // 3. THE FIX: HANDLE APP RESUME
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // The user just came back to the app.
+      // 1. Clear any "stale" network errors that happened while backgrounded
+      if (ref.read(webErrorProvider) != null) {
+         ref.read(webErrorProvider.notifier).state = null;
+         
+         // 2. Force a reload to wake up the socket
+         final controller = ref.read(webViewControllerProvider);
+         controller?.reload();
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     // 1. WATCH STATE
     final isGhost = ref.watch(isGhostModeProvider);
     final activeTab = ref.watch(currentActiveTabProvider);
@@ -44,14 +84,9 @@ class Mainscreen extends ConsumerWidget {
     final securityState = ref.watch(securityProvider);
     final double progress = ref.watch(loadingProgressProvider) / 100;
     
-    // Watch Error State
     final errorMessage = ref.watch(webErrorProvider);
-
-    // Watch Bookmarks
     final bookmarks = ref.watch(bookmarksProvider);
     final isBookmarked = bookmarks.any((b) => b.url == activeUrl);
-
-    // 2. THEME LOGIC
     final appTheme = ref.watch(themeProvider);
     
     final backgroundColor = isGhost ? Colors.black : appTheme.backgroundColor;
@@ -62,11 +97,9 @@ class Mainscreen extends ConsumerWidget {
     final contentColor = isGhost ? Colors.redAccent : (isLightMode ? Colors.black87 : Colors.white);
     final hintColor = isGhost ? Colors.red.withOpacity(0.3) : (isLightMode ? Colors.black38 : Colors.white30);
 
-    // 3. ADDRESS BAR CONTROLLER
     final textController = TextEditingController(text: activeUrl);
     textController.selection = TextSelection.collapsed(offset: activeUrl.length);
 
-    // 4. CALCULATE SECURITY ICON
     IconData securityIcon;
     Color securityColor;
 
@@ -81,24 +114,20 @@ class Mainscreen extends ConsumerWidget {
       securityColor = Colors.redAccent;
     }
 
-    // 5. LISTENER: THEME CHANGES (FIX FOR STUCK DARK MODE)
-    // When the user toggles theme in Drawer, update WebView settings immediately.
     ref.listen(themeProvider, (previous, next) async {
        final controller = ref.read(webViewControllerProvider);
        if (controller != null) {
-         // Calculate ForceDark setting based on new theme
          final forceDarkSetting = isGhost 
-             ? ForceDark.ON 
+             ? ForceDark.OFF 
              : (next.mode == ThemeMode.light ? ForceDark.OFF : (next.mode == ThemeMode.dark ? ForceDark.ON : ForceDark.AUTO));
           
          await controller.setSettings(settings: InAppWebViewSettings(
             forceDark: forceDarkSetting,
-            algorithmicDarkeningAllowed: (isGhost || next.mode == ThemeMode.dark),
+            algorithmicDarkeningAllowed: isGhost ? false : (next.mode == ThemeMode.dark),
          ));
        }
     });
 
-    // 6. LISTENER: SECURITY CHANGES
     ref.listen(securityProvider, (previous, next) async {
       if (activeUrl.isEmpty) return; 
       final controller = ref.read(webViewControllerProvider);
@@ -301,13 +330,11 @@ class Mainscreen extends ConsumerWidget {
       );
     }
 
-    // Watch progress for the animation logic
     final progress = ref.watch(loadingProgressProvider);
     final bool isLoading = progress < 100;
     
-    // 7. FIX: CALCULATE CORRECT FORCE DARK SETTING
     final forceDarkSetting = isGhost 
-        ? ForceDark.ON 
+        ? ForceDark.OFF 
         : (theme.mode == ThemeMode.light ? ForceDark.OFF : (theme.mode == ThemeMode.dark ? ForceDark.ON : ForceDark.AUTO));
 
     return Stack(
@@ -319,12 +346,8 @@ class Mainscreen extends ConsumerWidget {
             incognito: isGhost || securityState.isIncognito, 
             clearCache: isGhost || securityState.isIncognito,
             useHybridComposition: true,
-            
-            // --- THEME FIX IS HERE ---
             forceDark: forceDarkSetting,
-            algorithmicDarkeningAllowed: (isGhost || theme.mode == ThemeMode.dark),
-            // ------------------------
-
+            algorithmicDarkeningAllowed: isGhost ? false : (theme.mode == ThemeMode.dark),
             userAgent: securityState.isDesktopMode 
                 ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" 
                 : "",
@@ -336,6 +359,17 @@ class Mainscreen extends ConsumerWidget {
           ),
           onWebViewCreated: (controller) {
             ref.read(webViewControllerProvider.notifier).state = controller;
+          },
+          onLoadStart: (controller, url) {
+             ref.read(webErrorProvider.notifier).state = null;
+             
+             if (url != null) {
+               if (isGhost) {
+                  ref.read(ghostTabsProvider.notifier).updateUrl(url.toString());
+               } else {
+                  ref.read(tabsProvider.notifier).updateUrl(url.toString());
+               }
+             }
           },
           onProgressChanged: (controller, progress) {
             ref.read(loadingProgressProvider.notifier).state = progress;
@@ -350,6 +384,16 @@ class Mainscreen extends ConsumerWidget {
               }
           },
           onReceivedError: (controller, request, error) {
+            // 4. IGNORE COMMON "FAKE" ERRORS
+            if (error.description.contains("net::ERR_ABORTED") || 
+                error.description.contains("net::ERR_NETWORK_CHANGED") ||
+                error.description.contains("net::ERR_INTERNET_DISCONNECTED")) {
+               
+               // Optional: If disconnected, only show error if it persists for >2 seconds
+               // For now, we return to avoid instant red screen on app resume
+               return; 
+            }
+
             if (request.isForMainFrame ?? true) {
                ref.read(webErrorProvider.notifier).state = error.description;
             }
@@ -417,7 +461,6 @@ class Mainscreen extends ConsumerWidget {
           },
         ),
 
-        // LAYER B: Skeleton Overlay
         IgnorePointer(
           ignoring: !isLoading, 
           child: AnimatedOpacity(
@@ -431,7 +474,6 @@ class Mainscreen extends ConsumerWidget {
     );
   }
 
-  // UPDATED DRAWER with safe area spacing
   Widget _buildDrawer(BuildContext context, WidgetRef ref, SecurityState securityState, bool isGhost, MiraTheme theme, Color textColor) {
     return Drawer(
       backgroundColor: isGhost ? const Color(0xFF1E1E1E) : theme.surfaceColor,
