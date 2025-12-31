@@ -115,53 +115,13 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
       }
     });
 
-    // 2. Theme Listener -> Force Reload to Apply Dark Mode
-    ref.listen(themeProvider, (previous, next) async {
-       final controller = ref.read(webViewControllerProvider);
-       if (controller != null) {
-         final forceDarkSetting = (next.mode == ThemeMode.light) 
-             ? ForceDark.OFF 
-             : (next.mode == ThemeMode.dark ? ForceDark.ON : ForceDark.AUTO);
-          
-         try {
-           await controller.setSettings(settings: InAppWebViewSettings(
-              forceDark: forceDarkSetting,
-              algorithmicDarkeningAllowed: (next.mode == ThemeMode.dark),
-           ));
-           // FIX: Force reload to guarantee the website repaints in the new theme
-           if (activeUrl.isNotEmpty) {
-             controller.reload();
-           }
-         } catch (e) {
-           debugPrint("Theme update safe fail: $e");
-         }
-       }
-    });
-
-    // 3. Security Listener
-    ref.listen(securityProvider, (previous, next) async {
-      if (activeUrl.isEmpty) return; 
-      final controller = ref.read(webViewControllerProvider);
-      if (controller == null) return;
-
-      if (previous?.isDesktopMode != next.isDesktopMode || 
-          previous?.isAdBlockEnabled != next.isAdBlockEnabled) {
-        try {
-          await controller.setSettings(
-            settings: InAppWebViewSettings(
-              preferredContentMode: next.isDesktopMode 
-                  ? UserPreferredContentMode.DESKTOP 
-                  : UserPreferredContentMode.MOBILE,
-              userAgent: next.isDesktopMode 
-                  ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" 
-                  : "",
-              contentBlockers: next.isAdBlockEnabled ? AdBlockService.adBlockRules : [],
-            ),
-          );
-          controller.reload();
-        } catch (e) {
-          debugPrint("Security update safe fail: $e");
-        }
+    // 2. Theme & Security Listener -> Unified Settings Update
+    ref.listen(themeProvider, (_, __) => _updateWebViewSettings());
+    ref.listen(securityProvider, (prev, next) {
+      // Only trigger for relevant security changes
+      if (prev?.isDesktopMode != next.isDesktopMode || 
+          prev?.isAdBlockEnabled != next.isAdBlockEnabled) {
+        _updateWebViewSettings();
       }
     });
 
@@ -365,21 +325,23 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
           key: ValueKey("${isGhost ? 'G' : 'N'}_$tabId"),
           initialUrlRequest: URLRequest(url: WebUri(activeUrl)),
           initialSettings: InAppWebViewSettings(
+            // Security & Privacy
             incognito: isGhost || securityState.isIncognito, 
             clearCache: isGhost || securityState.isIncognito,
-            useHybridComposition: true,
-            
+            contentBlockers: securityState.isAdBlockEnabled ? AdBlockService.adBlockRules : [],
+
+            // Theme
             forceDark: forceDarkSetting,
             algorithmicDarkeningAllowed: (theme.mode == ThemeMode.dark),
 
+            // Platform & UX
+            useHybridComposition: true,
             userAgent: securityState.isDesktopMode 
                 ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" 
                 : "",
             preferredContentMode: securityState.isDesktopMode 
                 ? UserPreferredContentMode.DESKTOP 
                 : UserPreferredContentMode.MOBILE,
-            contentBlockers: securityState.isAdBlockEnabled ? AdBlockService.adBlockRules : [],
-            transparentBackground: true, 
           ),
           onWebViewCreated: (controller) {
             ref.read(webViewControllerProvider.notifier).state = controller;
@@ -730,5 +692,53 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
         );
       },
     );
+  }
+
+  // --- WebView Settings Logic ---
+  void _updateWebViewSettings() async {
+    final controller = ref.read(webViewControllerProvider);
+    if (controller == null) return;
+
+    // Grab latest state from providers
+    final theme = ref.read(themeProvider);
+    final securityState = ref.read(securityProvider);
+    final isGhost = ref.read(isGhostModeProvider);
+    final activeUrl = ref.read(currentActiveTabProvider).url;
+
+    // Determine dark mode settings
+    final forceDarkSetting = (theme.mode == ThemeMode.light)
+        ? ForceDark.OFF
+        : (theme.mode == ThemeMode.dark ? ForceDark.ON : ForceDark.AUTO);
+
+    // Build the settings object
+    final settings = InAppWebViewSettings(
+      // Security & Privacy
+      incognito: isGhost || securityState.isIncognito,
+      clearCache: isGhost || securityState.isIncognito,
+      contentBlockers: securityState.isAdBlockEnabled ? AdBlockService.adBlockRules : [],
+
+      // Theme
+      forceDark: forceDarkSetting,
+      algorithmicDarkeningAllowed: (theme.mode == ThemeMode.dark),
+      
+      // Platform & UX
+      useHybridComposition: true,
+      userAgent: securityState.isDesktopMode
+          ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+          : "",
+      preferredContentMode: securityState.isDesktopMode
+          ? UserPreferredContentMode.DESKTOP
+          : UserPreferredContentMode.MOBILE,
+    );
+
+    // Apply settings and reload if needed
+    try {
+      await controller.setSettings(settings: settings);
+      if (activeUrl.isNotEmpty) {
+        controller.reload();
+      }
+    } catch (e) {
+      debugPrint("WebView settings update safe fail: $e");
+    }
   }
 }

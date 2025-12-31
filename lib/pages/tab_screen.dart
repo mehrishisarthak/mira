@@ -158,7 +158,7 @@ class TabsSheet extends ConsumerWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: isActive ? activeBorder : contentColor,
+                    color: isGhost ? Colors.white : (isActive ? activeBorder : contentColor),
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -167,13 +167,13 @@ class TabsSheet extends ConsumerWidget {
                   tab.url.isEmpty ? "Start Page" : tab.url,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: contentColor.withOpacity(0.5), fontSize: 12),
+                  style: TextStyle(color: isGhost ? Colors.white.withOpacity(0.5) : contentColor.withOpacity(0.5), fontSize: 12),
                 ),
                 const Spacer(),
                 Align(
                   alignment: Alignment.bottomRight,
                   child: IconButton(
-                    icon: Icon(Icons.close, color: contentColor.withOpacity(0.3), size: 20),
+                    icon: Icon(Icons.close, color: (isGhost ? Colors.white : contentColor).withOpacity(0.3), size: 20),
                     onPressed: () {
                       if (isGhost) {
                         ref.read(ghostTabsProvider.notifier).closeTab(tab.id);
