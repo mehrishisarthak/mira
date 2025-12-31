@@ -21,7 +21,7 @@ import 'package:mira/pages/browser_sheet.dart';
 import 'package:mira/pages/tab_screen.dart'; 
 import 'package:mira/pages/downloads_screen.dart'; 
 import 'package:mira/pages/book_marks_screen.dart'; 
-import 'package:mira/pages/network_error_screen.dart';
+import 'package:mira/pages/custom_error_screen.dart';
 
 // Local Providers
 final loadingProgressProvider = StateProvider<int>((ref) => 0);
@@ -301,7 +301,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     }
 
     if (errorMessage != null) {
-      return ErrorScreen(
+      return CustomErrorScreen(
         error: errorMessage,
         url: activeUrl,
         onRetry: () {
@@ -346,6 +346,19 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
           onWebViewCreated: (controller) {
             ref.read(webViewControllerProvider.notifier).state = controller;
           },
+          onCreateWindow: (controller, createWindowAction) async {
+            final isGhost = ref.read(isGhostModeProvider);
+            final url = createWindowAction.request.url;
+
+            if (isGhost) {
+              ref.read(ghostTabsProvider.notifier).add(url: url?.toString() ?? '');
+            } else {
+              ref.read(tabsProvider.notifier).add(url: url?.toString() ?? '');
+            }
+
+            // Return true to confirm we've handled the action
+            return true;
+          },
           onLoadStart: (controller, url) {
              ref.read(webErrorProvider.notifier).state = null;
              if (url != null) {
@@ -369,13 +382,35 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
               }
           },
           onReceivedError: (controller, request, error) {
-            if (error.description.contains("net::ERR_ABORTED") || 
+            // Ignore some common "errors" that aren't critical failures
+            if (error.description.contains("net::ERR_ABORTED") ||
                 error.description.contains("net::ERR_NETWORK_CHANGED") ||
                 error.description.contains("net::ERR_INTERNET_DISCONNECTED")) {
-               return; 
+              return;
             }
+
+            // Only handle errors for the main frame
             if (request.isForMainFrame ?? true) {
-               ref.read(webErrorProvider.notifier).state = error.description;
+              // NEW: If it's a DNS/host lookup error, try searching for it instead
+              final url = request.url;
+              if (error.type == WebResourceErrorType.HOST_LOOKUP && url.host.isNotEmpty) {
+                // Prevent looping if the search engine itself is down
+                final currentSearchEngineHost = Uri.parse(ref.read(searchEngineProvider)).host;
+                if (url.host.contains(currentSearchEngineHost)) {
+                   ref.read(webErrorProvider.notifier).state = "Search engine is unreachable.";
+                   return;
+                }
+
+                final searchTerm = url.host; // e.g., "kissanime.org.ru"
+                final searchUrl = ref.read(formattedSearchUrlProvider(searchTerm));
+                
+                controller.loadUrl(urlRequest: URLRequest(url: WebUri(searchUrl)));
+                
+                return; 
+              }
+
+              // For all other errors, show the error screen
+              ref.read(webErrorProvider.notifier).state = error.description;
             }
           },
           onReceivedHttpError: (controller, request, response) {
@@ -720,6 +755,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
       // Theme
       forceDark: forceDarkSetting,
       algorithmicDarkeningAllowed: (theme.mode == ThemeMode.dark),
+      
       
       // Platform & UX
       useHybridComposition: true,

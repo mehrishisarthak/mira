@@ -67,8 +67,11 @@ class GhostTabsNotifier extends StateNotifier<TabsState> {
 
   // Nuke (Reset)
   void nuke() {
-    state = TabsState(tabs: [BrowserTab(title: "Ghost Tab")], activeIndex: 0);
+    final newTabs = [BrowserTab(title: "Ghost Tab")];
+    state = TabsState(tabs: newTabs, activeIndex: 0);
   }
+
+  void add({required String url}) {}
 }
 
 // --- 2. THE PROVIDERS ---

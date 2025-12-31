@@ -143,8 +143,9 @@ class TabsNotifier extends StateNotifier<TabsState> {
   // --- THE MISSING NUKE METHOD ---
   // This resets the persistent tabs to a single blank tab
   void nuke() {
-    state = TabsState(tabs: [BrowserTab()], activeIndex: 0);
-    _saveToPrefs(); // Save the "empty" state to disk immediately
+    final newTabs = [BrowserTab()];
+    state = TabsState(tabs: newTabs, activeIndex: 0);
+    _saveToPrefs();
   }
 
   void _updateActiveTab(BrowserTab Function(BrowserTab) updater) {
@@ -154,6 +155,8 @@ class TabsNotifier extends StateNotifier<TabsState> {
     state = TabsState(tabs: currentTabs, activeIndex: state.activeIndex);
     _saveToPrefs();
   }
+
+  void add({required String url}) {}
 }
 
 // --- 4. THE PROVIDER ---
