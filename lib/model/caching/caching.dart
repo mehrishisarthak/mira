@@ -25,6 +25,9 @@ class PreferencesService {
   static const _keyTheme = 'app_theme_style'; // For Color Accent
   static const _keyThemeMode = 'app_theme_mode'; // For Light/Dark/System
 
+  // Onboarding Key (NEW)
+  static const _keyFirstRun = 'is_first_run';
+
   // --- SEARCH ENGINE ---
   String? getSearchEngine() => _prefs.getString(_keySearchEngine);
   Future<void> setSearchEngine(String engineKey) async => await _prefs.setString(_keySearchEngine, engineKey);
@@ -83,4 +86,9 @@ class PreferencesService {
   // Default to 0 (ThemeMode.system in Flutter is usually index 0)
   int getThemeMode() => _prefs.getInt(_keyThemeMode) ?? 0;
   Future<void> setThemeMode(int index) async => await _prefs.setInt(_keyThemeMode, index);
+
+  // --- ONBOARDING (NEW) ---
+  // Returns true if key doesn't exist yet (First time user)
+  bool getFirstRun() => _prefs.getBool(_keyFirstRun) ?? true;
+  Future<void> setFirstRun(bool value) async => await _prefs.setBool(_keyFirstRun, value);
 }

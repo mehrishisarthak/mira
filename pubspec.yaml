@@ -19,6 +19,8 @@ dependencies:
   shared_preferences: ^2.5.4
   url_launcher: ^6.3.2
   uuid: ^4.5.2
+  lottie: ^3.1.0 
+  smooth_page_indicator: ^1.1.0
 
 dev_dependencies:
   flutter_lints: ^5.0.0
@@ -27,3 +29,8 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  
+  assets:
+    - assets/1.json
+    - assets/2.json
+    - assets/3.json

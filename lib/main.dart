@@ -3,33 +3,43 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mira/model/download_model.dart';
 import 'package:mira/model/search_engine.dart';
 import 'package:mira/model/theme_model.dart';
+import 'package:mira/pages/onboarding_scree.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:mira/model/caching/caching.dart'; // Imports PreferencesService CLASS
+import 'package:mira/model/caching/caching.dart'; 
 import 'package:mira/pages/mainscreen.dart';
-
 void main() async {
   // 1. Ensure Flutter bindings are ready for async code
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 2. Initialize SharedPreferences
+  // 2. Initialize SharedPreferences & Service
   final prefs = await SharedPreferences.getInstance();
   final preferencesService = PreferencesService(prefs);
-  // 3. Downlaod Manager
+  
+  // 3. Check Onboarding Status
+  // (Uses the new method we added to PreferencesService)
+  final isFirstRun = preferencesService.getFirstRun();
+
+  // 4. Download Manager
   await DownloadManager.init();
 
   runApp(
     ProviderScope(
-      // 3. Inject the initialized service into the provider
+      // Inject the initialized service into the provider
       overrides: [
         preferencesServiceProvider.overrideWithValue(preferencesService),
       ],
-      child: const MyApp(),
+      // Pass the correct starting screen based on first run status
+      child: MyApp(
+        startScreen: isFirstRun ? const OnboardingScreen() : const Mainscreen(),
+      ),
     ),
   );
 }
 
 class MyApp extends ConsumerWidget {
-  const MyApp({super.key});
+  final Widget startScreen; 
+
+  const MyApp({super.key, required this.startScreen});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -71,7 +81,7 @@ class MyApp extends ConsumerWidget {
       theme: lightTheme,
       darkTheme: darkTheme,
       themeMode: appTheme.mode,
-      home: Mainscreen(),
+      home: startScreen,
     );
   }
 }

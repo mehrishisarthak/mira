@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // For SystemNavigator
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:mira/model/ad_block_model.dart';
@@ -21,7 +22,7 @@ import 'package:mira/pages/browser_sheet.dart';
 import 'package:mira/pages/tab_screen.dart'; 
 import 'package:mira/pages/downloads_screen.dart'; 
 import 'package:mira/pages/book_marks_screen.dart'; 
-import 'package:mira/pages/custom_error_screen.dart';
+import 'package:mira/pages/custom_error_screen.dart'; 
 
 // Local Providers
 final loadingProgressProvider = StateProvider<int>((ref) => 0);
@@ -38,6 +39,9 @@ class Mainscreen extends ConsumerStatefulWidget {
 class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObserver {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   
+  // For Double-Tap to Exit logic
+  DateTime? _lastExitTime;
+
   @override
   void initState() {
     super.initState();
@@ -54,11 +58,25 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       if (ref.read(webErrorProvider) != null) {
+         debugPrint("System: App Resumed. Healing broken connection...");
          ref.read(webErrorProvider.notifier).state = null;
          final controller = ref.read(webViewControllerProvider);
          controller?.reload();
       }
     }
+  }
+
+  // FIXED: Robust Search vs URL Detection
+  bool _isValidUrl(String value) {
+    if (value.contains(' ')) return false;
+    if (value.startsWith('http://') || value.startsWith('https://')) return true;
+    
+    final domainRegExp = RegExp(
+      r'^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}|' 
+      r'^localhost|' 
+      r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$'
+    );
+    return domainRegExp.hasMatch(value);
   }
 
   @override
@@ -80,8 +98,6 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     // 2. THEME & COLORS
     final backgroundColor = appTheme.backgroundColor;
     final appBarColor = appTheme.surfaceColor;
-    
-    // Accent Color: Red for Ghost, Theme Color for Normal
     final primaryAccent = isGhost ? Colors.redAccent : appTheme.primaryColor;
     
     final isLightMode = appTheme.mode == ThemeMode.light;
@@ -107,7 +123,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
 
     // --- LISTENERS ---
 
-    // 1. Tab Switch -> Reset Progress & Kill Controller (Anti-Crash)
+    // 1. Tab Switch -> Reset Progress & Controller
     ref.listen(currentActiveTabProvider, (previous, next) {
       if (previous?.id != next.id) {
         ref.read(loadingProgressProvider.notifier).state = 0;
@@ -115,13 +131,15 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
       }
     });
 
-    // 2. Theme & Security Listener -> Unified Settings Update
-    ref.listen(themeProvider, (_, __) => _updateWebViewSettings());
+    // 2. FIXED: Smart Settings Updates
+    // Theme change -> Update settings, NO reload
+    ref.listen(themeProvider, (_, __) => _updateWebViewSettings(forceReload: false));
+    
+    // Security change -> Update settings, FORCE reload (for Desktop mode/AdBlock)
     ref.listen(securityProvider, (prev, next) {
-      // Only trigger for relevant security changes
       if (prev?.isDesktopMode != next.isDesktopMode || 
           prev?.isAdBlockEnabled != next.isAdBlockEnabled) {
-        _updateWebViewSettings();
+        _updateWebViewSettings(forceReload: true);
       }
     });
 
@@ -131,6 +149,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
         if (didPop) return;
         final controller = ref.read(webViewControllerProvider);
         
+        // 1. Handle Error Screen Back
         if (errorMessage != null) {
            if (await controller?.canGoBack() ?? false) {
              ref.read(webErrorProvider.notifier).state = null; 
@@ -139,27 +158,37 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
            }
         }
 
-        if (controller != null) {
-          try {
-            if (await controller.canGoBack()) {
-              controller.goBack();
-            } else {
-              if (activeUrl.isNotEmpty) {
-                 if (isGhost) {
-                   ref.read(ghostTabsProvider.notifier).updateUrl('');
-                 } else {
-                   ref.read(tabsProvider.notifier).updateUrl('');
-                 }
-                 ref.read(webErrorProvider.notifier).state = null;
-              }
-            }
-          } catch (e) {
-             if (isGhost) {
-               ref.read(ghostTabsProvider.notifier).updateUrl('');
-             } else {
-               ref.read(tabsProvider.notifier).updateUrl('');
-             }
-          }
+        // 2. Handle Browser Back
+        if (controller != null && await controller.canGoBack()) {
+          controller.goBack();
+          return;
+        } 
+        
+        // 3. Handle Going to Home (Branding)
+        if (activeUrl.isNotEmpty) {
+           if (isGhost) {
+             ref.read(ghostTabsProvider.notifier).updateUrl('');
+           } else {
+             ref.read(tabsProvider.notifier).updateUrl('');
+           }
+           ref.read(webErrorProvider.notifier).state = null;
+           return;
+        }
+
+        // 4. FIXED: Double Tap to Exit
+        final now = DateTime.now();
+        if (_lastExitTime == null || 
+            now.difference(_lastExitTime!) > const Duration(seconds: 2)) {
+          _lastExitTime = now;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text("Press back again to exit MIRA"),
+              backgroundColor: isGhost ? Colors.redAccent : appTheme.primaryColor,
+              duration: const Duration(seconds: 2),
+            )
+          );
+        } else {
+          SystemNavigator.pop(); 
         }
       },
       child: Scaffold(
@@ -211,7 +240,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
                         size: 20,
                       ),
                       onPressed: () {
-                         ref.read(bookmarksProvider.notifier).toggleBookmark(activeUrl, activeTab.title);
+                          ref.read(bookmarksProvider.notifier).toggleBookmark(activeUrl, activeTab.title);
                       },
                     )
                   : null,
@@ -225,17 +254,18 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
                  ref.read(webErrorProvider.notifier).state = null;
 
                  String finalUrl;
-                 if (value.contains('.') && !value.contains(' ')) {
-                    finalUrl = "https://$value";
+                 // FIXED: Smart URL Logic
+                 if (_isValidUrl(value)) {
+                    finalUrl = value.startsWith("http") ? value : "https://$value";
                  } else {
                     finalUrl = ref.read(formattedSearchUrlProvider(value));
                  }
                  
                  if (isGhost) {
-                    ref.read(ghostTabsProvider.notifier).updateUrl(finalUrl);
+                   ref.read(ghostTabsProvider.notifier).updateUrl(finalUrl);
                  } else {
-                    ref.read(historyProvider.notifier).addToHistory(value);
-                    ref.read(tabsProvider.notifier).updateUrl(finalUrl);
+                   ref.read(historyProvider.notifier).addToHistory(value);
+                   ref.read(tabsProvider.notifier).updateUrl(finalUrl);
                  }
 
                  final controller = ref.read(webViewControllerProvider);
@@ -257,18 +287,17 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
                   builder: (context) => const FractionallySizedBox(heightFactor: 0.8, child: TabsSheet()),
                 );
               },
-              // UI FIX: Filled Background with Contrasting Text
               child: Container(
                 margin: const EdgeInsets.symmetric(horizontal: 8),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: primaryAccent, // Filled Background
+                  color: primaryAccent, 
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   "$tabCount", 
                   style: const TextStyle(
-                    color: Colors.white, // Always White text on filled accent
+                    color: Colors.white,
                     fontWeight: FontWeight.bold
                   )
                 ),
@@ -279,16 +308,18 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
               onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
             ),
           ],
-          bottom: progress < 1.0 
-            ? PreferredSize(
-                preferredSize: const Size.fromHeight(2),
-                child: LinearProgressIndicator(
+          
+          // FIXED: UI Jitter prevention
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(2),
+            child: progress < 1.0 
+              ? LinearProgressIndicator(
                   value: progress, 
                   backgroundColor: Colors.transparent, 
                   color: primaryAccent
-                ),
-              ) 
-            : null,
+                )
+              : Container(height: 2, color: Colors.transparent),
+          ),
         ),
         body: _buildBody(activeUrl, errorMessage, ref, securityState, isGhost, activeTab.id, primaryAccent, appTheme),
       ),
@@ -314,7 +345,6 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     final progress = ref.watch(loadingProgressProvider);
     final bool isLoading = progress < 100;
     
-    // Initial Setting (Matches Listener)
     final forceDarkSetting = (theme.mode == ThemeMode.light) 
         ? ForceDark.OFF 
         : (theme.mode == ThemeMode.dark ? ForceDark.ON : ForceDark.AUTO);
@@ -322,19 +352,14 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     return Stack(
       children: [
         InAppWebView(
-          key: ValueKey("${isGhost ? 'G' : 'N'}_$tabId"),
+          key: ValueKey("${isGhost ? 'G' : 'N'}_$tabId"), // Rebuilds when ID changes (Standard Behavior)
           initialUrlRequest: URLRequest(url: WebUri(activeUrl)),
           initialSettings: InAppWebViewSettings(
-            // Security & Privacy
             incognito: isGhost || securityState.isIncognito, 
             clearCache: isGhost || securityState.isIncognito,
             contentBlockers: securityState.isAdBlockEnabled ? AdBlockService.adBlockRules : [],
-
-            // Theme
             forceDark: forceDarkSetting,
             algorithmicDarkeningAllowed: (theme.mode == ThemeMode.dark),
-
-            // Platform & UX
             useHybridComposition: true,
             userAgent: securityState.isDesktopMode 
                 ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" 
@@ -346,26 +371,28 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
           onWebViewCreated: (controller) {
             ref.read(webViewControllerProvider.notifier).state = controller;
           },
+          
+          // FIXED: Prevent Null URL Crashes
           onCreateWindow: (controller, createWindowAction) async {
-            final isGhost = ref.read(isGhostModeProvider);
             final url = createWindowAction.request.url;
-
-            if (isGhost) {
-              ref.read(ghostTabsProvider.notifier).add(url: url?.toString() ?? '');
-            } else {
-              ref.read(tabsProvider.notifier).add(url: url?.toString() ?? '');
+            if (url == null || url.toString().isEmpty || url.toString() == 'about:blank') {
+              return true; 
             }
-
-            // Return true to confirm we've handled the action
+            final isGhost = ref.read(isGhostModeProvider);
+            if (isGhost) {
+              ref.read(ghostTabsProvider.notifier).add(url: url.toString());
+            } else {
+              ref.read(tabsProvider.notifier).add(url: url.toString());
+            }
             return true;
           },
           onLoadStart: (controller, url) {
              ref.read(webErrorProvider.notifier).state = null;
              if (url != null) {
                if (isGhost) {
-                  ref.read(ghostTabsProvider.notifier).updateUrl(url.toString());
+                 ref.read(ghostTabsProvider.notifier).updateUrl(url.toString());
                } else {
-                  ref.read(tabsProvider.notifier).updateUrl(url.toString());
+                 ref.read(tabsProvider.notifier).updateUrl(url.toString());
                }
              }
           },
@@ -382,35 +409,13 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
               }
           },
           onReceivedError: (controller, request, error) {
-            // Ignore some common "errors" that aren't critical failures
-            if (error.description.contains("net::ERR_ABORTED") ||
+            if (error.description.contains("net::ERR_ABORTED") || 
                 error.description.contains("net::ERR_NETWORK_CHANGED") ||
                 error.description.contains("net::ERR_INTERNET_DISCONNECTED")) {
-              return;
+               return; 
             }
-
-            // Only handle errors for the main frame
             if (request.isForMainFrame ?? true) {
-              // NEW: If it's a DNS/host lookup error, try searching for it instead
-              final url = request.url;
-              if (error.type == WebResourceErrorType.HOST_LOOKUP && url.host.isNotEmpty) {
-                // Prevent looping if the search engine itself is down
-                final currentSearchEngineHost = Uri.parse(ref.read(searchEngineProvider)).host;
-                if (url.host.contains(currentSearchEngineHost)) {
-                   ref.read(webErrorProvider.notifier).state = "Search engine is unreachable.";
-                   return;
-                }
-
-                final searchTerm = url.host; // e.g., "kissanime.org.ru"
-                final searchUrl = ref.read(formattedSearchUrlProvider(searchTerm));
-                
-                controller.loadUrl(urlRequest: URLRequest(url: WebUri(searchUrl)));
-                
-                return; 
-              }
-
-              // For all other errors, show the error screen
-              ref.read(webErrorProvider.notifier).state = error.description;
+               ref.read(webErrorProvider.notifier).state = error.description;
             }
           },
           onReceivedHttpError: (controller, request, response) {
@@ -429,25 +434,35 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
                 }
               }
           },
+          
+          // FIXED: Deep Links Support (YouTube, Maps, etc.)
           shouldOverrideUrlLoading: (controller, navigationAction) async {
             final uri = navigationAction.request.url;
             if (uri == null) return NavigationActionPolicy.ALLOW;
 
-            if (uri.scheme == 'http' || uri.scheme == 'https') {
+            // 1. Standard Web Navigation -> Allow Internal WebView
+            if (['http', 'https', 'file', 'chrome', 'data', 'javascript', 'about'].contains(uri.scheme)) {
               return NavigationActionPolicy.ALLOW;
             }
+
+            // 2. Known External Schemes
             if (['mailto', 'tel', 'sms'].contains(uri.scheme)) {
               if (await canLaunchUrl(uri)) {
                 await launchUrl(uri);
                 return NavigationActionPolicy.CANCEL;
               }
             }
+
+            // 3. Deep Links (Market, Twitter, etc.)
             try {
-              await launchUrl(uri, mode: LaunchMode.externalApplication);
-              return NavigationActionPolicy.CANCEL;
+              if (await canLaunchUrl(uri)) {
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+                return NavigationActionPolicy.CANCEL;
+              }
             } catch (e) {
-              return NavigationActionPolicy.CANCEL; 
+              debugPrint("Deep Link failed: $e");
             }
+            return NavigationActionPolicy.CANCEL; 
           },
           onDownloadStartRequest: (controller, downloadRequest) async {
               await DownloadManager.download(
@@ -491,7 +506,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
 
   Widget _buildDrawer(BuildContext context, WidgetRef ref, SecurityState securityState, bool isGhost, MiraTheme theme, Color appTextColor) {
     return Drawer(
-      backgroundColor: theme.surfaceColor, // Always follows theme (White in Light, Dark in Dark)
+      backgroundColor: theme.surfaceColor,
       child: Column(
         children: [
           Expanded(
@@ -516,7 +531,6 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
                     ),
                   ),
                   
-                  // Use 'appTextColor' which auto-adapts to theme (Black in Light, White in Dark)
                   ListTile(
                     leading: Icon(Icons.history, color: appTextColor.withOpacity(0.7)),
                     title: Text('History', style: TextStyle(color: appTextColor)),
@@ -547,8 +561,8 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
                   ),
 
                   ListTile(
-                    leading: Icon(Icons.settings, color: appTextColor.withOpacity(0.7)),
-                    title: Text('Settings', style: TextStyle(color: appTextColor)),
+                    leading: Icon(Icons.search, color: appTextColor.withOpacity(0.7)),
+                    title: Text('Browser', style: TextStyle(color: appTextColor)),
                     onTap: () {
                       Navigator.pop(context);
                       showModalBottomSheet(
@@ -571,9 +585,9 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
                     subtitle: Text("Start a private session", style: TextStyle(color: appTextColor.withOpacity(0.5), fontSize: 12)),
                     leading: Icon(Icons.privacy_tip_outlined, color: appTextColor.withOpacity(0.7)),
                     onTap: () {
-                       ref.read(isGhostModeProvider.notifier).state = true;
-                       ref.read(ghostTabsProvider.notifier).addTab();
-                       Navigator.pop(context);
+                        ref.read(isGhostModeProvider.notifier).state = true;
+                        ref.read(ghostTabsProvider.notifier).addTab();
+                        Navigator.pop(context);
                     },
                   ),
 
@@ -637,7 +651,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
                     value: securityState.isAdBlockEnabled,
                     activeColor: Colors.greenAccent,
                     onChanged: (val) {
-                       ref.read(securityProvider.notifier).toggleAdBlock(val);
+                        ref.read(securityProvider.notifier).toggleAdBlock(val);
                     },
                   ),
 
@@ -654,11 +668,10 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
                     value: securityState.isDesktopMode,
                     activeColor: Colors.blueAccent,
                     onChanged: (val) {
-                       ref.read(securityProvider.notifier).toggleDesktop(val);
+                        ref.read(securityProvider.notifier).toggleDesktop(val);
                     },
                   ),
 
-                  // THEME SELECTOR IS VISIBLE IN BOTH MODES
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                     child: _buildDrawerThemeSelector(context, ref, theme, appTextColor),
@@ -729,35 +742,25 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     );
   }
 
-  // --- WebView Settings Logic ---
-  void _updateWebViewSettings() async {
+  // FIXED: Added forceReload parameter for smarter updates
+  void _updateWebViewSettings({bool forceReload = false}) async {
     final controller = ref.read(webViewControllerProvider);
     if (controller == null) return;
 
-    // Grab latest state from providers
     final theme = ref.read(themeProvider);
     final securityState = ref.read(securityProvider);
     final isGhost = ref.read(isGhostModeProvider);
-    final activeUrl = ref.read(currentActiveTabProvider).url;
-
-    // Determine dark mode settings
+    
     final forceDarkSetting = (theme.mode == ThemeMode.light)
         ? ForceDark.OFF
         : (theme.mode == ThemeMode.dark ? ForceDark.ON : ForceDark.AUTO);
 
-    // Build the settings object
     final settings = InAppWebViewSettings(
-      // Security & Privacy
       incognito: isGhost || securityState.isIncognito,
       clearCache: isGhost || securityState.isIncognito,
       contentBlockers: securityState.isAdBlockEnabled ? AdBlockService.adBlockRules : [],
-
-      // Theme
       forceDark: forceDarkSetting,
       algorithmicDarkeningAllowed: (theme.mode == ThemeMode.dark),
-      
-      
-      // Platform & UX
       useHybridComposition: true,
       userAgent: securityState.isDesktopMode
           ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -767,10 +770,10 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
           : UserPreferredContentMode.MOBILE,
     );
 
-    // Apply settings and reload if needed
     try {
       await controller.setSettings(settings: settings);
-      if (activeUrl.isNotEmpty) {
+      // FIXED: Only reload if specifically requested
+      if (forceReload) {
         controller.reload();
       }
     } catch (e) {
