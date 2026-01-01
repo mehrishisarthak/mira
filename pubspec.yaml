@@ -14,24 +14,43 @@ dependencies:
   flutter_downloader: ^1.12.0
   flutter_inappwebview: ^6.1.5
   flutter_riverpod: ^2.6.1
+  google_fonts: ^6.3.3
+  lottie: ^3.1.0
   path_provider: ^2.1.5
   permission_handler: ^12.0.1
   shared_preferences: ^2.5.4
+  showcaseview: ^3.0.0
+  smooth_page_indicator: ^1.1.0
   url_launcher: ^6.3.2
   uuid: ^4.5.2
-  lottie: ^3.1.0 
-  smooth_page_indicator: ^1.1.0
-  showcaseview: ^3.0.0
 
 dev_dependencies:
+  # Build tools moved here
+  flutter_launcher_icons: ^0.14.4
   flutter_lints: ^5.0.0
+  flutter_native_splash: ^2.4.7
   flutter_test:
     sdk: flutter
 
 flutter:
   uses-material-design: true
-  
+
   assets:
     - assets/1.json
     - assets/2.json
     - assets/3.json
+    - assets/icon.png
+# --- MIRA IDENTITY CONFIG ---
+flutter_native_splash:
+  color: "#000000"
+  # This ensures Android 12+ also respects the black void
+  android_12:
+    color: "#000000"
+  # Note: No image defined, so it will be a pure black screen
+  # until your Flutter app fades in.
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  remove_alpha_ios: true
+  # Placeholder: Update this path when you have your logo ready
+  image_path: "assets/icon.png"

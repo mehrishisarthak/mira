@@ -4,9 +4,11 @@ import 'package:mira/model/download_model.dart';
 import 'package:mira/model/search_engine.dart';
 import 'package:mira/model/theme_model.dart';
 import 'package:mira/pages/onboarding_screen.dart';
+import 'package:mira/pages/splashscreen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mira/model/caching/caching.dart'; 
-import 'package:mira/pages/mainscreen.dart';
+import 'package:mira/pages/mainscreen.dart'; // Ensure filename matches (mainscreen vs main_screen)
+
 void main() async {
   // 1. Ensure Flutter bindings are ready for async code
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,7 +18,6 @@ void main() async {
   final preferencesService = PreferencesService(prefs);
   
   // 3. Check Onboarding Status
-  // (Uses the new method we added to PreferencesService)
   final isFirstRun = preferencesService.getFirstRun();
 
   // 4. Download Manager
@@ -24,22 +25,22 @@ void main() async {
 
   runApp(
     ProviderScope(
-      // Inject the initialized service into the provider
       overrides: [
         preferencesServiceProvider.overrideWithValue(preferencesService),
       ],
-      // Pass the correct starting screen based on first run status
       child: MyApp(
-        startScreen: isFirstRun ? const OnboardingScreen() : const Mainscreen(),
+        // Pass the TARGET screen, not the starting screen.
+        // We will pass this to the SplashScreen.
+        targetScreen: isFirstRun ? const OnboardingScreen() : const Mainscreen(),
       ),
     ),
   );
 }
 
 class MyApp extends ConsumerWidget {
-  final Widget startScreen; 
+  final Widget targetScreen; 
 
-  const MyApp({super.key, required this.startScreen});
+  const MyApp({super.key, required this.targetScreen});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -81,7 +82,8 @@ class MyApp extends ConsumerWidget {
       theme: lightTheme,
       darkTheme: darkTheme,
       themeMode: appTheme.mode,
-      home: startScreen,
+      // ALWAYS start with Splash, pass the target destination
+      home: SplashScreen(nextScreen: targetScreen),
     );
   }
 }

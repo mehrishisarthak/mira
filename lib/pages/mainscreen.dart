@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/services.dart'; // Required for Haptics
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:google_fonts/google_fonts.dart'; // --- [NEW] For Monospace Font ---
 import 'package:mira/model/ad_block_model.dart';
 import 'package:mira/model/book_mark_model.dart';
 import 'package:mira/model/download_model.dart';
@@ -103,6 +104,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
 
     // 3. Handle Going to Home (Branding)
     if (activeUrl.isNotEmpty) {
+      HapticFeedback.lightImpact(); // --- [TACTILE] Feedback on clearing URL ---
       if (isGhost) {
         ref.read(ghostTabsProvider.notifier).updateUrl('');
       } else {
@@ -118,6 +120,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
         now.difference(_lastExitTime!) > const Duration(seconds: 2)) {
       _lastExitTime = now;
       if (mounted) {
+        HapticFeedback.selectionClick(); // --- [TACTILE] Warning vibration ---
         ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: const Text("Press back again to exit MIRA"),
@@ -184,10 +187,8 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     });
 
     // 2. Smart Settings Updates
-    // Theme change -> Update settings, NO reload
     ref.listen(themeProvider, (_, __) => _updateWebViewSettings(forceReload: false));
     
-    // Security change -> Update settings, FORCE reload (for Desktop mode/AdBlock)
     ref.listen(securityProvider, (prev, next) {
       if (prev?.isDesktopMode != next.isDesktopMode || 
           prev?.isAdBlockEnabled != next.isAdBlockEnabled) {
@@ -213,6 +214,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
             icon: Icon(securityIcon, color: securityColor),
             onPressed: () {
               if (activeUrl.isNotEmpty) {
+                HapticFeedback.selectionClick(); // --- [TACTILE] ---
                 showDialog(
                   context: context, 
                   builder: (ctx) => AlertDialog(
@@ -236,12 +238,18 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
 
           title: TextField(
             controller: textController,
-            style: TextStyle(color: contentColor), 
+            // --- [FIXED] Restored 'jetBrainsMono' (Capital B is key) ---
+            style: GoogleFonts.jetBrainsMono(
+              color: contentColor,
+              fontWeight: FontWeight.w500,
+              fontSize: 14, 
+            ), 
             cursorColor: primaryAccent,
             decoration: InputDecoration(
               hintText: isGhost ? 'Ghost Mode Active' : 'Search or enter address',
               border: InputBorder.none,
-              hintStyle: TextStyle(color: hintColor),
+              // --- [FIXED] Restored 'jetBrainsMono' ---
+              hintStyle: GoogleFonts.jetBrainsMono(color: hintColor), 
               suffixIcon: activeUrl.isNotEmpty && !isGhost
                   ? IconButton(
                       icon: Icon(
@@ -250,6 +258,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
                         size: 20,
                       ),
                       onPressed: () {
+                          HapticFeedback.selectionClick(); // --- [TACTILE] ---
                           ref.read(bookmarksProvider.notifier).toggleBookmark(activeUrl, activeTab.title);
                       },
                     )
@@ -261,14 +270,14 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
             },
             onSubmitted: (value) {
               if (value.isNotEmpty) {
+                 HapticFeedback.lightImpact(); // --- [TACTILE] Enter pressed ---
                  ref.read(webErrorProvider.notifier).state = null;
 
                  String finalUrl;
-                 // Smart URL Logic
                  if (_isValidUrl(value)) {
-                    finalUrl = value.startsWith("http") ? value : "https://$value";
+                   finalUrl = value.startsWith("http") ? value : "https://$value";
                  } else {
-                    finalUrl = ref.read(formattedSearchUrlProvider(value));
+                   finalUrl = ref.read(formattedSearchUrlProvider(value));
                  }
                  
                  if (isGhost) {
@@ -290,6 +299,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
           actions: [
             InkWell(
               onTap: () {
+                HapticFeedback.selectionClick(); // --- [TACTILE] Click feel ---
                 showModalBottomSheet(
                   context: context,
                   isScrollControlled: true,
@@ -306,7 +316,8 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
                 ),
                 child: Text(
                   "$tabCount", 
-                  style: const TextStyle(
+                  // --- [FIXED] Restored 'jetBrainsMono' ---
+                  style: GoogleFonts.jetBrainsMono(
                     color: Colors.white,
                     fontWeight: FontWeight.bold
                   )
@@ -315,11 +326,13 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
             ),
             IconButton(
               icon: Icon(Icons.more_vert, color: contentColor),
-              onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
+              onPressed: () {
+                HapticFeedback.selectionClick(); // --- [TACTILE] ---
+                _scaffoldKey.currentState?.openEndDrawer();
+              },
             ),
           ],
           
-          // UI Jitter prevention
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(2),
             child: progress < 1.0 
@@ -346,6 +359,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
         error: errorMessage,
         url: activeUrl,
         onRetry: () {
+          HapticFeedback.mediumImpact(); // --- [TACTILE] Retry bump ---
           ref.read(webErrorProvider.notifier).state = null;
           ref.read(webViewControllerProvider)?.reload();    
         },
@@ -362,7 +376,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     return Stack(
       children: [
         InAppWebView(
-          key: ValueKey("${isGhost ? 'G' : 'N'}_$tabId"), // Rebuilds when ID changes (Standard Behavior)
+          key: ValueKey("${isGhost ? 'G' : 'N'}_$tabId"),
           initialUrlRequest: URLRequest(url: WebUri(activeUrl)),
           initialSettings: InAppWebViewSettings(
             incognito: isGhost || securityState.isIncognito, 
@@ -371,12 +385,9 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
             forceDark: forceDarkSetting,
             algorithmicDarkeningAllowed: (theme.mode == ThemeMode.dark),
             useHybridComposition: true,
-            
-            // FIXED: Using 'null' instead of empty string avoids 403 blocks from Cloudflare/Akamai
             userAgent: securityState.isDesktopMode 
                 ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" 
                 : null,
-            
             preferredContentMode: securityState.isDesktopMode 
                 ? UserPreferredContentMode.DESKTOP 
                 : UserPreferredContentMode.MOBILE,
@@ -384,13 +395,12 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
           onWebViewCreated: (controller) {
             ref.read(webViewControllerProvider.notifier).state = controller;
           },
-          
-          // Prevent Null URL Crashes
           onCreateWindow: (controller, createWindowAction) async {
             final url = createWindowAction.request.url;
             if (url == null || url.toString().isEmpty || url.toString() == 'about:blank') {
               return true; 
             }
+            HapticFeedback.lightImpact(); // --- [TACTILE] New window pop ---
             final isGhost = ref.read(isGhostModeProvider);
             if (isGhost) {
               ref.read(ghostTabsProvider.notifier).add(url: url.toString());
@@ -433,7 +443,6 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
           },
           onReceivedHttpError: (controller, request, response) {
             if (request.isForMainFrame ?? true) {
-               // FIXED: Ignore 403 Forbidden to allow CAPTCHAs/Cloudflare checks to render
                if (response.statusCode! >= 400 && response.statusCode != 403) {
                  ref.read(webErrorProvider.notifier).state = "HTTP Error: ${response.statusCode}";
                }
@@ -448,18 +457,14 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
                 }
               }
           },
-          
-          // Deep Links Support (YouTube, Maps, etc.)
           shouldOverrideUrlLoading: (controller, navigationAction) async {
             final uri = navigationAction.request.url;
             if (uri == null) return NavigationActionPolicy.ALLOW;
 
-            // 1. Standard Web Navigation -> Allow Internal WebView
             if (['http', 'https', 'file', 'chrome', 'data', 'javascript', 'about'].contains(uri.scheme)) {
               return NavigationActionPolicy.ALLOW;
             }
 
-            // 2. Known External Schemes
             if (['mailto', 'tel', 'sms'].contains(uri.scheme)) {
               if (await canLaunchUrl(uri)) {
                 await launchUrl(uri);
@@ -467,7 +472,6 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
               }
             }
 
-            // 3. Deep Links (Market, Twitter, etc.)
             try {
               if (await canLaunchUrl(uri)) {
                 await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -479,6 +483,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
             return NavigationActionPolicy.CANCEL; 
           },
           onDownloadStartRequest: (controller, downloadRequest) async {
+              HapticFeedback.mediumImpact(); // --- [TACTILE] Download started ---
               await DownloadManager.download(
                   downloadRequest.url.toString(),
                   filename: downloadRequest.suggestedFilename
@@ -535,7 +540,8 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
                     child: Center(
                       child: Text(
                         'M I R A',
-                        style: TextStyle(
+                        // --- [FIXED] Restored 'jetBrainsMono' ---
+                        style: GoogleFonts.jetBrainsMono(
                           color: isGhost ? Colors.redAccent : theme.primaryColor, 
                           fontSize: 24, 
                           letterSpacing: 5, 
@@ -599,6 +605,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
                     subtitle: Text("Start a private session", style: TextStyle(color: appTextColor.withAlpha(128), fontSize: 12)),
                     leading: Icon(Icons.privacy_tip_outlined, color: appTextColor.withAlpha(179)),
                     onTap: () {
+                        HapticFeedback.mediumImpact(); // --- [TACTILE] Ghost Switch ---
                         ref.read(isGhostModeProvider.notifier).state = true;
                         ref.read(ghostTabsProvider.notifier).addTab();
                         Navigator.pop(context);
@@ -609,6 +616,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
                     title: const Text("Nuke Data", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
                     leading: const Icon(Icons.delete_forever, color: Colors.redAccent),
                     onTap: () async {
+                      HapticFeedback.selectionClick(); // Warning vibration
                       final confirm = await showDialog<bool>(
                         context: context,
                         builder: (ctx) => AlertDialog(
@@ -617,7 +625,10 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
                           content: Text("This will wipe all history, cookies, cache, and close all tabs. This cannot be undone.", style: TextStyle(color: appTextColor.withAlpha(179))),
                           actions: [
                             TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text("Cancel", style: TextStyle(color: appTextColor.withAlpha(128)))),
-                            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("NUKE IT", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold))),
+                            TextButton(onPressed: () {
+                                HapticFeedback.heavyImpact(); // --- [TACTILE] THE NUKE "THUD" ---
+                                Navigator.pop(ctx, true);
+                            }, child: const Text("NUKE IT", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold))),
                           ],
                         ),
                       );
@@ -756,7 +767,6 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     );
   }
 
-  // Added forceReload parameter for smarter updates
   void _updateWebViewSettings({bool forceReload = false}) async {
     final controller = ref.read(webViewControllerProvider);
     if (controller == null) return;
@@ -777,7 +787,6 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
       algorithmicDarkeningAllowed: (theme.mode == ThemeMode.dark),
       useHybridComposition: true,
       
-      // FIXED: Using 'null' again here ensures consistency
       userAgent: securityState.isDesktopMode
           ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
           : null,
@@ -789,7 +798,6 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
 
     try {
       await controller.setSettings(settings: settings);
-      // Only reload if specifically requested
       if (forceReload) {
         controller.reload();
       }
