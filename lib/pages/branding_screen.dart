@@ -31,7 +31,7 @@ class _GhostLandingPage extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Center(
-            child: Icon(Icons.privacy_tip, size: 80, color: Colors.redAccent.withOpacity(0.8)),
+            child: Icon(Icons.privacy_tip, size: 80, color: Colors.redAccent.withAlpha(204)),
           ),
           const SizedBox(height: 24),
           const Center(
@@ -106,8 +106,8 @@ class _NormalSpeedDial extends ConsumerWidget {
     final appTheme = ref.watch(themeProvider);
     
     final textColor = appTheme.mode == ThemeMode.light ? Colors.black87 : Colors.white;
-    final cardColor = appTheme.primaryColor.withOpacity(0.1);
-    final borderColor = appTheme.primaryColor.withOpacity(0.3);
+    final cardColor = appTheme.primaryColor.withAlpha(26);
+    final borderColor = appTheme.primaryColor.withAlpha(77);
 
     return Container(
       color: appTheme.backgroundColor,
@@ -117,19 +117,6 @@ class _NormalSpeedDial extends ConsumerWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.public, size: 64, color: textColor.withOpacity(0.8)),
-              const SizedBox(height: 16),
-              Text(
-                "M I R A",
-                style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 8,
-                  color: textColor,
-                ),
-              ),
-              const SizedBox(height: 48),
-
               // SPEED DIAL GRID
               Wrap(
                 spacing: 16,
@@ -243,7 +230,7 @@ class _SpeedDialItem extends StatelessWidget {
             Text(
               label,
               style: TextStyle(
-                color: color.withOpacity(0.8),
+                color: color.withAlpha(204),
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),

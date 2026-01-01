@@ -45,13 +45,13 @@ class CustomErrorScreen extends ConsumerWidget {
             const SizedBox(height: 12),
             Text(
               "Target: $url",
-              style: TextStyle(color: contentColor.withOpacity(0.5), fontSize: 12),
+              style: TextStyle(color: contentColor.withAlpha(128), fontSize: 12),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
             Text(
               errorInfo.description,
-              style: TextStyle(color: contentColor.withOpacity(0.7)),
+              style: TextStyle(color: contentColor.withAlpha(179)),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 48),

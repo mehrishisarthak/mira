@@ -32,7 +32,7 @@ class BrowserSheet extends ConsumerWidget {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: contentColor.withOpacity(0.2),
+                color: contentColor.withAlpha(51),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -53,7 +53,7 @@ class BrowserSheet extends ConsumerWidget {
             return RadioListTile<String>(
               title: Text(
                 engineKey.toUpperCase(),
-                style: TextStyle(color: contentColor.withOpacity(0.7)),
+                style: TextStyle(color: contentColor.withAlpha(179)),
               ),
               value: engineKey,
               groupValue: currentEngine,

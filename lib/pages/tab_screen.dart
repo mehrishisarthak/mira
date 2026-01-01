@@ -36,7 +36,7 @@ class TabsSheet extends ConsumerWidget {
           )
         ),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 20, spreadRadius: 5)
+          BoxShadow(color: Colors.black.withAlpha(51), blurRadius: 20, spreadRadius: 5)
         ],
       ),
       child: Column(
@@ -46,7 +46,7 @@ class TabsSheet extends ConsumerWidget {
             height: 4, 
             width: 40, 
             decoration: BoxDecoration(
-              color: textColor.withOpacity(0.2), 
+              color: textColor.withAlpha(51), 
               borderRadius: BorderRadius.circular(10)
             )
           ),
@@ -78,7 +78,7 @@ class TabsSheet extends ConsumerWidget {
                       textColor: textColor,
                     ),
                     const SizedBox(height: 24),
-                    Divider(color: textColor.withOpacity(0.1), thickness: 1),
+                    Divider(color: textColor.withAlpha(26), thickness: 1),
                     const SizedBox(height: 16),
                   ],
 
@@ -127,7 +127,7 @@ class TabsSheet extends ConsumerWidget {
         children: [
           Container(
             padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+            decoration: BoxDecoration(color: color.withAlpha(26), borderRadius: BorderRadius.circular(8)),
             child: Icon(isGhost ? Icons.privacy_tip_outlined : Icons.public, size: 18, color: color),
           ),
           const SizedBox(width: 12),
@@ -154,7 +154,7 @@ class TabsSheet extends ConsumerWidget {
           ),
           const Spacer(),
           IconButton(
-            icon: Icon(Icons.delete_sweep_outlined, color: color.withOpacity(0.6), size: 20),
+            icon: Icon(Icons.delete_sweep_outlined, color: color.withAlpha(153), size: 20),
             onPressed: onClear,
             tooltip: "Close All",
           ),
@@ -188,7 +188,7 @@ class TabsSheet extends ConsumerWidget {
         child: Center(
           child: Text(
             "No Active Tabs", 
-            style: TextStyle(color: textColor.withOpacity(0.3), fontStyle: FontStyle.italic)
+            style: TextStyle(color: textColor.withAlpha(77), fontStyle: FontStyle.italic)
           )
         ),
       );
@@ -209,13 +209,10 @@ class TabsSheet extends ConsumerWidget {
         final tab = tabs[index];
         final isActive = tab.id == activeTabId;
 
-        // FIXED: Replaced standard GestureDetector with the Bouncing Animation Widget
-        return _BouncingTabCard(
-          onTap: () async {
-            // 1. Wait slightly so the user SEES the bounce animation finish
-            await Future.delayed(const Duration(milliseconds: 150));
-            
-            // 2. Perform the logic
+        // FIXED: Reverted to standard GestureDetector with no delay/animation
+        return GestureDetector(
+          onTap: () {
+            // Direct logic execution without delays
             if (context.mounted) {
                ref.read(isGhostModeProvider.notifier).state = isGhost;
                if (isGhost) {
@@ -230,7 +227,7 @@ class TabsSheet extends ConsumerWidget {
             decoration: BoxDecoration(
               color: isGhost 
                   ? const Color(0xFF2C2C2C) 
-                  : accentColor.withOpacity(0.05),
+                  : accentColor.withAlpha(13),
               border: Border.all(
                 color: isActive ? accentColor : Colors.transparent, 
                 width: 2
@@ -245,10 +242,10 @@ class TabsSheet extends ConsumerWidget {
                   children: [
                     CircleAvatar(
                       radius: 8,
-                      backgroundColor: isActive ? accentColor : textColor.withOpacity(0.1),
+                      backgroundColor: isActive ? accentColor : textColor.withAlpha(26),
                       child: isActive 
                           ? const SizedBox() 
-                          : Icon(Icons.web, size: 10, color: textColor.withOpacity(0.5)),
+                          : Icon(Icons.web, size: 10, color: textColor.withAlpha(128)),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
@@ -273,7 +270,7 @@ class TabsSheet extends ConsumerWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: isGhost ? Colors.white54 : textColor.withOpacity(0.5), 
+                    color: isGhost ? Colors.white54 : textColor.withAlpha(128), 
                     fontSize: 11
                   ),
                 ),
@@ -283,7 +280,6 @@ class TabsSheet extends ConsumerWidget {
                 Align(
                   alignment: Alignment.centerRight,
                   child: InkWell(
-                    // Keep close button as standard InkWell, no bounce needed here
                     onTap: () {
                       if (isGhost) {
                         ref.read(ghostTabsProvider.notifier).closeTab(tab.id);
@@ -294,10 +290,10 @@ class TabsSheet extends ConsumerWidget {
                     child: Container(
                       padding: const EdgeInsets.all(4),
                       decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.1),
+                        color: Colors.black.withAlpha(26),
                         shape: BoxShape.circle
                       ),
-                      child: Icon(Icons.close, size: 14, color: textColor.withOpacity(0.6)),
+                      child: Icon(Icons.close, size: 14, color: textColor.withAlpha(153)),
                     ),
                   ),
                 )
@@ -306,69 +302,6 @@ class TabsSheet extends ConsumerWidget {
           ),
         );
       },
-    );
-  }
-}
-
-// --- NEW ANIMATION WIDGET ---
-// This handles the "Squish" physics
-class _BouncingTabCard extends StatefulWidget {
-  final Widget child;
-  final VoidCallback onTap;
-
-  const _BouncingTabCard({required this.child, required this.onTap});
-
-  @override
-  State<_BouncingTabCard> createState() => _BouncingTabCardState();
-}
-
-class _BouncingTabCardState extends State<_BouncingTabCard> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  final Duration _duration = const Duration(milliseconds: 100);
-  final double _scaleFactor = 0.95; // Shrink to 95% size
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(vsync: this, duration: _duration, lowerBound: 0.0, upperBound: 1.0);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _onTapDown(TapDownDetails details) {
-    _controller.forward(); // Animate scale down
-  }
-
-  void _onTapUp(TapUpDetails details) {
-    _controller.reverse(); // Animate scale back up
-    widget.onTap(); // Trigger the action
-  }
-
-  void _onTapCancel() {
-    _controller.reverse(); // If user drags finger off, just reset scale
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: _onTapDown,
-      onTapUp: _onTapUp,
-      onTapCancel: _onTapCancel,
-      child: AnimatedBuilder(
-        animation: _controller,
-        builder: (context, child) {
-          final scale = 1.0 - (_controller.value * (1.0 - _scaleFactor));
-          return Transform.scale(
-            scale: scale,
-            child: child,
-          );
-        },
-        child: widget.child,
-      ),
     );
   }
 }

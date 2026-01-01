@@ -26,7 +26,6 @@ class AdBlockService {
     _createBlocker(r".*pinterest\.com/ct\.html.*"),
 
     // 3. Session Recorders (The "Creepy" List)
-    // These services record videos of user sessions. Blocking them is a huge privacy win.
     _createBlocker(r".*hotjar\.com.*"),
     _createBlocker(r".*crazyegg\.com.*"),
     _createBlocker(r".*fullstory\.com.*"),
@@ -125,9 +124,18 @@ class AdBlockService {
     return ContentBlocker(
       trigger: ContentBlockerTrigger(
         urlFilter: urlRegex,
+        // FIXED: Explicitly target resource types. 
+        // We DO NOT include ContentBlockerTriggerResourceType.MAIN_FRAME 
+        // to ensure we never block the actual website the user wants to visit.
+        resourceType: [
+          ContentBlockerTriggerResourceType.SCRIPT,
+          ContentBlockerTriggerResourceType.IMAGE,       // iFrames
+          ContentBlockerTriggerResourceType.MEDIA,            // Video Ads
+          ContentBlockerTriggerResourceType.FONT,
+        ],
       ),
       action: ContentBlockerAction(
-        type: ContentBlockerActionType.BLOCK, // "Talk to the Hand"
+        type: ContentBlockerActionType.BLOCK, 
       ),
     );
   }
