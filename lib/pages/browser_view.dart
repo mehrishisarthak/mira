@@ -1,7 +1,8 @@
 import 'dart:collection'; 
-import 'package:flutter/foundation.dart'; // [NEW] Required for defaultTargetPlatform
+import 'dart:collection'; // Required for UnmodifiableListView
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart'; // [NEW]
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:url_launcher/url_launcher.dart'; 
@@ -12,6 +13,7 @@ import 'package:mira/model/theme_model.dart';
 import 'package:mira/model/ghost_model.dart';
 import 'package:mira/model/security_model.dart'; 
 import 'package:mira/model/tab_model.dart';
+import 'package:mira/model/proxy_gateway.dart'; // [NEW]
 
 import 'package:mira/pages/branding_screen.dart';
 import 'package:mira/pages/custom_error_screen.dart'; 
@@ -104,6 +106,19 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
     });
   }
 
+  /// [NEW] Calculates the actual URL to load, applying the iOS Proxy Gateway if needed.
+  String _getEffectiveUrl(String originalUrl, SecurityState security) {
+    if (originalUrl.isEmpty) return originalUrl;
+    
+    final gateway = ref.read(proxyGatewayProvider);
+    if (defaultTargetPlatform == TargetPlatform.iOS && security.isProxyEnabled && gateway.isRunning) {
+      // Don't proxy the proxy itself
+      if (originalUrl.startsWith('http://localhost')) return originalUrl;
+      return gateway.getProxiedUrl(originalUrl);
+    }
+    return originalUrl;
+  }
+
   @override
   Widget build(BuildContext context) {
     // 1. Watch Data
@@ -174,7 +189,7 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
 
             return InAppWebView(
               key: ObjectKey(tab.id),
-              initialUrlRequest: URLRequest(url: WebUri(tab.url)),
+              initialUrlRequest: URLRequest(url: WebUri(_getEffectiveUrl(tab.url, securityState))),
               
               initialUserScripts: (securityState.isAdBlockEnabled && AdBlockService.initialUserScripts != null) 
                   ? UnmodifiableListView<UserScript>(AdBlockService.initialUserScripts!) 
@@ -236,10 +251,16 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
                    ref.read(webErrorProvider.notifier).state = null;
                  }
                  if (url != null) {
+                   final urlString = url.toString();
+                   // Avoid updating tab URL with the localhost proxy prefix
+                   final displayUrl = urlString.contains('localhost') && urlString.contains('/http') 
+                       ? urlString.split('/http').last.replaceFirst('s:', 'https:').replaceFirst(':', 'http:')
+                       : urlString;
+
                    if (isGhost) {
-                     ref.read(ghostTabsProvider.notifier).updateUrl(url.toString());
+                     ref.read(ghostTabsProvider.notifier).updateUrl(displayUrl);
                    } else {
-                     ref.read(tabsProvider.notifier).updateUrl(url.toString());
+                     ref.read(tabsProvider.notifier).updateUrl(displayUrl);
                    }
                  }
               },

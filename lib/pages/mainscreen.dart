@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; 
+import 'package:flutter/foundation.dart'; // [NEW]
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -11,6 +12,7 @@ import 'package:mira/model/ghost_model.dart';
 import 'package:mira/model/search_engine.dart';
 import 'package:mira/model/security_model.dart'; 
 import 'package:mira/model/tab_model.dart';
+import 'package:mira/model/proxy_gateway.dart'; // [NEW]
 import 'package:mira/pages/browser_view.dart'; 
 import 'package:mira/pages/mira_drawer.dart';
 import 'package:mira/pages/tab_screen.dart'; // [NEW] Import View
@@ -81,6 +83,13 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
       finalUrl = trimmedValue.startsWith("http") ? trimmedValue : "https://$trimmedValue";
     } else {
       finalUrl = ref.read(formattedSearchUrlProvider(trimmedValue));
+    }
+    
+    // [PROXY] Apply gateway if on iOS
+    final gateway = ref.read(proxyGatewayProvider);
+    final security = ref.read(securityProvider);
+    if (defaultTargetPlatform == TargetPlatform.iOS && security.isProxyEnabled && gateway.isRunning) {
+        finalUrl = gateway.getProxiedUrl(finalUrl);
     }
     
     final isGhost = ref.read(isGhostModeProvider);
@@ -154,6 +163,10 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     // 1. WATCH STATE
     final isGhost = ref.watch(isGhostModeProvider);
     final activeTab = ref.watch(currentActiveTabProvider);
+    
+    // [NEW] Initialize Proxy Gateway status app-wide
+    ref.watch(proxyGatewayStatusProvider);
+
     final activeUrl = activeTab.url;
     final currentTabsList = ref.watch(currentTabListProvider);
     final tabCount = currentTabsList.length;
