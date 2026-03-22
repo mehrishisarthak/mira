@@ -73,6 +73,18 @@ class BrowserView extends ConsumerWidget {
                 ? UserPreferredContentMode.DESKTOP 
                 : UserPreferredContentMode.MOBILE,
           ),
+          shouldInterceptRequest: (controller, request) async {
+            if (!securityState.isAdBlockEnabled) return null;
+            
+            final host = request.url.host;
+            if (AdBlockService.blockedDomains.any((domain) => host.contains(domain))) {
+              return WebResourceResponse(
+                contentType: 'text/plain',
+                data: Uint8List(0),
+              );
+            }
+            return null;
+          },
           onWebViewCreated: (controller) {
             ref.read(webViewControllerProvider.notifier).state = controller;
           },

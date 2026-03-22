@@ -56,15 +56,47 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
   }
 
   bool _isValidUrl(String value) {
-    if (value.contains(' ')) return false;
-    if (value.startsWith('http://') || value.startsWith('https://')) return true;
+    String trimmed = value.trim();
+    if (trimmed.contains(' ')) return false;
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return true;
     
     final domainRegExp = RegExp(
       r'^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}|' 
       r'^localhost|' 
       r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$'
     );
-    return domainRegExp.hasMatch(value);
+    return domainRegExp.hasMatch(trimmed);
+  }
+
+  void _performSearch(String value) {
+    if (value.isEmpty) return;
+    
+    HapticFeedback.lightImpact(); 
+    ref.read(webErrorProvider.notifier).state = null;
+
+    String finalUrl;
+    String trimmedValue = value.trim();
+    
+    if (_isValidUrl(trimmedValue)) {
+      finalUrl = trimmedValue.startsWith("http") ? trimmedValue : "https://$trimmedValue";
+    } else {
+      finalUrl = ref.read(formattedSearchUrlProvider(trimmedValue));
+    }
+    
+    final isGhost = ref.read(isGhostModeProvider);
+    if (isGhost) {
+      ref.read(ghostTabsProvider.notifier).updateUrl(finalUrl);
+    } else {
+      ref.read(historyProvider.notifier).addToHistory(trimmedValue);
+      ref.read(tabsProvider.notifier).updateUrl(finalUrl);
+    }
+
+    final controller = ref.read(webViewControllerProvider);
+    if (controller != null) {
+      controller.loadUrl(
+        urlRequest: URLRequest(url: WebUri(finalUrl))
+      );
+    }
   }
 
   void _handlePop() async {
@@ -246,33 +278,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
             onTap: () {
               textController.selection = TextSelection(baseOffset: 0, extentOffset: textController.text.length);
             },
-            onSubmitted: (value) {
-              if (value.isNotEmpty) {
-                 HapticFeedback.lightImpact(); 
-                 ref.read(webErrorProvider.notifier).state = null;
-
-                 String finalUrl;
-                 if (_isValidUrl(value)) {
-                   finalUrl = value.startsWith("http") ? value : "https://$value";
-                 } else {
-                   finalUrl = ref.read(formattedSearchUrlProvider(value));
-                 }
-                 
-                 if (isGhost) {
-                   ref.read(ghostTabsProvider.notifier).updateUrl(finalUrl);
-                 } else {
-                   ref.read(historyProvider.notifier).addToHistory(value);
-                   ref.read(tabsProvider.notifier).updateUrl(finalUrl);
-                 }
-
-                 final controller = ref.read(webViewControllerProvider);
-                 if (controller != null) {
-                   controller.loadUrl(
-                     urlRequest: URLRequest(url: WebUri(finalUrl))
-                   );
-                 }
-              }
-            },
+            onSubmitted: _performSearch,
           ),
           actions: [
             InkWell(

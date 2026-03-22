@@ -1,0 +1,72 @@
+MIRA BROWSER OPTIMIZATION GUIDE
+================================
+
+1. OPTIMIZING SEARCH UX (THE "SEARCH-FIRST" PATTERN)
+---------------------------------------------------
+Problem: Waiting for the WebView to process a search query is slow because it has to load the engine's homepage/logic first.
+Solution: Construct the search URL instantly in Dart and use "Pre-fetching".
+
+* IMPLEMENTATION:
+  - Detect if input is a URL (e.g., contains '.') or a search query.
+  - Construct the URL immediately: `final searchUrl = "https://google.com/search?q=${Uri.encodeComponent(query)}";`
+  - Call `controller.loadUrl(urlRequest: URLRequest(url: WebUri(searchUrl)))`.
+  - Use a 'local' Search Bar: Do not use the WebView's text fields for searching. Build a native Flutter TextField. Use a debounced API call to `https://suggestqueries.google.com/complete/search?client=firefox&q=...` to show instant native suggestions.
+
+2. HIGH-PERFORMANCE AD-BLOCKING (O(1) LOOKUP)
+---------------------------------------------
+Problem: Regex matching for every resource request is O(n) and blocks the UI thread or the WebView's rendering.
+Solution: Use Host-based blocking and Android-specific Interception.
+
+* ANDROID OPTIMIZATION:
+  Use `shouldInterceptRequest`. In this method, check the host against a `HashSet<String>` in Dart.
+  ```dart
+  shouldInterceptRequest: (controller, request) async {
+    if (adBlockSet.contains(request.url.host)) {
+      return WebResourceResponse(contentType: 'text/plain', data: Uint8List(0));
+    }
+    return null;
+  }
+  ```
+* IOS OPTIMIZATION:
+  Use `WKContentRuleList`. Instead of passing a list of `ContentBlocker` objects, compile a single JSON rule list. This is handled at the OS level (C++) and is significantly faster.
+
+3. IMPLEMENTING PROXY LAYERS
+----------------------------
+Problem: Standard WebViews don't expose low-level socket control easily.
+Solution: Use `ProxySettings` for Android and a Local Gateway for cross-platform.
+
+* ANDROID:
+  ```dart
+  initialSettings: InAppWebViewSettings(
+    proxy: ProxySettings(
+      proxyRules: [
+        ProxyRule(urlPattern: "*", proxyUrl: "http://your-proxy:8080"),
+      ],
+      bypassRules: ["*.local"],
+    ),
+  )
+  ```
+* ADVANCED (Cross-Platform):
+  Run a local SOCKS5-to-HTTP gateway using a Flutter plugin like `shelf` or a native binary. Point the WebView to `localhost:port`. This allows you to rotate proxies or use Tor/VPN layers transparently.
+
+4. WEBVIEW ARCHITECTURE & SPEED
+-------------------------------
+* TAB PERSISTENCE: 
+  Use `IndexedStack`. Never dispose of a WebView when the user switches tabs. Keep the `InAppWebView` instances in an `IndexedStack` so switching is instant (0ms load time).
+* HYBRID COMPOSITION:
+  Set `useHybridComposition: true` on Android. It improves keyboard interaction and accessibility, but more importantly, it handles complex layers better.
+* HARDWARE ACCELERATION:
+  Ensure `hardwareAcceleration: true` is set in the Android Manifest and WebView settings to offload CSS/Animations to the GPU.
+
+5. CONTENT INJECTION (JS PRE-LOADING)
+-------------------------------------
+Instead of blocking ads after they load, inject "User Scripts" that:
+- Hide ad containers via CSS (`display: none !important`).
+- Overwrite `window.alert` or `window.open` to prevent popups before they trigger.
+- Use `initialUserScripts` to inject these BEFORE the page content loads.
+
+6. MEMORY MANAGEMENT
+--------------------
+- Set `cacheMode: CacheMode.LOAD_DEFAULT`.
+- Periodically call `WebStorageManager.instance().android.deleteAllData()` for incognito tabs.
+- Use `pause()` and `resume()` on the InAppWebViewController when tabs are moved to the background to save CPU cycles.

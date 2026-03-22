@@ -1,6 +1,94 @@
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'dart:collection';
 
 class AdBlockService {
+  // Use a HashSet for O(1) lookup of blocked domains
+  static final HashSet<String> blockedDomains = HashSet<String>.from([
+    // Google
+    "googlesyndication.com",
+    "doubleclick.net",
+    "googleadservices.com",
+    "google-analytics.com",
+    "googletagservices.com",
+    "adservice.google.com",
+    "imasdk.googleapis.com",
+    
+    // Social
+    "facebook.net",
+    "connect.facebook.net",
+    "fbsbx.com",
+    "analytics.twitter.com",
+    "linkedin.com/px",
+    
+    // Trackers/Analytics
+    "hotjar.com",
+    "crazyegg.com",
+    "fullstory.com",
+    "mouseflow.com",
+    "luckyorange.com",
+    "inspectlet.com",
+    "smartlook.com",
+    "logrocket.com",
+    "scorecardresearch.com",
+    "quantserve.com",
+    
+    // Ad Networks
+    "adnxs.com",
+    "criteo.com",
+    "taboola.com",
+    "outbrain.com",
+    "pubmatic.com",
+    "openx.net",
+    "amazon-adsystem.com",
+    "moatads.com",
+    "adzerk.net",
+    "adsrvr.org",
+    "bidswitch.net",
+    "rubiconproject.com",
+    "smartadserver.com",
+    "yieldmo.com",
+    "teads.tv",
+    "indexexchange.com",
+    "casalemedia.com",
+    "sovrn.com",
+    "lijit.com",
+    "33across.com",
+    "media.net",
+    "triplelift.com",
+    "gumgum.com",
+    "sharethrough.com",
+    "spotxchange.com",
+    "springserve.com",
+    "tremorhub.com",
+    "unruly.co",
+    
+    // Mobile Ad Networks
+    "appsflyer.com",
+    "adjust.com",
+    "branch.io",
+    "inmobi.com",
+    "adcolony.com",
+    "vungle.com",
+    "applovin.com",
+    "chartboost.com",
+    "unityads.unity3d.com",
+    "startapp.com",
+    "ironsrc.com",
+    "tapjoy.com",
+    "fyber.com",
+    "mopub.com",
+    
+    // Annoyances
+    "popads.net",
+    "popcash.net",
+    "propellerads.com",
+    "ad-maven.com",
+    
+    // Crypto Miners
+    "coinhive.com",
+    "crypto-loot.com",
+  ]);
+
   // Enhanced regex rules to kill ads, trackers, miners, and session recorders.
   static final List<ContentBlocker> adBlockRules = [
     // 1. The Big G (Google Ecosystem)
