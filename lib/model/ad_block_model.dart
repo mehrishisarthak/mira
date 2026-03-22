@@ -208,6 +208,53 @@ class AdBlockService {
     _createBlocker(r".*jsecoin\.com.*"),
   ];
 
+  static final List<UserScript> initialUserScripts = [
+    UserScript(
+      source: """
+        (function() {
+          // 1. CSS Injection for Ad-Hiding (Pre-loading)
+          const style = document.createElement('style');
+          style.innerHTML = `
+            [id*="google_ads"], [class*="google_ads"], 
+            .adsbygoogle, .ad-unit, .ad-container, .ad-wrapper, 
+            [id^="ad-"], [class^="ad-"], 
+            [id*="-ad-"], [class*="-ad-"],
+            [id\$="-ad"], [class\$="-ad"],
+            iframe[src*="googleads"], iframe[src*="doubleclick"],
+            .trc_related_container, .outbrain_widget_container {
+              display: none !important;
+              visibility: hidden !important;
+              opacity: 0 !important;
+              pointer-events: none !important;
+              height: 0 !important;
+              width: 0 !important;
+            }
+          `;
+          
+          // Use documentElement if head is not available yet
+          (document.head || document.documentElement).appendChild(style);
+
+          // 2. Popup & Alert Blocking (Optional/Experimental)
+          // We wrap them to allow basic debugging if needed
+          const log = (msg) => console.log("MIRA_SHIELD: " + msg);
+          
+          window.alert = function(m) { log("Blocked Alert: " + m); };
+          window.confirm = function(m) { log("Blocked Confirm: " + m); return true; };
+          window.prompt = function(m) { log("Blocked Prompt: " + m); return null; };
+          
+          // 3. Prevent aggressive window.open popups
+          // Legitimate clicks usually trigger onCreateWindow in InAppWebView
+          const originalOpen = window.open;
+          window.open = function(url, name, specs, replace) {
+            log("Intercepted window.open: " + url);
+            return null; 
+          };
+        })();
+      """,
+      injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+    ),
+  ];
+
   static ContentBlocker _createBlocker(String urlRegex) {
     return ContentBlocker(
       trigger: ContentBlockerTrigger(

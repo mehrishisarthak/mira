@@ -65,6 +65,9 @@ class BrowserView extends ConsumerWidget {
               // Unique key per tab to keep its state alive in the IndexedStack
               key: ObjectKey(tab.id),
               initialUrlRequest: URLRequest(url: WebUri(tab.url)),
+              initialUserScripts: securityState.isAdBlockEnabled 
+                  ? AdBlockService.initialUserScripts 
+                  : null,
               initialSettings: InAppWebViewSettings(
                 incognito: isGhost || securityState.isIncognito, 
                 clearCache: isGhost || securityState.isIncognito,
