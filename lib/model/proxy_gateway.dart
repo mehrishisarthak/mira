@@ -23,17 +23,28 @@ class ProxyGateway {
   Future<void> start(String targetProxyUrl) async {
     if (_server != null) await stop();
 
-    try {
-      // Create a proxy handler that forwards requests to the user's proxy
-      final handler = proxyHandler(targetProxyUrl);
+    const int maxRetries = 3;
+    int retryCount = 0;
 
-      // Start the local server on a random available port
-      _server = await io.serve(handler, 'localhost', 0);
-      _port = _server!.port;
-      
-      debugPrint('MIRA_GATEWAY: Local iOS Proxy Gateway started on localhost:$_port -> $targetProxyUrl');
-    } catch (e) {
-      debugPrint('MIRA_GATEWAY: Failed to start proxy gateway: $e');
+    while (retryCount < maxRetries) {
+      try {
+        final handler = proxyHandler(targetProxyUrl);
+        _server = await io.serve(handler, 'localhost', 0);
+        _port = _server!.port;
+        
+        debugPrint('MIRA_GATEWAY: Local iOS Proxy Gateway started on localhost:$_port -> $targetProxyUrl');
+        return; // Success
+      } catch (e) {
+        retryCount++;
+        debugPrint('MIRA_GATEWAY: Start attempt $retryCount failed: $e');
+        
+        if (retryCount < maxRetries) {
+          debugPrint('MIRA_GATEWAY: Retrying in 500ms...');
+          await Future.delayed(const Duration(milliseconds: 500));
+        } else {
+          debugPrint('MIRA_GATEWAY: Maximum retries reached. Gateway failed to start.');
+        }
+      }
     }
   }
 
