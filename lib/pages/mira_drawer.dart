@@ -195,6 +195,56 @@ class MiraDrawer extends ConsumerWidget {
                     },
                   ),
 
+                  // --- PROXY SETTINGS ---
+                  SwitchListTile(
+                    title: Text("Network Proxy", style: TextStyle(color: appTextColor)),
+                    secondary: Icon(Icons.router, color: securityState.isProxyEnabled ? Colors.orangeAccent : appTextColor.withAlpha(128)),
+                    subtitle: Text(securityState.proxyUrl.isEmpty ? "No Proxy Set" : securityState.proxyUrl, style: TextStyle(color: appTextColor.withAlpha(128), fontSize: 11)),
+                    value: securityState.isProxyEnabled,
+                    activeColor: Colors.orangeAccent,
+                    onChanged: (val) {
+                        ref.read(securityProvider.notifier).toggleProxy(val);
+                    },
+                  ),
+
+                  if (securityState.isProxyEnabled)
+                    ListTile(
+                      dense: true,
+                      contentPadding: const EdgeInsets.only(left: 72, right: 16),
+                      title: Text("Configure Proxy", style: TextStyle(color: theme.primaryColor, fontSize: 13, fontWeight: FontWeight.bold)),
+                      onTap: () async {
+                        final controller = TextEditingController(text: securityState.proxyUrl);
+                        final newUrl = await showDialog<String>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            backgroundColor: theme.surfaceColor,
+                            title: Text("Proxy Configuration", style: TextStyle(color: appTextColor)),
+                            content: TextField(
+                              controller: controller,
+                              autofocus: true,
+                              style: TextStyle(color: appTextColor),
+                              decoration: InputDecoration(
+                                hintText: "http://your-proxy:port",
+                                hintStyle: TextStyle(color: appTextColor.withAlpha(80)),
+                                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: theme.primaryColor.withAlpha(100))),
+                                focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: theme.primaryColor)),
+                              ),
+                            ),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(ctx), child: Text("Cancel", style: TextStyle(color: appTextColor.withAlpha(128)))),
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx, controller.text), 
+                                child: Text("Save", style: TextStyle(color: theme.primaryColor, fontWeight: FontWeight.bold))
+                              ),
+                            ],
+                          ),
+                        );
+                        if (newUrl != null) {
+                          ref.read(securityProvider.notifier).updateProxyUrl(newUrl);
+                        }
+                      },
+                    ),
+
                   Divider(color: appTextColor.withAlpha(51)),
 
                   // --- CUSTOMIZATION SECTION ---

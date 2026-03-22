@@ -17,6 +17,8 @@ class PreferencesService {
   static const _keyCamera = 'mode_camera';     
   static const _keyDesktop = 'mode_desktop';
   static const _keyAdBlock = 'mode_adblock'; 
+  static const _keyProxyEnabled = 'mode_proxy_enabled';
+  static const _keyProxyUrl = 'mode_proxy_url';
   
   // Bookmarks Key
   static const _keyBookmarks = 'saved_bookmarks';
@@ -76,6 +78,13 @@ class PreferencesService {
   // AdBlock / The Shield (Default: true -> MIRA protects you out of the box)
   bool getAdBlock() => _prefs.getBool(_keyAdBlock) ?? true;
   Future<void> setAdBlock(bool value) async => await _prefs.setBool(_keyAdBlock, value);
+
+  // Proxy Settings
+  bool getProxyEnabled() => _prefs.getBool(_keyProxyEnabled) ?? false;
+  Future<void> setProxyEnabled(bool value) async => await _prefs.setBool(_keyProxyEnabled, value);
+
+  String getProxyUrl() => _prefs.getString(_keyProxyUrl) ?? "";
+  Future<void> setProxyUrl(String value) async => await _prefs.setString(_keyProxyUrl, value);
 
   // --- THEME (COLORS) ---
   // Returns the index of the selected theme (0 = Green, 1 = Yellow, etc.)

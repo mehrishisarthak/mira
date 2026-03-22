@@ -8,6 +8,8 @@ class SecurityState {
   final bool isCameraBlocked;
   final bool isDesktopMode;
   final bool isAdBlockEnabled;
+  final bool isProxyEnabled;
+  final String proxyUrl;
 
   SecurityState({
     required this.isIncognito,
@@ -15,6 +17,8 @@ class SecurityState {
     required this.isCameraBlocked,
     required this.isDesktopMode,
     required this.isAdBlockEnabled,
+    required this.isProxyEnabled,
+    required this.proxyUrl,
   });
 
   SecurityState copyWith({
@@ -23,6 +27,8 @@ class SecurityState {
     bool? isCameraBlocked,
     bool? isDesktopMode,
     bool? isAdBlockEnabled,
+    bool? isProxyEnabled,
+    String? proxyUrl,
   }) {
     return SecurityState(
       isIncognito: isIncognito ?? this.isIncognito,
@@ -30,6 +36,8 @@ class SecurityState {
       isCameraBlocked: isCameraBlocked ?? this.isCameraBlocked,
       isDesktopMode: isDesktopMode ?? this.isDesktopMode,
       isAdBlockEnabled: isAdBlockEnabled ?? this.isAdBlockEnabled,
+      isProxyEnabled: isProxyEnabled ?? this.isProxyEnabled,
+      proxyUrl: proxyUrl ?? this.proxyUrl,
     );
   }
 }
@@ -43,6 +51,8 @@ class SecurityNotifier extends StateNotifier<SecurityState> {
     isCameraBlocked: true,
     isDesktopMode: false,
     isAdBlockEnabled: true, // Default to Safe
+    isProxyEnabled: false,
+    proxyUrl: "",
   )) {
     _loadSettings();
   }
@@ -53,7 +63,9 @@ class SecurityNotifier extends StateNotifier<SecurityState> {
       isLocationBlocked: _prefs.getLocationBlock(),
       isCameraBlocked: _prefs.getCameraBlock(),
       isDesktopMode: _prefs.getDesktopMode(),
-      isAdBlockEnabled: _prefs.getAdBlock(), // Load Shield State
+      isAdBlockEnabled: _prefs.getAdBlock(), 
+      isProxyEnabled: _prefs.getProxyEnabled(),
+      proxyUrl: _prefs.getProxyUrl(),
     );
   }
 
@@ -77,10 +89,19 @@ class SecurityNotifier extends StateNotifier<SecurityState> {
     _prefs.setDesktopMode(value);
   }
   
-  // NEW: Toggle The Shield
   void toggleAdBlock(bool value) {
     state = state.copyWith(isAdBlockEnabled: value);
     _prefs.setAdBlock(value);
+  }
+
+  void toggleProxy(bool value) {
+    state = state.copyWith(isProxyEnabled: value);
+    _prefs.setProxyEnabled(value);
+  }
+
+  void updateProxyUrl(String value) {
+    state = state.copyWith(proxyUrl: value);
+    _prefs.setProxyUrl(value);
   }
 }
 

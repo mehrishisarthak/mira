@@ -1,4 +1,5 @@
-import 'dart:collection'; // Required for UnmodifiableListView
+import 'dart:collection'; 
+import 'package:flutter/foundation.dart'; // [NEW] Required for defaultTargetPlatform
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -31,24 +32,51 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    
+    // Safety check: Apply initial proxy state if starting the app with proxy enabled
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final initialSecurityState = ref.read(securityProvider);
+      _applyProxy(initialSecurityState);
+    });
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _controllers.clear(); // Drop all references on complete disposal
+    _controllers.clear();
     super.dispose();
+  }
+
+  // [NEW] Helper method to apply proxy settings globally (Android Only)
+  Future<void> _applyProxy(securityState) async {
+    if (defaultTargetPlatform != TargetPlatform.android) return;
+
+    final proxyController = ProxyController.instance();
+    final isSupported = await WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE);
+    
+    if (isSupported) {
+      if (securityState.isProxyEnabled && securityState.proxyUrl.isNotEmpty) {
+        await proxyController.setProxyOverride(
+          settings: ProxySettings(
+            proxyRules: [
+              ProxyRule(url: securityState.proxyUrl)
+            ],
+            bypassRules: ["*.local"],
+          ),
+        );
+      } else {
+        await proxyController.clearProxyOverride();
+      }
+    }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Optimization: Pause all WebViews when app is backgrounded
     if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
       for (var controller in _controllers.values) {
         controller.pause();
       }
     } else if (state == AppLifecycleState.resumed) {
-      // Resume only the active tab's controller
       final isGhost = ref.read(isGhostModeProvider);
       final tabsState = isGhost ? ref.read(ghostTabsProvider) : ref.read(tabsProvider);
       if (tabsState.tabs.isNotEmpty) {
@@ -68,7 +96,6 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
     });
   }
 
-  // [NEW] Memory Management: Clean up controllers for tabs that were closed
   void _cleanUpClosedTabs(List<dynamic> currentTabs) {
     final currentTabIds = currentTabs.map((tab) => tab.id).toSet();
     _controllers.removeWhere((id, controller) {
@@ -86,7 +113,6 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
     final activeIndex = tabsState.activeIndex;
     final activeTabId = tabs.isNotEmpty ? tabs[activeIndex].id : '';
 
-    // Listen safely to tab changes to update pause states AND clean up closed tabs
     ref.listen(tabsProvider, (previous, next) {
       if (!isGhost) {
         _cleanUpClosedTabs(next.tabs);
@@ -106,6 +132,14 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
     });
     
     final securityState = ref.watch(securityProvider);
+
+    // [NEW] Listen to security state specifically to trigger proxy updates
+    ref.listen(securityProvider, (previous, next) {
+      if (previous?.isProxyEnabled != next.isProxyEnabled || previous?.proxyUrl != next.proxyUrl) {
+        _applyProxy(next);
+      }
+    });
+
     final theme = ref.watch(themeProvider);
     final errorMessage = ref.watch(webErrorProvider);
     final progress = ref.watch(loadingProgressProvider);
@@ -134,25 +168,25 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
         IndexedStack(
           index: activeIndex,
           children: tabs.map((tab) {
-            // Only show BrandingScreen if the active tab is empty and it's the current active tab
             if (tab.url.isEmpty) {
               return const BrandingScreen();
             }
 
             return InAppWebView(
-              // Unique key per tab to keep its state alive in the IndexedStack
               key: ObjectKey(tab.id),
               initialUrlRequest: URLRequest(url: WebUri(tab.url)),
               
-              // [FIX] Safely wrap UserScripts in UnmodifiableListView to satisfy v6+ strict typing
-              initialUserScripts: (securityState.isAdBlockEnabled) 
-                  ? UnmodifiableListView<UserScript>(AdBlockService.initialUserScripts) 
+              initialUserScripts: (securityState.isAdBlockEnabled && AdBlockService.initialUserScripts != null) 
+                  ? UnmodifiableListView<UserScript>(AdBlockService.initialUserScripts!) 
                   : null,
                   
               initialSettings: InAppWebViewSettings(
                 incognito: isGhost || securityState.isIncognito, 
                 clearCache: isGhost || securityState.isIncognito,
                 cacheMode: CacheMode.LOAD_DEFAULT, 
+                
+                // [FIX] 'proxy' argument removed entirely. It is now handled by the listener above.
+                
                 contentBlockers: securityState.isAdBlockEnabled ? AdBlockService.adBlockRules : [],
                 forceDark: forceDarkSetting,
                 algorithmicDarkeningAllowed: (theme.mode == ThemeMode.dark),
