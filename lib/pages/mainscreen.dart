@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; 
-import 'package:flutter/foundation.dart'; // [NEW]
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'dart:io';
 
 import 'package:mira/model/ad_block_model.dart';
 import 'package:mira/model/book_mark_model.dart';
@@ -12,12 +13,12 @@ import 'package:mira/model/ghost_model.dart';
 import 'package:mira/model/search_engine.dart';
 import 'package:mira/model/security_model.dart'; 
 import 'package:mira/model/tab_model.dart';
-import 'package:mira/model/proxy_gateway.dart'; // [NEW]
+import 'package:mira/model/proxy_gateway.dart'; 
 import 'package:mira/pages/browser_view.dart'; 
 import 'package:mira/pages/mira_drawer.dart';
-import 'package:mira/pages/tab_screen.dart'; // [NEW] Import View
+import 'package:mira/pages/tab_screen.dart'; 
 
-// --- LOCAL PROVIDERS (Keep these here or move to a general_providers.dart) ---
+// --- LOCAL PROVIDERS ---
 final loadingProgressProvider = StateProvider<int>((ref) => 0);
 final webViewControllerProvider = StateProvider<InAppWebViewController?>((ref) => null);
 final webErrorProvider = StateProvider<String?>((ref) => null); 
@@ -70,10 +71,27 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     return domainRegExp.hasMatch(trimmed);
   }
 
+  void _triggerHaptic(HapticFeedbackType type) {
+    if (kIsWeb) return;
+    if (Platform.isAndroid || Platform.isIOS) {
+      switch (type) {
+        case HapticFeedbackType.light:
+          HapticFeedback.lightImpact();
+          break;
+        case HapticFeedbackType.medium:
+          HapticFeedback.mediumImpact();
+          break;
+        case HapticFeedbackType.selection:
+          HapticFeedback.selectionClick();
+          break;
+      }
+    }
+  }
+
   void _performSearch(String value) {
     if (value.isEmpty) return;
     
-    HapticFeedback.lightImpact(); 
+    _triggerHaptic(HapticFeedbackType.light);
     ref.read(webErrorProvider.notifier).state = null;
 
     String finalUrl;
@@ -85,10 +103,9 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
       finalUrl = ref.read(formattedSearchUrlProvider(trimmedValue));
     }
     
-    // [PROXY] Apply gateway if on iOS
     final gateway = ref.read(proxyGatewayProvider);
     final security = ref.read(securityProvider);
-    if (defaultTargetPlatform == TargetPlatform.iOS && security.isProxyEnabled && gateway.isRunning) {
+    if (!kIsWeb && Platform.isIOS && security.isProxyEnabled && gateway.isRunning) {
         finalUrl = gateway.getProxiedUrl(finalUrl);
     }
     
@@ -129,7 +146,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     }
 
     if (activeUrl.isNotEmpty) {
-      HapticFeedback.lightImpact(); 
+      _triggerHaptic(HapticFeedbackType.light);
       if (isGhost) {
         ref.read(ghostTabsProvider.notifier).updateUrl('');
       } else {
@@ -139,32 +156,33 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
       return;
     }
 
-    final now = DateTime.now();
-    if (_lastExitTime == null ||
-        now.difference(_lastExitTime!) > const Duration(seconds: 2)) {
-      _lastExitTime = now;
-      if (mounted) {
-        HapticFeedback.selectionClick(); 
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text("Press back again to exit MIRA"),
-              backgroundColor: isGhost ? Colors.redAccent : appTheme.primaryColor,
-              duration: const Duration(seconds: 2),
-            )
-        );
+    if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+      final now = DateTime.now();
+      if (_lastExitTime == null ||
+          now.difference(_lastExitTime!) > const Duration(seconds: 2)) {
+        _lastExitTime = now;
+        if (mounted) {
+          _triggerHaptic(HapticFeedbackType.selection);
+          ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text("Press back again to exit MIRA"),
+                backgroundColor: isGhost ? Colors.redAccent : appTheme.primaryColor,
+                duration: const Duration(seconds: 2),
+              )
+          );
+        }
+      } else {
+        SystemNavigator.pop();
       }
     } else {
-      SystemNavigator.pop();
+      exit(0);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // 1. WATCH STATE
     final isGhost = ref.watch(isGhostModeProvider);
     final activeTab = ref.watch(currentActiveTabProvider);
-    
-    // [NEW] Initialize Proxy Gateway status app-wide
     ref.watch(proxyGatewayStatusProvider);
 
     final activeUrl = activeTab.url;
@@ -176,7 +194,6 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     final isBookmarked = bookmarks.any((b) => b.url == activeUrl);
     final appTheme = ref.watch(themeProvider);
     
-    // 2. THEME & COLORS
     final backgroundColor = appTheme.backgroundColor;
     final appBarColor = appTheme.surfaceColor;
     final primaryAccent = isGhost ? Colors.redAccent : appTheme.primaryColor;
@@ -201,9 +218,8 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
       securityColor = Colors.redAccent;
     }
 
-    // --- LISTENERS (Logic Layer) ---
+    final isDesktop = !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
 
-    // 1. Tab Switch -> Reset Progress & Controller
     ref.listen(currentActiveTabProvider, (previous, next) {
       if (previous?.id != next.id) {
         ref.read(loadingProgressProvider.notifier).state = 0;
@@ -211,7 +227,6 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
       }
     });
 
-    // 2. Smart Settings Updates (The Controller Logic)
     ref.listen(themeProvider, (_, __) => _updateWebViewSettings(forceReload: false));
     ref.listen(securityProvider, (prev, next) {
       if (prev?.isDesktopMode != next.isDesktopMode || 
@@ -229,121 +244,246 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
       child: Scaffold(
         key: _scaffoldKey,
         backgroundColor: backgroundColor,
-        // --- [NEW] Use the extracted Drawer Widget ---
         endDrawer: const MiraDrawer(),
-        
-        appBar: AppBar(
-          backgroundColor: appBarColor,
-          titleSpacing: 0,
-          leading: IconButton(
-            icon: Icon(securityIcon, color: securityColor),
-            onPressed: () {
-              if (activeUrl.isNotEmpty) {
-                HapticFeedback.selectionClick(); 
-                showDialog(
-                  context: context, 
-                  builder: (ctx) => AlertDialog(
-                    backgroundColor: appTheme.surfaceColor,
-                    title: Text(
-                      activeUrl.startsWith("https://") ? "Connection Secure" : "Connection Not Secure",
-                      style: TextStyle(color: securityColor),
-                    ),
-                    content: Text(
-                      activeUrl.startsWith("https://") 
-                        ? "MIRA verified this site uses a valid SSL certificate."
-                        : "This site uses HTTP. Your data is not encrypted.",
-                      style: TextStyle(color: contentColor.withAlpha(179)),
-                    ),
-                    actions: [TextButton(onPressed: ()=>Navigator.pop(ctx), child: const Text("Got it"))],
-                  )
-                );
-              }
-            },
-          ),
-
-          title: TextField(
-            controller: textController,
-            style: GoogleFonts.jetBrainsMono(
-              color: contentColor,
-              fontWeight: FontWeight.w500,
-              fontSize: 14, 
-            ), 
-            cursorColor: primaryAccent,
-            decoration: InputDecoration(
-              hintText: isGhost ? 'Ghost Mode Active' : 'Search or enter address',
-              border: InputBorder.none,
-              hintStyle: GoogleFonts.jetBrainsMono(color: hintColor), 
-              suffixIcon: activeUrl.isNotEmpty && !isGhost
-                  ? IconButton(
-                      icon: Icon(
-                        isBookmarked ? Icons.star : Icons.star_border,
-                        color: isBookmarked ? Colors.yellowAccent : hintColor,
-                        size: 20,
-                      ),
-                      onPressed: () {
-                          HapticFeedback.selectionClick(); 
-                          ref.read(bookmarksProvider.notifier).toggleBookmark(activeUrl, activeTab.title);
-                      },
-                    )
-                  : null,
-            ),
-            textInputAction: TextInputAction.go,
-            onTap: () {
-              textController.selection = TextSelection(baseOffset: 0, extentOffset: textController.text.length);
-            },
-            onSubmitted: _performSearch,
-          ),
-          actions: [
-            InkWell(
-              onTap: () {
-                HapticFeedback.selectionClick(); 
-                showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  backgroundColor: Colors.transparent,
-                  builder: (context) => const FractionallySizedBox(heightFactor: 0.8, child: TabsSheet()),
-                );
-              },
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: primaryAccent, 
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  "$tabCount", 
-                  style: GoogleFonts.jetBrainsMono(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold
-                  )
-                ),
-              ),
-            ),
-            IconButton(
-              icon: Icon(Icons.more_vert, color: contentColor),
-              onPressed: () {
-                HapticFeedback.selectionClick(); 
-                _scaffoldKey.currentState?.openEndDrawer();
-              },
-            ),
+        appBar: isDesktop ? null : _buildMobileAppBar(appBarColor, securityIcon, securityColor, activeUrl, textController, contentColor, primaryAccent, isGhost, hintColor, isBookmarked, activeTab, tabCount, progress),
+        body: Column(
+          children: [
+            if (isDesktop) _buildDesktopTopBar(appBarColor, contentColor, primaryAccent, currentTabsList, activeTab, isGhost, securityIcon, securityColor, textController, hintColor, isBookmarked, progress),
+            const Expanded(child: BrowserView()),
           ],
-          
-          bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(2),
-            child: progress < 1.0 
-              ? LinearProgressIndicator(
-                  value: progress, 
-                  backgroundColor: Colors.transparent, 
-                  color: primaryAccent
+        ),
+      ),
+    );
+  }
+
+  PreferredSizeWidget _buildMobileAppBar(Color appBarColor, IconData securityIcon, Color securityColor, String activeUrl, TextEditingController textController, Color contentColor, Color primaryAccent, bool isGhost, Color hintColor, bool isBookmarked, dynamic activeTab, int tabCount, double progress) {
+    return AppBar(
+      backgroundColor: appBarColor,
+      titleSpacing: 0,
+      leading: IconButton(
+        icon: Icon(securityIcon, color: securityColor),
+        onPressed: () => _showSecurityDialog(activeUrl, securityColor, contentColor),
+      ),
+      title: TextField(
+        controller: textController,
+        style: GoogleFonts.jetBrainsMono(color: contentColor, fontWeight: FontWeight.w500, fontSize: 14),
+        cursorColor: primaryAccent,
+        decoration: InputDecoration(
+          hintText: isGhost ? 'Ghost Mode Active' : 'Search or enter address',
+          border: InputBorder.none,
+          hintStyle: GoogleFonts.jetBrainsMono(color: hintColor),
+          suffixIcon: activeUrl.isNotEmpty && !isGhost
+              ? IconButton(
+                  icon: Icon(isBookmarked ? Icons.star : Icons.star_border, color: isBookmarked ? Colors.yellowAccent : hintColor, size: 20),
+                  onPressed: () {
+                    _triggerHaptic(HapticFeedbackType.selection);
+                    ref.read(bookmarksProvider.notifier).toggleBookmark(activeUrl, activeTab.title);
+                  },
                 )
-              : Container(height: 2, color: Colors.transparent),
+              : null,
+        ),
+        textInputAction: TextInputAction.go,
+        onTap: () => textController.selection = TextSelection(baseOffset: 0, extentOffset: textController.text.length),
+        onSubmitted: _performSearch,
+      ),
+      actions: [
+        InkWell(
+          onTap: () {
+            _triggerHaptic(HapticFeedbackType.selection);
+            showModalBottomSheet(
+              context: context,
+              isScrollControlled: true,
+              backgroundColor: Colors.transparent,
+              builder: (context) => const FractionallySizedBox(heightFactor: 0.8, child: TabsSheet()),
+            );
+          },
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(color: primaryAccent, borderRadius: BorderRadius.circular(8)),
+            child: Text("$tabCount", style: GoogleFonts.jetBrainsMono(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ),
-        
-        // --- [NEW] Use the extracted Browser View Widget ---
-        body: const BrowserView(),
+        IconButton(
+          icon: Icon(Icons.more_vert, color: contentColor),
+          onPressed: () {
+            _triggerHaptic(HapticFeedbackType.selection);
+            _scaffoldKey.currentState?.openEndDrawer();
+          },
+        ),
+      ],
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(2),
+        child: progress < 1.0 
+          ? LinearProgressIndicator(value: progress, backgroundColor: Colors.transparent, color: primaryAccent)
+          : Container(height: 2, color: Colors.transparent),
       ),
+    );
+  }
+
+  Widget _buildDesktopTopBar(Color bgColor, Color contentColor, Color accentColor, List<BrowserTab> tabs, BrowserTab activeTab, bool isGhost, IconData securityIcon, Color securityColor, TextEditingController textController, Color hintColor, bool isBookmarked, double progress) {
+    return Container(
+      color: bgColor,
+      child: Column(
+        children: [
+          // Tab Strip
+          Container(
+            height: 40,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: Row(
+              children: [
+                Expanded(
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: tabs.length,
+                    itemBuilder: (context, index) {
+                      final tab = tabs[index];
+                      final isActive = tab.id == activeTab.id;
+                      return GestureDetector(
+                        onTap: () {
+                          if (isGhost) {
+                            ref.read(ghostTabsProvider.notifier).switchTab(index);
+                          } else {
+                            ref.read(tabsProvider.notifier).switchTab(index);
+                          }
+                        },
+                        child: Container(
+                          width: 180,
+                          margin: const EdgeInsets.only(right: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: isActive ? accentColor.withOpacity(0.2) : Colors.transparent,
+                            borderRadius: BorderRadius.circular(6),
+                            border: isActive ? Border.all(color: accentColor.withOpacity(0.5)) : null,
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  tab.title.isEmpty ? "New Tab" : tab.title,
+                                  style: GoogleFonts.jetBrainsMono(color: contentColor, fontSize: 12, fontWeight: isActive ? FontWeight.bold : FontWeight.normal),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (tabs.length > 1)
+                                GestureDetector(
+                                  onTap: () {
+                                    if (isGhost) {
+                                      ref.read(ghostTabsProvider.notifier).closeTab(tab.id);
+                                    } else {
+                                      ref.read(tabsProvider.notifier).closeTab(tab.id);
+                                    }
+                                  },
+                                  child: Icon(Icons.close, size: 14, color: contentColor.withOpacity(0.5)),
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(Icons.add, color: contentColor, size: 20),
+                  onPressed: () {
+                    if (isGhost) {
+                      ref.read(ghostTabsProvider.notifier).addTab();
+                    } else {
+                      ref.read(tabsProvider.notifier).addTab();
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+          // Toolbar
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: Icon(Icons.arrow_back, color: contentColor, size: 20),
+                  onPressed: () => ref.read(webViewControllerProvider)?.goBack(),
+                ),
+                IconButton(
+                  icon: Icon(Icons.arrow_forward, color: contentColor, size: 20),
+                  onPressed: () => ref.read(webViewControllerProvider)?.goForward(),
+                ),
+                IconButton(
+                  icon: Icon(Icons.refresh, color: contentColor, size: 20),
+                  onPressed: () => ref.read(webViewControllerProvider)?.reload(),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Container(
+                    height: 36,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: contentColor.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(securityIcon, color: securityColor, size: 16),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: textController,
+                            style: GoogleFonts.jetBrainsMono(color: contentColor, fontSize: 13),
+                            cursorColor: accentColor,
+                            decoration: InputDecoration(
+                              hintText: isGhost ? 'Ghost Mode Active' : 'Search or enter address',
+                              border: InputBorder.none,
+                              isDense: true,
+                              hintStyle: GoogleFonts.jetBrainsMono(color: hintColor, fontSize: 13),
+                            ),
+                            onSubmitted: _performSearch,
+                          ),
+                        ),
+                        if (textController.text.isNotEmpty && !isGhost)
+                          IconButton(
+                            padding: EdgeInsets.zero,
+                            icon: Icon(isBookmarked ? Icons.star : Icons.star_border, color: isBookmarked ? Colors.yellowAccent : hintColor, size: 18),
+                            onPressed: () => ref.read(bookmarksProvider.notifier).toggleBookmark(textController.text, activeTab.title),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: Icon(Icons.more_vert, color: contentColor, size: 20),
+                  onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
+                ),
+              ],
+            ),
+          ),
+          if (progress < 1.0)
+            LinearProgressIndicator(value: progress, backgroundColor: Colors.transparent, color: accentColor, minHeight: 2),
+        ],
+      ),
+    );
+  }
+
+  void _showSecurityDialog(String activeUrl, Color securityColor, Color contentColor) {
+    if (activeUrl.isEmpty) return;
+    final appTheme = ref.read(themeProvider);
+    showDialog(
+      context: context, 
+      builder: (ctx) => AlertDialog(
+        backgroundColor: appTheme.surfaceColor,
+        title: Text(
+          activeUrl.startsWith("https://") ? "Connection Secure" : "Connection Not Secure",
+          style: TextStyle(color: securityColor),
+        ),
+        content: Text(
+          activeUrl.startsWith("https://") 
+            ? "MIRA verified this site uses a valid SSL certificate."
+            : "This site uses HTTP. Your data is not encrypted.",
+          style: TextStyle(color: contentColor.withAlpha(179)),
+        ),
+        actions: [TextButton(onPressed: ()=>Navigator.pop(ctx), child: const Text("Got it"))],
+      )
     );
   }
 
@@ -365,12 +505,10 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
       contentBlockers: securityState.isAdBlockEnabled ? AdBlockService.adBlockRules : [],
       forceDark: forceDarkSetting,
       algorithmicDarkeningAllowed: (theme.mode == ThemeMode.dark),
-      useHybridComposition: true,
-      
+      useHybridComposition: !kIsWeb && Platform.isAndroid,
       userAgent: securityState.isDesktopMode
           ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
           : null,
-          
       preferredContentMode: securityState.isDesktopMode
           ? UserPreferredContentMode.DESKTOP
           : UserPreferredContentMode.MOBILE,
@@ -385,4 +523,10 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
       debugPrint("WebView settings update safe fail: $e");
     }
   }
+}
+
+enum HapticFeedbackType {
+  light,
+  medium,
+  selection
 }

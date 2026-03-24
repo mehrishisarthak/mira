@@ -1,11 +1,11 @@
 import 'dart:collection'; 
-import 'dart:collection'; // Required for UnmodifiableListView
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/foundation.dart'; // [NEW]
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:url_launcher/url_launcher.dart'; 
+import 'dart:io';
 
 import 'package:mira/model/ad_block_model.dart';
 import 'package:mira/model/download_model.dart';
@@ -13,7 +13,7 @@ import 'package:mira/model/theme_model.dart';
 import 'package:mira/model/ghost_model.dart';
 import 'package:mira/model/security_model.dart'; 
 import 'package:mira/model/tab_model.dart';
-import 'package:mira/model/proxy_gateway.dart'; // [NEW]
+import 'package:mira/model/proxy_gateway.dart'; 
 
 import 'package:mira/pages/branding_screen.dart';
 import 'package:mira/pages/custom_error_screen.dart'; 
@@ -49,25 +49,25 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
     super.dispose();
   }
 
-  // [NEW] Helper method to apply proxy settings globally (Android Only)
+  // Helper method to apply proxy settings globally (Android Only)
   Future<void> _applyProxy(securityState) async {
-    if (defaultTargetPlatform != TargetPlatform.android) return;
-
-    final proxyController = ProxyController.instance();
-    final isSupported = await WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE);
-    
-    if (isSupported) {
-      if (securityState.isProxyEnabled && securityState.proxyUrl.isNotEmpty) {
-        await proxyController.setProxyOverride(
-          settings: ProxySettings(
-            proxyRules: [
-              ProxyRule(url: securityState.proxyUrl)
-            ],
-            bypassRules: ["*.local"],
-          ),
-        );
-      } else {
-        await proxyController.clearProxyOverride();
+    if (!kIsWeb && Platform.isAndroid) {
+      final proxyController = ProxyController.instance();
+      final isSupported = await WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE);
+      
+      if (isSupported) {
+        if (securityState.isProxyEnabled && securityState.proxyUrl.isNotEmpty) {
+          await proxyController.setProxyOverride(
+            settings: ProxySettings(
+              proxyRules: [
+                ProxyRule(url: securityState.proxyUrl)
+              ],
+              bypassRules: ["*.local"],
+            ),
+          );
+        } else {
+          await proxyController.clearProxyOverride();
+        }
       }
     }
   }
@@ -76,24 +76,36 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
       for (var controller in _controllers.values) {
-        controller.pause();
+        try {
+          controller.pause();
+        } catch (e) {
+          debugPrint("Safe Pause Fail: $e");
+        }
       }
     } else if (state == AppLifecycleState.resumed) {
       final isGhost = ref.read(isGhostModeProvider);
       final tabsState = isGhost ? ref.read(ghostTabsProvider) : ref.read(tabsProvider);
       if (tabsState.tabs.isNotEmpty) {
         final activeTabId = tabsState.tabs[tabsState.activeIndex].id;
-        _controllers[activeTabId]?.resume();
+        try {
+          _controllers[activeTabId]?.resume();
+        } catch (e) {
+          debugPrint("Safe Resume Fail: $e");
+        }
       }
     }
   }
 
   void _updateControllersPauseState(String activeTabId) {
     _controllers.forEach((id, controller) {
-      if (id == activeTabId) {
-        controller.resume();
-      } else {
-        controller.pause();
+      try {
+        if (id == activeTabId) {
+          controller.resume();
+        } else {
+          controller.pause();
+        }
+      } catch (e) {
+        debugPrint("Safe Pause/Resume Fail for $id: $e");
       }
     });
   }
@@ -106,12 +118,12 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
     });
   }
 
-  /// [NEW] Calculates the actual URL to load, applying the iOS Proxy Gateway if needed.
+  /// Calculates the actual URL to load, applying the iOS Proxy Gateway if needed.
   String _getEffectiveUrl(String originalUrl, SecurityState security) {
     if (originalUrl.isEmpty) return originalUrl;
     
     final gateway = ref.read(proxyGatewayProvider);
-    if (defaultTargetPlatform == TargetPlatform.iOS && security.isProxyEnabled && gateway.isRunning) {
+    if (!kIsWeb && Platform.isIOS && security.isProxyEnabled && gateway.isRunning) {
       // Don't proxy the proxy itself
       if (originalUrl.startsWith('http://localhost')) return originalUrl;
       return gateway.getProxiedUrl(originalUrl);
@@ -148,7 +160,7 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
     
     final securityState = ref.watch(securityProvider);
 
-    // [NEW] Listen to security state specifically to trigger proxy updates
+    // Listen to security state specifically to trigger proxy updates
     ref.listen(securityProvider, (previous, next) {
       if (previous?.isProxyEnabled != next.isProxyEnabled || previous?.proxyUrl != next.proxyUrl) {
         _applyProxy(next);
@@ -158,7 +170,10 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
     final theme = ref.watch(themeProvider);
     final errorMessage = ref.watch(webErrorProvider);
     final progress = ref.watch(loadingProgressProvider);
-    final bool isLoading = progress < 100;
+    
+    // [FIX] Only show loading if URL is not empty
+    final activeTabUrl = tabs.isNotEmpty ? tabs[activeIndex].url : '';
+    final bool isLoading = progress < 100 && activeTabUrl.isNotEmpty;
 
     // 2. Handle Error State (Global for active tab)
     if (errorMessage != null && tabs.isNotEmpty) {
@@ -200,12 +215,10 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
                 clearCache: isGhost || securityState.isIncognito,
                 cacheMode: CacheMode.LOAD_DEFAULT, 
                 
-                // [FIX] 'proxy' argument removed entirely. It is now handled by the listener above.
-                
                 contentBlockers: securityState.isAdBlockEnabled ? AdBlockService.adBlockRules : [],
                 forceDark: forceDarkSetting,
                 algorithmicDarkeningAllowed: (theme.mode == ThemeMode.dark),
-                useHybridComposition: true,
+                useHybridComposition: !kIsWeb && Platform.isAndroid,
                 hardwareAcceleration: true, 
                 userAgent: securityState.isDesktopMode 
                     ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" 
@@ -278,8 +291,12 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
                     }
 
                     if (isGhost || securityState.isIncognito) {
-                      // ignore: deprecated_member_use
-                      WebStorageManager.instance().android.deleteAllData();
+                      if (!kIsWeb && Platform.isAndroid) {
+                        // ignore: deprecated_member_use
+                        WebStorageManager.instance().android.deleteAllData();
+                      } else {
+                        WebStorageManager.instance().deleteAllData();
+                      }
                     }
                   }
               },

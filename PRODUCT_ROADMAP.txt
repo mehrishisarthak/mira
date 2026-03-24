@@ -1,0 +1,48 @@
+# MIRA Browser: Revenue Model & Technical Roadmap
+
+## 1. REVENUE MODELS (Monetization Strategy)
+
+### A. Privacy-First Search Partnerships (Immediate)
+*   **Model:** Set a privacy-focused search engine (DuckDuckGo, Brave Search, Mojeek) as the default.
+*   **Revenue:** Receive a share of the ad revenue generated from search queries.
+*   **Alignment:** 100% aligned with MIRA’s Ghost Mode; no user tracking required.
+
+### B. Sponsored "Speed Dial" Tiles (Low Friction)
+*   **Model:** Include affiliate tiles on the 'Branding Screen' for services like ProtonMail, ExpressVPN, or privacy-conscious retailers.
+*   **Revenue:** Commission-based (CPA) when users sign up or purchase through the tiles.
+*   **UX:** Non-intrusive and can be disabled by the user in settings.
+
+### C. MIRA "Pro" Subscription (SaaS)
+*   **Model:** $3–$5/month for advanced privacy features.
+*   **Features:**
+    *   **Built-in VPN/WireGuard:** Full system-wide encryption beyond simple proxy.
+    *   **Encrypted Cloud Sync:** Sync bookmarks/history across Windows, Mac, and Mobile via E2EE.
+    *   **Custom Ad-Block Lists:** Access to "Nuclear" blocking rules for power users.
+
+### D. B2B Enterprise Edition (High Growth)
+*   **Model:** Licensed version for Law Firms, Healthcare, and Crypto startups.
+*   **Features:** Hardened "Ghost Mode" by default, zero-data-leakage configuration, and custom corporate branding.
+
+---
+
+## 2. POTENTIAL IMPROVEMENTS (The "Production Grade" Checklist)
+
+### Technical Performance & Stability
+*   **Tab Hibernation (Critical):** Implement a "Sleep" mode for background tabs. Instead of keeping 20+ live WebViews in memory (causing OOM crashes), store the tab state and a screenshot, then re-initialize only when the tab becomes active.
+*   **Observability:** Integrate Sentry or Firebase Crashlytics to monitor crashes on specific OS versions (especially Windows/macOS) and identify broken websites.
+*   **Enhanced Error Handling:** Improve the `CustomErrorScreen` to handle network transitions (Wi-Fi to 5G) and provide more granular "Proceed anyway" options for SSL certificate issues.
+
+### User Experience (UX)
+*   **Data Portability:** Build an "Import from Chrome/Firefox" tool to allow users to migrate their bookmarks and passwords easily.
+*   **Desktop Layout Refinement:** Continue optimizing the top-tab bar and toolbar for 4K monitors and ultra-wide displays.
+*   **Accessibility (a11y):** Audit the UI with Screen Readers (TalkBack/VoiceOver) and ensure all custom icons have proper `Semantics` labels.
+
+### Security & Privacy
+*   **Biometric App Lock:** Add an option to lock the browser (especially Ghost Mode) behind FaceID, TouchID, or Windows Hello.
+*   **Self-Destruct Timer:** A setting to automatically close all Ghost Tabs and clear the session after a set period of inactivity.
+*   **Fingerprinting Protection:** Add logic to spoof or randomize browser headers to prevent "Canvas Fingerprinting" by trackers.
+
+---
+
+## 3. COMPETITIVE POSITIONING
+MIRA is uniquely positioned as a **unified, lightweight, and visually striking** alternative. Its core strength lies in its **Flutter-driven agility**, allowing it to offer a consistent experience across all platforms with a significantly smaller resource footprint than traditional browsers.

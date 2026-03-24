@@ -1,0 +1,45 @@
+# MIRA Browser: Future-Proofing & Bug Audit
+
+## 1. FUTURE-PROOFING PLAN (Mitigating Dependency Risk)
+
+### A. The Abstraction Layer (Facade Pattern)
+*   **The Risk:** Directly calling `InAppWebViewController` or `InAppWebViewSettings` throughout the UI (e.g., in `Mainscreen` and `BrowserView`) makes MIRA a "hostage" to that specific package.
+*   **The Fix:** Create a `BrowserService` or `BrowserInterface` class. The UI should call `miraBrowser.loadUrl()` or `miraBrowser.clearCache()`. 
+*   **Result:** If `flutter_inappwebview` is ever deprecated, you only update the `BrowserService` implementation to use a new plugin (like `webview_flutter` or a custom native bridge), and 90% of your code remains untouched.
+
+### B. Official Plugin Fallbacks
+*   **Strategy:** For core system tasks (File paths, URL launching, Permissions), always prefer official Google-maintained plugins (`path_provider`, `url_launcher`, `permission_handler`) over third-party alternatives. MIRA already follows this, which is a strong foundation.
+
+### C. The "Fork" Readiness
+*   **Strategy:** Keep the logic for Ghost Mode, Proxy Gateway, and Ad-Blocking separate from the WebView rendering. This ensures that even if you have to switch the "engine," the "intelligence" of MIRA remains intact.
+
+---
+
+## 2. POTENTIAL BUG AUDIT (Known & Speculative)
+
+### A. The "Memory Leak" (IndexedStack Issue)
+*   **Bug:** Because `BrowserView` uses an `IndexedStack`, every open tab is a live, memory-consuming WebView.
+*   **Impact:** Opening 10+ tabs on a mid-range Android phone will eventually cause an "Out of Memory" (OOM) crash.
+*   **Status:** High Priority - Requires "Tab Hibernation" logic.
+
+### B. Desktop Proxy Limitations
+*   **Bug:** Currently, `ProxyController` is Android-only and `shelf_proxy` is iOS-optimized. Windows and macOS versions of the `flutter_inappwebview` do not yet support easy runtime proxy overrides.
+*   **Impact:** Ghost Mode/Proxy settings may not be 100% effective on Desktop without system-level configuration.
+
+### C. Download Reliability (Desktop)
+*   **Bug:** The current `HttpClient` implementation for Windows/macOS is basic. It does not handle HTTP redirects (302), authentication prompts, or partial resumes.
+*   **Impact:** Large files or downloads from sites like Google Drive may fail on PC.
+
+### D. Keyboard/Snapshot Leaks (Privacy)
+*   **Bug:** Most mobile OSs take a "snapshot" of the app for the App Switcher. 
+*   **Impact:** If a user is in Ghost Mode, their private data might be visible in the multitasking view.
+*   **Status:** Needs a "Privacy Overlay" (blurring the screen when the app is inactive).
+
+### E. Race Conditions (Controller Access)
+*   **Bug:** If a tab is switched or closed exactly as a page finishes loading, the app might try to call `controller.settings()` on a disposed controller.
+*   **Status:** Partially mitigated with try-catch blocks, but needs a more robust "Controller Registry."
+
+---
+
+## 3. SUMMARY: Is MIRA "Future-Proof"?
+**Yes, provided you decouple the UI from the WebView plugin.** The "intelligence" of MIRA (Ghost Mode, Ad-Blocking, Proxy Logic) is independent of how the page is rendered. As long as you maintain that separation, MIRA can survive the death of any single plugin.
