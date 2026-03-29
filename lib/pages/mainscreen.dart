@@ -31,7 +31,6 @@ class Mainscreen extends ConsumerStatefulWidget {
 }
 
 class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObserver {
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   DateTime? _lastExitTime;
 
   @override
@@ -237,14 +236,12 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
 
     return PopScope(
       canPop: false,
-      onPopInvoked: (didPop) {
+      onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
         _handlePop();
       },
       child: Scaffold(
-        key: _scaffoldKey,
         backgroundColor: backgroundColor,
-        endDrawer: const MiraDrawer(),
         appBar: isDesktop ? null : _buildMobileAppBar(appBarColor, securityIcon, securityColor, activeUrl, textController, contentColor, primaryAccent, isGhost, hintColor, isBookmarked, activeTab, tabCount, progress),
         body: Column(
           children: [
@@ -308,7 +305,10 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
           icon: Icon(Icons.more_vert, color: contentColor),
           onPressed: () {
             _triggerHaptic(HapticFeedbackType.selection);
-            _scaffoldKey.currentState?.openEndDrawer();
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const MiraMenuPage()),
+            );
           },
         ),
       ],
@@ -352,9 +352,9 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
                           margin: const EdgeInsets.only(right: 4),
                           padding: const EdgeInsets.symmetric(horizontal: 12),
                           decoration: BoxDecoration(
-                            color: isActive ? accentColor.withOpacity(0.2) : Colors.transparent,
+                            color: isActive ? accentColor.withValues(alpha: 0.2) : Colors.transparent,
                             borderRadius: BorderRadius.circular(6),
-                            border: isActive ? Border.all(color: accentColor.withOpacity(0.5)) : null,
+                            border: isActive ? Border.all(color: accentColor.withValues(alpha: 0.5)) : null,
                           ),
                           child: Row(
                             children: [
@@ -374,7 +374,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
                                       ref.read(tabsProvider.notifier).closeTab(tab.id);
                                     }
                                   },
-                                  child: Icon(Icons.close, size: 14, color: contentColor.withOpacity(0.5)),
+                                  child: Icon(Icons.close, size: 14, color: contentColor.withValues(alpha: 0.5)),
                                 ),
                             ],
                           ),
@@ -419,7 +419,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
                     height: 36,
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     decoration: BoxDecoration(
-                      color: contentColor.withOpacity(0.05),
+                      color: contentColor.withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(18),
                     ),
                     child: Row(
@@ -453,7 +453,10 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
                 const SizedBox(width: 8),
                 IconButton(
                   icon: Icon(Icons.more_vert, color: contentColor, size: 20),
-                  onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const MiraMenuPage()),
+                  ),
                 ),
               ],
             ),

@@ -99,12 +99,12 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: brandColor.withOpacity(0.3),
+                          color: brandColor.withValues(alpha: 0.3),
                           width: 2,
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: brandColor.withOpacity(0.2 * _opacityAnimation.value),
+                            color: brandColor.withValues(alpha: 0.2 * _opacityAnimation.value),
                             blurRadius: 30,
                             spreadRadius: 5,
                           ),
@@ -129,7 +129,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                         letterSpacing: 8,
                         shadows: [
                           Shadow(
-                            color: brandColor.withOpacity(0.6),
+                            color: brandColor.withValues(alpha: 0.6),
                             blurRadius: 10,
                           ),
                         ],
