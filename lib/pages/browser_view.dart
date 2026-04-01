@@ -7,13 +7,14 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:url_launcher/url_launcher.dart'; 
 import 'dart:io';
 
-import 'package:mira/model/ad_block_model.dart';
+import 'package:mira/shell/ad_block/ad_block_service_webview.dart';
 import 'package:mira/core/services/download_provider.dart';
 import 'package:mira/model/theme_model.dart';
 import 'package:mira/model/ghost_model.dart';
 import 'package:mira/model/security_model.dart'; 
 import 'package:mira/model/tab_model.dart';
-import 'package:mira/model/proxy_gateway.dart'; 
+import 'package:mira/core/notifiers/proxy_notifier.dart';
+import 'package:mira/shell/proxy/proxy_provider.dart'; 
 
 import 'package:mira/pages/branding_screen.dart';
 import 'package:mira/pages/custom_error_screen.dart'; 
@@ -169,7 +170,7 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
       incognito: isGhost || securityState.isIncognito,
       clearCache: isGhost || securityState.isIncognito,
       contentBlockers:
-          securityState.isAdBlockEnabled ? AdBlockService.adBlockRules : [],
+          securityState.isAdBlockEnabled ? AdBlockServiceWebview.contentBlockers : [],
       forceDark: forceDarkSetting,
       algorithmicDarkeningAllowed: (theme.mode == ThemeMode.dark),
       useHybridComposition: !kIsWeb && Platform.isAndroid,
@@ -313,8 +314,9 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
   String _getEffectiveUrl(String originalUrl, SecurityState security) {
     if (originalUrl.isEmpty) return originalUrl;
     
-    final gateway = ref.read(proxyGatewayProvider);
-    if (!kIsWeb && Platform.isIOS && security.isProxyEnabled && gateway.isRunning) {
+    final gateway = ref.read(proxyServiceProvider);
+    final isGatewayRunning = ref.watch(proxyGatewayStatusProvider);
+    if (!kIsWeb && Platform.isIOS && security.isProxyEnabled && isGatewayRunning) {
       // Don't proxy the proxy itself
       if (originalUrl.startsWith('http://localhost')) return originalUrl;
       return gateway.getProxiedUrl(originalUrl);
@@ -425,7 +427,7 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
               initialUrlRequest: URLRequest(url: WebUri(_getEffectiveUrl(tab.url, securityState))),
               
               initialUserScripts: securityState.isAdBlockEnabled
-                  ? UnmodifiableListView<UserScript>(AdBlockService.initialUserScripts)
+                  ? UnmodifiableListView<UserScript>(AdBlockServiceWebview.initialUserScripts)
                   : null,
                   
               initialSettings: InAppWebViewSettings(
@@ -433,7 +435,7 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
                 clearCache: isGhost || securityState.isIncognito,
                 cacheMode: CacheMode.LOAD_DEFAULT, 
                 
-                contentBlockers: securityState.isAdBlockEnabled ? AdBlockService.adBlockRules : [],
+                contentBlockers: securityState.isAdBlockEnabled ? AdBlockServiceWebview.contentBlockers : [],
                 forceDark: forceDarkSetting,
                 algorithmicDarkeningAllowed: (theme.mode == ThemeMode.dark),
                 useHybridComposition: !kIsWeb && Platform.isAndroid,
@@ -448,7 +450,7 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
               shouldInterceptRequest: (controller, request) async {
                 if (!securityState.isAdBlockEnabled) return null;
                 final host = request.url.host;
-                if (AdBlockService.blockedDomains.any((domain) => host.contains(domain))) {
+                if (AdBlockServiceWebview.blockedDomains.any((domain) => host.contains(domain))) {
                   return WebResourceResponse(
                     contentType: 'text/plain',
                     data: Uint8List(0),

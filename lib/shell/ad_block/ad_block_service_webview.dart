@@ -2,8 +2,9 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'dart:collection';
 import 'package:mira/constants/ad_block_scripts.dart';
 
-class AdBlockService {
-  // Use a HashSet for O(1) lookup of blocked domains
+/// A specialized service that provides InAppWebView-specific ad blocking rules.
+/// This encapsulates the knowledge of HOW to block ads in InAppWebView.
+class AdBlockServiceWebview {
   static final HashSet<String> blockedDomains = HashSet<String>.from([
     // Google
     "googlesyndication.com",
@@ -90,8 +91,7 @@ class AdBlockService {
     "crypto-loot.com",
   ]);
 
-  // Enhanced regex rules to kill ads, trackers, miners, and session recorders.
-  static final List<ContentBlocker> adBlockRules = [
+  static final List<ContentBlocker> contentBlockers = [
     // 1. The Big G (Google Ecosystem)
     _createBlocker(r".*googlesyndication\.com.*"),
     _createBlocker(r".*doubleclick\.net.*"),
@@ -220,18 +220,15 @@ class AdBlockService {
     return ContentBlocker(
       trigger: ContentBlockerTrigger(
         urlFilter: urlRegex,
-        // FIXED: Explicitly target resource types. 
-        // We DO NOT include ContentBlockerTriggerResourceType.MAIN_FRAME 
-        // to ensure we never block the actual website the user wants to visit.
         resourceType: [
           ContentBlockerTriggerResourceType.SCRIPT,
-          ContentBlockerTriggerResourceType.IMAGE,       // iFrames
-          ContentBlockerTriggerResourceType.MEDIA,            // Video Ads
+          ContentBlockerTriggerResourceType.IMAGE,
+          ContentBlockerTriggerResourceType.MEDIA,
           ContentBlockerTriggerResourceType.FONT,
         ],
       ),
       action: ContentBlockerAction(
-        type: ContentBlockerActionType.BLOCK, 
+        type: ContentBlockerActionType.BLOCK,
       ),
     );
   }

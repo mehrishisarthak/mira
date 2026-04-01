@@ -6,14 +6,15 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:io';
 
-import 'package:mira/model/ad_block_model.dart';
+import 'package:mira/shell/ad_block/ad_block_service_webview.dart';
 import 'package:mira/model/book_mark_model.dart';
 import 'package:mira/model/theme_model.dart';
 import 'package:mira/model/ghost_model.dart';
 import 'package:mira/model/search_engine.dart';
 import 'package:mira/model/security_model.dart'; 
 import 'package:mira/model/tab_model.dart';
-import 'package:mira/model/proxy_gateway.dart'; 
+import 'package:mira/core/notifiers/proxy_notifier.dart';
+import 'package:mira/shell/proxy/proxy_provider.dart'; 
 import 'package:mira/pages/browser_view.dart'; 
 import 'package:mira/pages/mira_drawer.dart';
 import 'package:mira/pages/tab_screen.dart'; 
@@ -102,9 +103,10 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
       finalUrl = ref.read(formattedSearchUrlProvider(trimmedValue));
     }
     
-    final gateway = ref.read(proxyGatewayProvider);
+    final gateway = ref.read(proxyServiceProvider);
+    final isGatewayRunning = ref.read(proxyGatewayStatusProvider);
     final security = ref.read(securityProvider);
-    if (!kIsWeb && Platform.isIOS && security.isProxyEnabled && gateway.isRunning) {
+    if (!kIsWeb && Platform.isIOS && security.isProxyEnabled && isGatewayRunning) {
         finalUrl = gateway.getProxiedUrl(finalUrl);
     }
     
@@ -505,7 +507,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     final settings = InAppWebViewSettings(
       incognito: isGhost || securityState.isIncognito,
       clearCache: isGhost || securityState.isIncognito,
-      contentBlockers: securityState.isAdBlockEnabled ? AdBlockService.adBlockRules : [],
+      contentBlockers: securityState.isAdBlockEnabled ? AdBlockServiceWebview.contentBlockers : [],
       forceDark: forceDarkSetting,
       algorithmicDarkeningAllowed: (theme.mode == ThemeMode.dark),
       useHybridComposition: !kIsWeb && Platform.isAndroid,
