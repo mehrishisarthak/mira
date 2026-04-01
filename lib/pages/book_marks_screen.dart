@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
-import 'package:mira/model/book_mark_model.dart';
-import 'package:mira/model/tab_model.dart';
-import 'package:mira/model/theme_model.dart';
+import 'package:mira/core/entities/bookmark_entity.dart';
+import 'package:mira/core/notifiers/bookmarks_notifier.dart';
+import 'package:mira/core/notifiers/tab_notifier.dart';
+import 'package:mira/core/entities/tab_entity.dart';
+import 'package:mira/core/entities/theme_entity.dart';
+import 'package:mira/core/notifiers/theme_notifier.dart';
 import 'package:mira/pages/mainscreen.dart';
 
 class BookmarksPage extends ConsumerWidget {
@@ -67,3 +70,4 @@ class BookmarksPage extends ConsumerWidget {
     );
   }
 }
+

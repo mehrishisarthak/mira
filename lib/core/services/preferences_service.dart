@@ -1,3 +1,4 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class PreferencesService {
@@ -101,3 +102,7 @@ class PreferencesService {
   bool getFirstRun() => _prefs.getBool(_keyFirstRun) ?? true;
   Future<void> setFirstRun(bool value) async => await _prefs.setBool(_keyFirstRun, value);
 }
+
+final preferencesServiceProvider = Provider<PreferencesService>((ref) {
+  throw UnimplementedError('PreferencesService must be overridden in main.dart');
+});

@@ -1,58 +1,8 @@
-import 'dart:convert'; // Required for JSON
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mira/model/search_engine.dart';
-import 'package:uuid/uuid.dart';
-import 'package:mira/model/caching/caching.dart'; 
+import 'package:mira/core/entities/tab_entity.dart';
+import 'package:mira/core/services/preferences_service.dart';
 
-// --- 1. THE MODEL ---
-class BrowserTab {
-  final String id;
-  final String url;
-  final String title;
-  final bool isLoading;
-  
-  BrowserTab({
-    String? id,
-    this.url = '',
-    this.title = 'New Tab',
-    this.isLoading = false,
-  }) : id = id ?? const Uuid().v4(); //giving  tabs an id
-
-  BrowserTab copyWith({
-    String? id,
-    String? url,
-    String? title,
-    bool? isLoading,
-  }) {
-    return BrowserTab(
-      id: id ?? this.id,
-      url: url ?? this.url,
-      title: title ?? this.title,
-      isLoading: isLoading ?? this.isLoading,
-    );
-  }
-
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'url': url,
-      'title': title,
-    };
-  }
-
-  factory BrowserTab.fromMap(Map<String, dynamic> map) {
-    return BrowserTab(
-      id: map['id'],
-      url: map['url'] ?? '',
-      title: map['title'] ?? 'New Tab',
-    );
-  }
-
-  String toJson() => json.encode(toMap());
-  factory BrowserTab.fromJson(String source) => BrowserTab.fromMap(json.decode(source));
-}
-
-// --- 2. THE STATE CLASS ---
+// --- 1. THE STATE CLASS ---
 class TabsState {
   final List<BrowserTab> tabs;
   final int activeIndex;
@@ -62,7 +12,7 @@ class TabsState {
   BrowserTab get activeTab => tabs[activeIndex];
 }
 
-// --- 3. THE NOTIFIER ---
+// --- 2. THE NOTIFIER ---
 class TabsNotifier extends StateNotifier<TabsState> {
   final PreferencesService _prefsService;
 
@@ -140,7 +90,6 @@ class TabsNotifier extends StateNotifier<TabsState> {
      _updateActiveTab((tab) => tab.copyWith(title: newTitle));
   }
 
-  // --- THE MISSING NUKE METHOD ---
   // This resets the persistent tabs to a single blank tab
   void nuke() {
     final newTabs = [BrowserTab()];
@@ -155,17 +104,15 @@ class TabsNotifier extends StateNotifier<TabsState> {
     state = TabsState(tabs: currentTabs, activeIndex: state.activeIndex);
     _saveToPrefs();
   }
-
-  void add({required String url}) {}
 }
 
-// --- 4. THE PROVIDER ---
+// --- 3. THE PROVIDER ---
 final tabsProvider = StateNotifierProvider<TabsNotifier, TabsState>((ref) {
   final prefsService = ref.watch(preferencesServiceProvider);
   return TabsNotifier(prefsService);
 });
 
-// --- 5. HELPER ---
+// --- 4. HELPER ---
 final activeUrlProvider = Provider<String>((ref) {
   final tabsState = ref.watch(tabsProvider);
   return tabsState.activeTab.url;

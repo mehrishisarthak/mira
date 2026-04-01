@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mira/model/theme_model.dart';
+import 'package:mira/core/entities/theme_entity.dart';
+import 'package:mira/core/notifiers/theme_notifier.dart';
 
 class WebSkeletonLoader extends ConsumerStatefulWidget {
   const WebSkeletonLoader({super.key});

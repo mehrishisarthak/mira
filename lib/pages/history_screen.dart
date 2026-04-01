@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mira/model/search_engine.dart';
-import 'package:mira/model/tab_model.dart';
-import 'package:mira/model/theme_model.dart';
+import 'package:mira/core/notifiers/search_notifier.dart';
+import 'package:mira/core/notifiers/history_notifier.dart';
+import 'package:mira/core/entities/history_entity.dart';
+import 'package:mira/core/notifiers/tab_notifier.dart';
+import 'package:mira/core/entities/tab_entity.dart';
+import 'package:mira/core/entities/theme_entity.dart';
+import 'package:mira/core/notifiers/theme_notifier.dart';
 import 'package:mira/pages/mainscreen.dart';
 
 class HistoryPage extends ConsumerWidget {
@@ -105,3 +109,4 @@ class HistoryList extends ConsumerWidget {
     );
   }
 }
+

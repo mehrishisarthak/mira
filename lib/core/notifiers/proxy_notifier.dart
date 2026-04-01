@@ -2,7 +2,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mira/core/services/proxy_service.dart';
-import 'package:mira/model/security_model.dart';
+import 'package:mira/core/entities/security_entity.dart';
+import 'package:mira/core/notifiers/security_notifier.dart';
 import 'package:mira/shell/proxy/proxy_provider.dart';
 
 /// Notifier to manage the gateway lifecycle based on security settings.
@@ -48,3 +49,4 @@ final proxyGatewayStatusProvider = StateNotifierProvider<ProxyGatewayNotifier, b
   final service = ref.watch(proxyServiceProvider);
   return ProxyGatewayNotifier(ref, service);
 });
+

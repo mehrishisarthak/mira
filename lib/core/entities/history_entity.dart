@@ -1,8 +1,5 @@
 import 'dart:convert';
 
-/// Pure data model for a single browsing history entry.
-/// The provider and notifier that manage this model live in search_engine.dart,
-/// co-located with the other preference-backed providers.
 class HistoryItem {
   final String text;
   final DateTime timestamp;

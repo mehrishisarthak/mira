@@ -8,11 +8,17 @@ import 'package:url_launcher/url_launcher.dart';
 import 'dart:io';
 
 import 'package:mira/shell/ad_block/ad_block_service_webview.dart';
+import 'package:mira/core/services/browser_service.dart';
+import 'package:mira/shell/browser/browser_provider.dart';
+import 'package:mira/core/notifiers/hibernation_notifier.dart';
 import 'package:mira/core/services/download_provider.dart';
-import 'package:mira/model/theme_model.dart';
-import 'package:mira/model/ghost_model.dart';
-import 'package:mira/model/security_model.dart'; 
-import 'package:mira/model/tab_model.dart';
+import 'package:mira/core/entities/theme_entity.dart';
+import 'package:mira/core/notifiers/theme_notifier.dart';
+import 'package:mira/core/notifiers/ghost_notifier.dart';
+import 'package:mira/core/entities/security_entity.dart';
+import 'package:mira/core/notifiers/security_notifier.dart'; 
+import 'package:mira/core/notifiers/tab_notifier.dart';
+import 'package:mira/core/entities/tab_entity.dart';
 import 'package:mira/core/notifiers/proxy_notifier.dart';
 import 'package:mira/shell/proxy/proxy_provider.dart'; 
 
@@ -31,32 +37,6 @@ class BrowserView extends ConsumerStatefulWidget {
 class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingObserver {
   final Map<String, InAppWebViewController> _controllers = {};
 
-  // ── TAB HIBERNATION ────────────────────────────────────────────────────────
-  // Only _maxAliveTabs WebView instances are kept live at once.
-  // All other tabs render as a lightweight placeholder and are reloaded on demand.
-  static const int _maxAliveTabs = 3;
-
-  // LinkedHashSet preserves insertion order (oldest first), making LRU eviction
-  // trivial: remove the first element.
-  final LinkedHashSet<String> _awakeTabIds = LinkedHashSet<String>();
-
-  /// Marks [tabId] as the most-recently-used tab. If the awake set exceeds
-  /// [_maxAliveTabs], the least-recently-used tab is evicted (hibernated).
-  /// Its controller reference is released so Flutter disposes the WebView.
-  void _wakeTab(String tabId) {
-    _awakeTabIds.remove(tabId); // re-insert to move it to the end (most recent)
-    _awakeTabIds.add(tabId);
-
-    while (_awakeTabIds.length > _maxAliveTabs) {
-      final lruId = _awakeTabIds.first;
-      _awakeTabIds.remove(lruId);
-      _controllers.remove(lruId);
-      debugPrint('MIRA_HIBERNATE: Tab $lruId hibernated (LRU eviction, limit=$_maxAliveTabs)');
-    }
-
-    if (mounted) setState(() {});
-  }
-
   // ── LIFECYCLE ──────────────────────────────────────────────────────────────
 
   @override
@@ -64,18 +44,18 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    // Seed the awake set with the initial active tab so the first build
-    // renders a live WebView instead of a placeholder.
-    final isGhost = ref.read(isGhostModeProvider);
-    final initialState = isGhost ? ref.read(ghostTabsProvider) : ref.read(tabsProvider);
-    if (initialState.tabs.isNotEmpty) {
-      _awakeTabIds.add(initialState.tabs[initialState.activeIndex].id);
-    }
-
-    // Apply proxy config after the first frame (platform channels are ready).
+    // Initial wake for active tab
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final initialSecurityState = ref.read(securityProvider);
-      _applyProxy(initialSecurityState);
+      final isGhost = ref.read(isGhostModeProvider);
+      final initialState = isGhost ? ref.read(ghostTabsProvider) : ref.read(tabsProvider);
+      if (initialState.tabs.isNotEmpty) {
+        final activeId = initialState.tabs[initialState.activeIndex].id;
+        ref.read(hibernationProvider.notifier).wakeTab(activeId);
+      }
+
+      // Initial proxy application
+      final security = ref.read(securityProvider);
+      ref.read(browserServiceProvider).applyProxy(security);
     });
   }
 
@@ -83,31 +63,7 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _controllers.clear();
-    _awakeTabIds.clear();
     super.dispose();
-  }
-
-  // Helper method to apply proxy settings globally (Android Only)
-  Future<void> _applyProxy(securityState) async {
-    if (!kIsWeb && Platform.isAndroid) {
-      final proxyController = ProxyController.instance();
-      final isSupported = await WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE);
-      
-      if (isSupported) {
-        if (securityState.isProxyEnabled && securityState.proxyUrl.isNotEmpty) {
-          await proxyController.setProxyOverride(
-            settings: ProxySettings(
-              proxyRules: [
-                ProxyRule(url: securityState.proxyUrl)
-              ],
-              bypassRules: ["*.local"],
-            ),
-          );
-        } else {
-          await proxyController.clearProxyOverride();
-        }
-      }
-    }
   }
 
   @override
@@ -149,14 +105,12 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
   }
 
   void _cleanUpClosedTabs(List<dynamic> currentTabs) {
-    final currentTabIds = currentTabs.map((tab) => tab.id).toSet();
+    final currentTabIds = currentTabs.map((tab) => tab.id as String).toSet();
     _controllers.removeWhere((id, _) => !currentTabIds.contains(id));
-    _awakeTabIds.removeWhere((id) => !currentTabIds.contains(id));
+    ref.read(hibernationProvider.notifier).onTabsClosed(currentTabIds);
   }
 
   /// Pushes updated theme/dark-mode settings to every live WebView controller.
-  /// Called whenever themeProvider changes so ALL tabs (not just the active one)
-  /// immediately reflect the new Light/Dark/System mode.
   Future<void> _applyThemeToAllControllers(MiraTheme theme) async {
     if (_controllers.isEmpty) return;
     final securityState = ref.read(securityProvider);
@@ -191,8 +145,6 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
     }
   }
 
-  /// Lightweight stand-in for a hibernated tab.
-  /// Shown for a brief moment while the fresh InAppWebView initialises after wake.
   Widget _buildHibernatedPlaceholder(BrowserTab tab) {
     return Container(
       color: Colors.black,
@@ -213,7 +165,6 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
     );
   }
 
-  /// Shows a bottom-sheet context menu when the user long-presses a link.
   void _showLinkContextMenu(String linkUrl) {
     if (!mounted) return;
     final theme = ref.read(themeProvider);
@@ -232,7 +183,6 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // URL preview pill
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               child: Container(
@@ -310,14 +260,12 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
     );
   }
 
-  /// Calculates the actual URL to load, applying the iOS Proxy Gateway if needed.
   String _getEffectiveUrl(String originalUrl, SecurityState security) {
     if (originalUrl.isEmpty) return originalUrl;
     
     final gateway = ref.read(proxyServiceProvider);
     final isGatewayRunning = ref.watch(proxyGatewayStatusProvider);
     if (!kIsWeb && Platform.isIOS && security.isProxyEnabled && isGatewayRunning) {
-      // Don't proxy the proxy itself
       if (originalUrl.startsWith('http://localhost')) return originalUrl;
       return gateway.getProxiedUrl(originalUrl);
     }
@@ -326,19 +274,20 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
 
   @override
   Widget build(BuildContext context) {
-    // 1. Watch Data
     final isGhost = ref.watch(isGhostModeProvider);
     final tabsState = isGhost ? ref.watch(ghostTabsProvider) : ref.watch(tabsProvider);
     final tabs = tabsState.tabs;
     final activeIndex = tabsState.activeIndex;
     final activeTabId = tabs.isNotEmpty ? tabs[activeIndex].id : '';
+    
+    final awakeTabIds = ref.watch(hibernationProvider);
 
     ref.listen(tabsProvider, (previous, next) {
       if (!isGhost) {
         _cleanUpClosedTabs(next.tabs);
         if (previous?.activeIndex != next.activeIndex && next.tabs.isNotEmpty) {
           final newActiveId = next.tabs[next.activeIndex].id;
-          _wakeTab(newActiveId);
+          ref.read(hibernationProvider.notifier).wakeTab(newActiveId);
           _updateControllersPauseState(newActiveId);
         }
       }
@@ -349,44 +298,39 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
         _cleanUpClosedTabs(next.tabs);
         if (previous?.activeIndex != next.activeIndex && next.tabs.isNotEmpty) {
           final newActiveId = next.tabs[next.activeIndex].id;
-          _wakeTab(newActiveId);
+          ref.read(hibernationProvider.notifier).wakeTab(newActiveId);
           _updateControllersPauseState(newActiveId);
         }
       }
     });
 
-    // When the user switches between ghost and normal mode, wake the active tab
-    // in the newly-visible set so it renders as a live WebView immediately.
     ref.listen(isGhostModeProvider, (_, isGhostNow) {
       final switchedState = isGhostNow
           ? ref.read(ghostTabsProvider)
           : ref.read(tabsProvider);
       if (switchedState.tabs.isNotEmpty) {
-        _wakeTab(switchedState.tabs[switchedState.activeIndex].id);
+        final activeId = switchedState.tabs[switchedState.activeIndex].id;
+        ref.read(hibernationProvider.notifier).wakeTab(activeId);
       }
     });
     
     final securityState = ref.watch(securityProvider);
 
-    // Listen to security state specifically to trigger proxy updates
     ref.listen(securityProvider, (previous, next) {
       if (previous?.isProxyEnabled != next.isProxyEnabled || previous?.proxyUrl != next.proxyUrl) {
-        _applyProxy(next);
+        ref.read(browserServiceProvider).applyProxy(next);
       }
     });
 
-    // Push theme changes to ALL open WebView controllers (not just the active tab).
     ref.listen(themeProvider, (_, next) => _applyThemeToAllControllers(next));
 
     final theme = ref.watch(themeProvider);
     final errorMessage = ref.watch(webErrorProvider);
     final progress = ref.watch(loadingProgressProvider);
     
-    // [FIX] Only show loading if URL is not empty
     final activeTabUrl = tabs.isNotEmpty ? tabs[activeIndex].url : '';
     final bool isLoading = progress < 100 && activeTabUrl.isNotEmpty;
 
-    // 2. Handle Error State (Global for active tab)
     if (errorMessage != null && tabs.isNotEmpty) {
       return CustomErrorScreen(
         error: errorMessage,
@@ -399,7 +343,6 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
       );
     }
     
-    // 3. Determine Force Dark Mode
     final forceDarkSetting = (theme.mode == ThemeMode.light) 
         ? ForceDark.OFF 
         : (theme.mode == ThemeMode.dark ? ForceDark.ON : ForceDark.AUTO);
@@ -413,12 +356,7 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
               return const BrandingScreen();
             }
 
-            // Tabs outside the LRU wake window are replaced with a featherweight
-            // placeholder. Flutter disposes the old InAppWebView, freeing its
-            // native memory. When the user switches back, _wakeTab() is called,
-            // the placeholder is replaced with a fresh InAppWebView, and the
-            // saved URL reloads automatically.
-            if (!_awakeTabIds.contains(tab.id)) {
+            if (!awakeTabIds.contains(tab.id)) {
               return _buildHibernatedPlaceholder(tab);
             }
 
@@ -484,7 +422,6 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
                  }
                  if (url != null) {
                    final urlString = url.toString();
-                   // Avoid updating tab URL with the localhost proxy prefix
                    final displayUrl = urlString.contains('localhost') && urlString.contains('/http') 
                        ? urlString.split('/http').last.replaceFirst('s:', 'https:').replaceFirst(':', 'http:')
                        : urlString;
@@ -631,3 +568,6 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
     );
   }
 }
+
+
+

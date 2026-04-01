@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mira/model/search_engine.dart';
-import 'package:mira/model/theme_model.dart';
+import 'package:mira/core/notifiers/search_notifier.dart';
+import 'package:mira/core/entities/theme_entity.dart';
+import 'package:mira/core/notifiers/theme_notifier.dart';
 import '../constants/search_engines.dart';
 
 class BrowserSheet extends ConsumerWidget {
@@ -77,3 +78,4 @@ class BrowserSheet extends ConsumerWidget {
     );
   }
 }
+

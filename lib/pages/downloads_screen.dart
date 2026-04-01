@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mira/core/entities/download_entity.dart';
 import 'package:mira/core/services/download_provider.dart';
-import 'package:mira/model/theme_model.dart';
+import 'package:mira/core/entities/theme_entity.dart';
+import 'package:mira/core/notifiers/theme_notifier.dart';
 
 class DownloadsPage extends ConsumerStatefulWidget {
   const DownloadsPage({super.key});
@@ -162,3 +163,4 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
     );
   }
 }
+
