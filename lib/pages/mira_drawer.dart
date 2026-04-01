@@ -11,7 +11,7 @@ import 'package:mira/model/theme_model.dart';
 import 'package:mira/model/security_model.dart';
 import 'package:mira/model/ghost_model.dart';
 import 'package:mira/model/tab_model.dart';
-import 'package:mira/model/download_model.dart';
+import 'package:mira/core/services/download_provider.dart';
 import 'package:mira/pages/history_screen.dart';
 import 'package:mira/pages/book_marks_screen.dart';
 import 'package:mira/pages/downloads_screen.dart';

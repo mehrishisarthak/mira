@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mira/model/download_model.dart';
+import 'package:mira/core/services/download_manager.dart';
 import 'package:mira/model/search_engine.dart';
 import 'package:mira/model/theme_model.dart';
 import 'package:mira/pages/onboarding_screen.dart';

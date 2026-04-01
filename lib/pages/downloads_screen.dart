@@ -2,7 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mira/model/download_model.dart';
+import 'package:mira/core/entities/download_entity.dart';
+import 'package:mira/core/services/download_provider.dart';
 import 'package:mira/model/theme_model.dart';
 
 class DownloadsPage extends ConsumerStatefulWidget {

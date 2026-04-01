@@ -8,7 +8,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'dart:io';
 
 import 'package:mira/model/ad_block_model.dart';
-import 'package:mira/model/download_model.dart';import 'package:mira/model/theme_model.dart';
+import 'package:mira/core/services/download_provider.dart';
+import 'package:mira/model/theme_model.dart';
 import 'package:mira/model/ghost_model.dart';
 import 'package:mira/model/security_model.dart'; 
 import 'package:mira/model/tab_model.dart';
