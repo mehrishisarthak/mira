@@ -32,15 +32,15 @@ class ProxyGatewayNotifier extends StateNotifier<bool> {
     if (shouldRun && !_service.isRunning) {
       await _service.start(security.proxyUrl);
       _previousProxyUrl = security.proxyUrl;
-      state = _service.isRunning;
+      if (mounted) state = _service.isRunning;
     } else if (!shouldRun && _service.isRunning) {
       await _service.stop();
-      state = false;
+      if (mounted) state = false;
     } else if (shouldRun && _service.isRunning && _previousProxyUrl != security.proxyUrl) {
       // Restart if proxy URL changed
       await _service.start(security.proxyUrl);
       _previousProxyUrl = security.proxyUrl;
-      state = _service.isRunning;
+      if (mounted) state = _service.isRunning;
     }
   }
 }

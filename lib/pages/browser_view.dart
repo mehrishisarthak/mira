@@ -337,7 +337,12 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
         onRetry: () {
           HapticFeedback.mediumImpact();
           ref.read(webErrorProvider.notifier).state = null;
-          ref.read(webViewControllerProvider)?.reload();    
+          final retryController = ref.read(webViewControllerProvider);
+          if (retryController != null) {
+            retryController.reload();
+          } else {
+            debugPrint('[MIRA] C01: onRetry called with null controller, clearing error only');
+          }
         },
       );
     }
@@ -397,8 +402,15 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
               },
               onWebViewCreated: (controller) {
                 _controllers[tab.id] = controller;
-
-                if (tab.id == activeTabId) {
+                // Re-read active tab id fresh — do not use the stale closure value.
+                final isGhostNow = ref.read(isGhostModeProvider);
+                final currentState = isGhostNow
+                    ? ref.read(ghostTabsProvider)
+                    : ref.read(tabsProvider);
+                final currentActiveId = currentState.tabs.isNotEmpty
+                    ? currentState.tabs[currentState.activeIndex].id
+                    : '';
+                if (tab.id == currentActiveId) {
                   ref.read(webViewControllerProvider.notifier).state = controller;
                 }
               },
