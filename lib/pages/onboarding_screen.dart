@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lottie/lottie.dart';
 import 'package:mira/pages/mainscreen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:mira/core/entities/theme_entity.dart';
 import 'package:mira/core/notifiers/theme_notifier.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart'; 
 

@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:mira/core/services/browser_service.dart';
 import 'package:mira/core/entities/security_entity.dart';
-import 'package:mira/core/notifiers/security_notifier.dart';
 
 class AndroidBrowserService implements BrowserService {
   @override

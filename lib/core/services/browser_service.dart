@@ -1,5 +1,4 @@
 import 'package:mira/core/entities/security_entity.dart';
-import 'package:mira/core/notifiers/security_notifier.dart';
 
 abstract class BrowserService {
   /// Applies platform-specific proxy configuration (e.g. WebViewFeature.PROXY_OVERRIDE on Android)

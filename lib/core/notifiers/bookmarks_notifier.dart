@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mira/core/entities/bookmark_entity.dart';
 import 'package:mira/core/services/preferences_service.dart';
@@ -11,7 +12,12 @@ class BookmarksNotifier extends StateNotifier<List<Bookmark>> {
 
   void _loadBookmarks() {
     final List<String> saved = _prefs.getBookmarks();
-    state = saved.map((e) => Bookmark.fromJson(e)).toList();
+    try {
+      state = saved.map((e) => Bookmark.fromJson(e)).toList();
+    } catch (e, stack) {
+      debugPrint('[MIRA] BookmarksNotifier corrupted data: $e\n$stack');
+      state = [];
+    }
   }
 
   void toggleBookmark(String url, String title) {

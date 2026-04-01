@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mira/core/services/download_manager.dart';
-import 'package:mira/core/notifiers/search_notifier.dart';
-import 'package:mira/core/entities/theme_entity.dart';
 import 'package:mira/core/notifiers/theme_notifier.dart';
 import 'package:mira/pages/onboarding_screen.dart';
 import 'package:mira/pages/splashscreen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mira/core/services/preferences_service.dart';
+import 'package:mira/core/observers/provider_observer.dart';
  
 import 'package:mira/pages/mainscreen.dart'; // Ensure filename matches (mainscreen vs main_screen)
 
@@ -27,6 +26,7 @@ void main() async {
 
   runApp(
     ProviderScope(
+      observers: [const MiraProviderObserver()],
       overrides: [
         preferencesServiceProvider.overrideWithValue(preferencesService),
       ],

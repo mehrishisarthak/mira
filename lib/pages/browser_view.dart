@@ -8,7 +8,6 @@ import 'package:url_launcher/url_launcher.dart';
 import 'dart:io';
 
 import 'package:mira/shell/ad_block/ad_block_service_webview.dart';
-import 'package:mira/core/services/browser_service.dart';
 import 'package:mira/shell/browser/browser_provider.dart';
 import 'package:mira/core/notifiers/hibernation_notifier.dart';
 import 'package:mira/core/services/download_provider.dart';

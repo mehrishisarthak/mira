@@ -104,5 +104,12 @@ class PreferencesService {
 }
 
 final preferencesServiceProvider = Provider<PreferencesService>((ref) {
-  throw UnimplementedError('PreferencesService must be overridden in main.dart');
+  assert(
+    false,
+    '\n[MIRA ERROR] preferencesServiceProvider not overridden.\n'
+    'Add overrideWithValue(PreferencesService(prefs)) in ProviderScope.\n',
+  );
+  throw StateError(
+    'preferencesServiceProvider accessed without ProviderScope override.',
+  );
 });

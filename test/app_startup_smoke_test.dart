@@ -71,5 +71,14 @@ void main() {
     await tester.pump(const Duration(milliseconds: 2500));
     await tester.pumpAndSettle();
   });
+
+  test('preferencesServiceProvider throws StateError without override', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    expect(
+      () => container.read(preferencesServiceProvider),
+      throwsA(anyOf(isA<StateError>(), isA<AssertionError>())),
+    );
+  });
 }
 

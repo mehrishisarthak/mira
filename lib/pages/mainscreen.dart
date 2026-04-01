@@ -7,14 +7,11 @@ import 'package:google_fonts/google_fonts.dart';
 import 'dart:io';
 
 import 'package:mira/shell/ad_block/ad_block_service_webview.dart';
-import 'package:mira/core/entities/bookmark_entity.dart';
 import 'package:mira/core/notifiers/bookmarks_notifier.dart';
-import 'package:mira/core/entities/theme_entity.dart';
 import 'package:mira/core/notifiers/theme_notifier.dart';
 import 'package:mira/core/notifiers/ghost_notifier.dart';
 import 'package:mira/core/notifiers/search_notifier.dart';
 import 'package:mira/core/notifiers/history_notifier.dart';
-import 'package:mira/core/entities/security_entity.dart';
 import 'package:mira/core/notifiers/security_notifier.dart'; 
 import 'package:mira/core/notifiers/tab_notifier.dart';
 import 'package:mira/core/entities/tab_entity.dart';

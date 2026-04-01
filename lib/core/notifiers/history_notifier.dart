@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mira/core/entities/history_entity.dart';
 import 'package:mira/core/services/preferences_service.dart';
@@ -11,7 +12,12 @@ class HistoryNotifier extends StateNotifier<List<HistoryItem>> {
 
   void _loadHistory() {
     final jsonList = _prefsService.getHistory();
-    state = jsonList.map((str) => HistoryItem.fromJson(str)).toList();
+    try {
+      state = jsonList.map((str) => HistoryItem.fromJson(str)).toList();
+    } catch (e, stack) {
+      debugPrint('[MIRA] HistoryNotifier corrupted data: $e\n$stack');
+      state = [];
+    }
   }
 
   Future<void> addToHistory(String query) async {

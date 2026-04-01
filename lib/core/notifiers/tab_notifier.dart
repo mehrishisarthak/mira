@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 import 'package:mira/core/entities/tab_entity.dart';
 import 'package:mira/core/services/preferences_service.dart';
 
@@ -23,17 +25,22 @@ class TabsNotifier extends StateNotifier<TabsState> {
   void _loadTabs() {
     final savedJsonList = _prefsService.getSavedTabs();
     final savedIndex = _prefsService.getActiveTabIndex();
-
     if (savedJsonList.isNotEmpty) {
       try {
-        final loadedTabs = savedJsonList.map((str) => BrowserTab.fromJson(str)).toList();
+        final loadedTabs = savedJsonList
+            .map((str) => BrowserTab.fromJson(str))
+            .toList();
         int safeIndex = savedIndex;
         if (safeIndex < 0 || safeIndex >= loadedTabs.length) {
           safeIndex = 0;
         }
         state = TabsState(tabs: loadedTabs, activeIndex: safeIndex);
-      } catch (e) {
-        // Corrupted data, start fresh
+      } catch (e, stack) {
+        debugPrint('[MIRA] TabNotifier corrupted data: $e\n$stack');
+        state = TabsState(
+          tabs: [BrowserTab(id: const Uuid().v4())],
+          activeIndex: 0,
+        );
       }
     }
   }
