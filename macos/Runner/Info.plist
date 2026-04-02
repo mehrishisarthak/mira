@@ -28,5 +28,16 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSCameraUsageDescription</key>
+	<string>MIRA Browser needs camera access for websites that request it. You can block this in Security settings.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>MIRA Browser needs microphone access for websites that request it. You can block this in Security settings.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+	<key>CFBundleDisplayName</key>
+	<string>Mira</string>
 </dict>
 </plist>

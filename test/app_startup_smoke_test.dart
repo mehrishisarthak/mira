@@ -7,11 +7,20 @@ import 'package:mira/core/services/preferences_service.dart';
 import 'package:mira/core/notifiers/search_notifier.dart';
 import 'package:mira/pages/splashscreen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:mocktail/mocktail.dart';
+import 'package:http/http.dart' as http;
+import 'package:package_info_plus/package_info_plus.dart';
+import 'dart:convert';
+
+class MockHttpClient extends Mock implements http.Client {}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  late MockHttpClient mockClient;
+
   setUpAll(() {
+    registerFallbackValue(Uri());
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(SystemChannels.platform, (call) async {
       if (call.method == 'HapticFeedback.vibrate') {
@@ -19,6 +28,27 @@ void main() {
       }
       return null;
     });
+  });
+
+  setUp(() {
+    mockClient = MockHttpClient();
+    PackageInfo.setMockInitialValues(
+      appName: 'Mira',
+      packageName: 'com.mira.browser',
+      version: '1.0.0',
+      buildNumber: '1',
+      buildSignature: '',
+    );
+
+    // Default mock response: No update needed
+    when(() => mockClient.get(any())).thenAnswer((_) async => http.Response(
+          json.encode({
+            'minimum_version': '1.0.0',
+            'latest_version': '1.0.0',
+            'store_url': 'https://store.com',
+          }),
+          200,
+        ));
   });
 
   tearDownAll(() {
@@ -29,9 +59,10 @@ void main() {
   testWidgets('renders splash shell and transitions to next screen',
       (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(
+      MaterialApp(
         home: SplashScreen(
-          nextScreen: Scaffold(
+          httpClient: mockClient,
+          nextScreen: const Scaffold(
             body: Center(child: Text('Startup Target Screen')),
           ),
         ),
@@ -47,6 +78,34 @@ void main() {
     expect(find.text('Startup Target Screen'), findsOneWidget);
   });
 
+  testWidgets('navigates to UpdateScreen on force update', (tester) async {
+    when(() => mockClient.get(any())).thenAnswer((_) async => http.Response(
+          json.encode({
+            'minimum_version': '2.0.0',
+            'latest_version': '2.0.0',
+            'store_url': 'https://store.com',
+          }),
+          200,
+        ));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SplashScreen(
+          httpClient: mockClient,
+          nextScreen: const Scaffold(
+            body: Center(child: Text('Startup Target Screen')),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump(const Duration(milliseconds: 3500));
+    await tester.pumpAndSettle();
+
+    expect(find.text('REQUIRED UPDATE'), findsOneWidget);
+    expect(find.text('UPDATE MIRA'), findsOneWidget);
+  });
+
   testWidgets('app shell boots and shows splash branding', (tester) async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
@@ -57,8 +116,9 @@ void main() {
         overrides: [
           preferencesServiceProvider.overrideWithValue(service),
         ],
-        child: const MyApp(
-          targetScreen: Scaffold(body: Center(child: Text('Target Screen'))),
+        child: MyApp(
+          httpClient: mockClient,
+          targetScreen: const Scaffold(body: Center(child: Text('Target Screen'))),
         ),
       ),
     );

@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // For Haptics
 import 'package:google_fonts/google_fonts.dart';
+import 'package:mira/core/services/update_service.dart';
+import 'package:mira/pages/update_screen.dart';
 import 'dart:async';
+
+import 'package:http/http.dart' as http;
 
 class SplashScreen extends StatefulWidget {
   // 1. Accept the destination screen dynamically
   final Widget nextScreen;
+  final http.Client? httpClient;
   
-  const SplashScreen({super.key, required this.nextScreen});
+  const SplashScreen({super.key, required this.nextScreen, this.httpClient});
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();
@@ -51,9 +56,28 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     await Future.delayed(const Duration(milliseconds: 800));
     HapticFeedback.lightImpact();
 
-    // Stage 4: Navigate to the Target Screen (Onboarding or Browser)
-    await Future.delayed(const Duration(milliseconds: 1200)); 
+    // Stage 4: Network Protocols (Update Check)
+    final updateResult = await UpdateService.autoCheck(client: widget.httpClient);
+
+    // Stage 5: Navigate based on Update Status
     if (mounted) {
+      if (updateResult.status == UpdateStatus.forceUpdate) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => UpdateScreen(result: updateResult)),
+        );
+        return;
+      }
+
+      if (updateResult.status == UpdateStatus.updateAvailable) {
+        // If optional update, we show it but allow skipping
+        // For now, we go to update screen first. 
+        // The UpdateScreen handles the skip logic.
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => UpdateScreen(result: updateResult)),
+        );
+        return;
+      }
+
       Navigator.of(context).pushReplacement(
         PageRouteBuilder(
           // 2. Use the dynamic nextScreen here

@@ -7,6 +7,7 @@ import 'package:mira/pages/splashscreen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mira/core/services/preferences_service.dart';
 import 'package:mira/core/observers/provider_observer.dart';
+import 'package:http/http.dart' as http;
  
 import 'package:mira/pages/mainscreen.dart'; // Ensure filename matches (mainscreen vs main_screen)
 
@@ -41,8 +42,9 @@ void main() async {
 
 class MyApp extends ConsumerWidget {
   final Widget targetScreen; 
+  final http.Client? httpClient;
 
-  const MyApp({super.key, required this.targetScreen});
+  const MyApp({super.key, required this.targetScreen, this.httpClient});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -85,7 +87,7 @@ class MyApp extends ConsumerWidget {
       darkTheme: darkTheme,
       themeMode: appTheme.mode,
       // ALWAYS start with Splash, pass the target destination
-      home: SplashScreen(nextScreen: targetScreen),
+      home: SplashScreen(nextScreen: targetScreen, httpClient: httpClient),
     );
   }
 }
