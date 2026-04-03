@@ -36,4 +36,27 @@ class SecurityState {
       proxyUrl: proxyUrl ?? this.proxyUrl,
     );
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SecurityState &&
+          other.isIncognito == isIncognito &&
+          other.isLocationBlocked == isLocationBlocked &&
+          other.isCameraBlocked == isCameraBlocked &&
+          other.isDesktopMode == isDesktopMode &&
+          other.isAdBlockEnabled == isAdBlockEnabled &&
+          other.isProxyEnabled == isProxyEnabled &&
+          other.proxyUrl == proxyUrl);
+
+  @override
+  int get hashCode => Object.hash(
+        isIncognito,
+        isLocationBlocked,
+        isCameraBlocked,
+        isDesktopMode,
+        isAdBlockEnabled,
+        isProxyEnabled,
+        proxyUrl,
+      );
 }

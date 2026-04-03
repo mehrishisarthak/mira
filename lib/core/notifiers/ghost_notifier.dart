@@ -40,13 +40,13 @@ class GhostTabsNotifier extends StateNotifier<TabsState> {
   }
 
   void updateUrl(String url) {
-    _updateActiveTab((tab) => tab.copyWith(url: url, title: url));
+    _updateActiveTab((tab) => tab.copyWith(url: url));
   }
 
   void updateUrlForTab(String tabId, String url) {
     _updateTabById(
       tabId,
-      (tab) => tab.copyWith(url: url, title: url),
+      (tab) => tab.copyWith(url: url),
     );
   }
   

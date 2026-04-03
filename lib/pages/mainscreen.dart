@@ -354,9 +354,10 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
       }
     });
 
-    ref.listen(themeProvider, (_, __) => _updateWebViewSettings(forceReload: false));
+    // Theme → WebView settings sync is handled by BrowserView._applyThemeToAllControllers.
+    // Only listen to security for desktop-mode / ad-block toggles that need a page reload.
     ref.listen(securityProvider, (prev, next) {
-      if (prev?.isDesktopMode != next.isDesktopMode || 
+      if (prev?.isDesktopMode != next.isDesktopMode ||
           prev?.isAdBlockEnabled != next.isAdBlockEnabled) {
         _updateWebViewSettings(forceReload: true);
       }

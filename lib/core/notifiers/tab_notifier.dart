@@ -12,6 +12,16 @@ class TabsState {
   TabsState({required this.tabs, required this.activeIndex});
 
   BrowserTab get activeTab => tabs[activeIndex];
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is TabsState &&
+          other.activeIndex == activeIndex &&
+          listEquals(other.tabs, tabs));
+
+  @override
+  int get hashCode => Object.hash(activeIndex, Object.hashAll(tabs));
 }
 
 // --- 2. THE NOTIFIER ---
@@ -90,13 +100,13 @@ class TabsNotifier extends StateNotifier<TabsState> {
   }
 
   void updateUrl(String newUrl) {
-    _updateActiveTab((tab) => tab.copyWith(url: newUrl, title: newUrl));
+    _updateActiveTab((tab) => tab.copyWith(url: newUrl));
   }
 
   void updateUrlForTab(String tabId, String newUrl) {
     _updateTabById(
       tabId,
-      (tab) => tab.copyWith(url: newUrl, title: newUrl),
+      (tab) => tab.copyWith(url: newUrl),
     );
   }
   

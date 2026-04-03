@@ -56,6 +56,9 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Register once for the widget lifetime — not in build() where new closures
+    // would be created every frame and the listener cascade causes redraws.
+    _registerBrowserSideEffectListeners();
 
     // Initial wake for active tab
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -252,7 +255,7 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
   }
 
   Widget _buildHibernatedPlaceholder(BrowserTab tab) {
-    final bg = ref.watch(themeProvider).backgroundColor;
+    final bg = ref.read(themeProvider).backgroundColor;
     return Container(
       color: bg,
       child: Center(
@@ -272,13 +275,121 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
     );
   }
 
+  /// Tracks the last pointer-down position for desktop context-menu placement.
+  Offset? _lastPointerPosition;
+
   void _showLinkContextMenu(String linkUrl) {
     if (!mounted) return;
     final theme = ref.read(themeProvider);
     final isGhost = ref.read(isGhostModeProvider);
     final isLight = theme.mode == ThemeMode.light;
     final textColor = isLight ? kMiraInkPrimary : Colors.white;
+    final isDesktop = !kIsWeb &&
+        (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
 
+    if (isDesktop) {
+      _showDesktopLinkPopup(linkUrl, theme, isGhost, textColor);
+    } else {
+      _showMobileLinkSheet(linkUrl, theme, isGhost, textColor);
+    }
+  }
+
+  void _showDesktopLinkPopup(
+      String linkUrl, dynamic theme, bool isGhost, Color textColor) {
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final position = _lastPointerPosition ?? overlay.localToGlobal(Offset.zero);
+
+    showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        position.dx,
+        position.dy,
+        position.dx,
+        position.dy,
+      ),
+      color: theme.surfaceColor,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      items: [
+        PopupMenuItem<String>(
+          enabled: false,
+          height: 32,
+          child: Text(
+            linkUrl.length > 60 ? '${linkUrl.substring(0, 60)}…' : linkUrl,
+            style: TextStyle(
+              color: textColor.withValues(alpha: 0.5),
+              fontSize: 11,
+              fontFamily: 'monospace',
+            ),
+          ),
+        ),
+        const PopupMenuDivider(height: 1),
+        PopupMenuItem(
+          value: 'copy',
+          child: Row(children: [
+            Icon(Icons.copy, color: textColor, size: 18),
+            const SizedBox(width: 10),
+            Text('Copy Link', style: TextStyle(color: textColor, fontSize: 13)),
+          ]),
+        ),
+        PopupMenuItem(
+          value: 'newtab',
+          child: Row(children: [
+            Icon(Icons.tab_outlined, color: textColor, size: 18),
+            const SizedBox(width: 10),
+            Text('Open in New Tab',
+                style: TextStyle(color: textColor, fontSize: 13)),
+          ]),
+        ),
+        PopupMenuItem(
+          value: 'external',
+          child: Row(children: [
+            Icon(Icons.open_in_browser, color: textColor, size: 18),
+            const SizedBox(width: 10),
+            Text('Open in External Browser',
+                style: TextStyle(color: textColor, fontSize: 13)),
+          ]),
+        ),
+        PopupMenuItem(
+          value: 'download',
+          child: Row(children: [
+            Icon(Icons.download_outlined, color: textColor, size: 18),
+            const SizedBox(width: 10),
+            Text('Download Link',
+                style: TextStyle(color: textColor, fontSize: 13)),
+          ]),
+        ),
+      ],
+    ).then((action) {
+      if (action == null || !mounted) return;
+      switch (action) {
+        case 'copy':
+          Clipboard.setData(ClipboardData(text: linkUrl));
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Link copied')),
+          );
+          break;
+        case 'newtab':
+          if (isGhost) {
+            ref.read(ghostTabsProvider.notifier).addTab(url: linkUrl);
+          } else {
+            ref.read(tabsProvider.notifier).addTab(url: linkUrl);
+          }
+          break;
+        case 'external':
+          final uri = Uri.tryParse(linkUrl);
+          if (uri != null) {
+            launchUrl(uri, mode: LaunchMode.externalApplication);
+          }
+          break;
+        case 'download':
+          ref.read(downloadsProvider.notifier).startDownload(linkUrl);
+          break;
+      }
+    });
+  }
+
+  void _showMobileLinkSheet(
+      String linkUrl, dynamic theme, bool isGhost, Color textColor) {
     showModalBottomSheet(
       context: context,
       backgroundColor: theme.surfaceColor,
@@ -371,7 +482,7 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
     if (originalUrl.isEmpty) return originalUrl;
     
     final gateway = ref.read(proxyServiceProvider);
-    final isGatewayRunning = ref.watch(proxyGatewayStatusProvider);
+    final isGatewayRunning = ref.read(proxyGatewayStatusProvider);
     if (!kIsWeb &&
         gateway.runtimeBackend == ProxyRuntimeBackend.iosLocalGateway &&
         security.isProxyEnabled &&
@@ -477,24 +588,33 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
   @override
   Widget build(BuildContext context) {
     final isGhost = ref.watch(isGhostModeProvider);
-    final tabsState = isGhost ? ref.watch(ghostTabsProvider) : ref.watch(tabsProvider);
+
+    // Structural watch: rebuilds only when tab count / ordering / active index /
+    // url-presence changes — NOT on every URL or title mutation that WebView
+    // callbacks fire during page load. This breaks the main rebuild cascade.
+    ref.watch(
+      (isGhost ? ghostTabsProvider : tabsProvider).select((s) =>
+          '${s.activeIndex}|${s.tabs.map((t) => '${t.id}:${t.url.isEmpty ? 0 : 1}').join(',')}'),
+    );
+    // Read (not watch) the full state: consistent with the structural key above
+    // and avoids a second subscription to the same provider.
+    final tabsState = ref.read(isGhost ? ghostTabsProvider : tabsProvider);
     final tabs = tabsState.tabs;
     final activeIndex = tabsState.activeIndex;
     final activeTabId = tabs.isNotEmpty ? tabs[activeIndex].id : '';
-    
+
     final awakeTabIds = ref.watch(hibernationProvider);
 
-    _registerBrowserSideEffectListeners();
+    // Security & theme are read, not watched.  `initialSettings` are consumed
+    // once at WebView mount; live updates to already-mounted WebViews are pushed
+    // by `ref.listen` handlers registered in initState
+    // (_applyThemeToAllControllers, applyProxy, _updateWebViewSettings).
+    final securityState = ref.read(securityProvider);
+    final theme = ref.read(themeProvider);
 
-    final securityState = ref.watch(securityProvider);
-
-    final theme = ref.watch(themeProvider);
-    final chrome = ref.watch(browserChromeProvider);
-    final errorMessage = chrome.webError;
-    final progress = chrome.loadingProgress;
-    
-    final activeTabUrl = tabs.isNotEmpty ? tabs[activeIndex].url : '';
-    final bool isLoading = !(!kIsWeb && Platform.isWindows) && progress < 100 && activeTabUrl.isNotEmpty;
+    // Only watch webError (rare change). Loading progress is isolated inside
+    // _WebViewSkeletonOverlay so onProgressChanged never rebuilds the WebView stack.
+    final errorMessage = ref.watch(browserChromeProvider.select((s) => s.webError));
 
     if (errorMessage != null && tabs.isNotEmpty) {
       return CustomErrorScreen(
@@ -517,7 +637,9 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
         ? ForceDark.OFF 
         : (theme.mode == ThemeMode.dark ? ForceDark.ON : ForceDark.AUTO);
 
-    return Stack(
+    return Listener(
+      onPointerDown: (e) => _lastPointerPosition = e.position,
+      child: Stack(
       children: [
         // Keep desktop WebView surfaces laid out even when hidden; offstage-style
         // hiding can make WebView2 lose paint/input until the next resize.
@@ -567,7 +689,10 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
                     : UserPreferredContentMode.MOBILE,
               ),
               shouldInterceptRequest: (controller, request) async {
-                if (!securityState.isAdBlockEnabled) return null;
+                // Read at request time so the callback always reflects the
+                // current toggle state, even though build() no longer re-runs
+                // on every securityProvider change.
+                if (!ref.read(securityProvider).isAdBlockEnabled) return null;
                 final host = request.url.host;
                 if (AdBlockServiceWebview.blockedDomains.any((domain) => host.contains(domain))) {
                   return WebResourceResponse(
@@ -690,20 +815,39 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
           );
         }),
 
-        // Skeleton Loader Overlay
-        IgnorePointer(
-          ignoring: !isLoading, 
-          child: AnimatedOpacity(
-            opacity: isLoading ? 1.0 : 0.0, 
-            duration: const Duration(milliseconds: 500), 
-            curve: Curves.easeInOut, 
-            child: const WebSkeletonLoader(),
-          ),
-        ),
+        // Skeleton overlay lives in its own ConsumerWidget so that
+        // onProgressChanged callbacks only rebuild it, not the WebView stack.
+        const _WebViewSkeletonOverlay(),
       ],
-    );
+    ));
   }
 }
 
+/// Isolated skeleton overlay — watches [browserChromeProvider] loading progress
+/// independently so that the ~100 [onProgressChanged] callbacks per navigation
+/// rebuild only this tiny widget, never the WebView stack above.
+class _WebViewSkeletonOverlay extends ConsumerWidget {
+  const _WebViewSkeletonOverlay();
 
-
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final progress =
+        ref.watch(browserChromeProvider.select((s) => s.loadingProgress));
+    final activeTabUrl =
+        ref.watch(currentActiveTabProvider.select((t) => t.url));
+    // Desktop platform views handle their own loading chrome and the opaque
+    // skeleton blocks mouse interaction (scroll, click) until progress == 100.
+    final isDesktop = !kIsWeb &&
+        (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
+    final isLoading = !isDesktop && progress < 100 && activeTabUrl.isNotEmpty;
+    return IgnorePointer(
+      ignoring: !isLoading,
+      child: AnimatedOpacity(
+        opacity: isLoading ? 1.0 : 0.0,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOut,
+        child: const WebSkeletonLoader(),
+      ),
+    );
+  }
+}

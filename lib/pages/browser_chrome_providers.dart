@@ -19,6 +19,21 @@ class BrowserChromeState {
   final InAppWebViewController? controller;
   final int loadingProgress;
   final String? webError;
+
+  // Value equality prevents Riverpod from notifying watchers when a notifier
+  // method reconstructs state with identical values (e.g. clearWebError when
+  // webError is already null, or setController with the same controller handle).
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is BrowserChromeState &&
+          identical(other.controller, controller) &&
+          other.loadingProgress == loadingProgress &&
+          other.webError == webError);
+
+  @override
+  int get hashCode =>
+      Object.hash(identityHashCode(controller), loadingProgress, webError);
 }
 
 class BrowserChromeNotifier extends StateNotifier<BrowserChromeState> {

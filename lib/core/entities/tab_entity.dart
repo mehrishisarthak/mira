@@ -1,12 +1,14 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show immutable;
 import 'package:uuid/uuid.dart';
 
+@immutable
 class BrowserTab {
   final String id;
   final String url;
   final String title;
   final bool isLoading;
-  
+
   BrowserTab({
     String? id,
     this.url = '',
@@ -27,6 +29,18 @@ class BrowserTab {
       isLoading: isLoading ?? this.isLoading,
     );
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is BrowserTab &&
+          other.id == id &&
+          other.url == url &&
+          other.title == title &&
+          other.isLoading == isLoading);
+
+  @override
+  int get hashCode => Object.hash(id, url, title, isLoading);
 
   Map<String, dynamic> toMap() {
     return {
