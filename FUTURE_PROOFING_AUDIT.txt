@@ -39,6 +39,15 @@
 *   **Bug:** If a tab is switched or closed exactly as a page finishes loading, the app might try to call `controller.settings()` on a disposed controller.
 *   **Status:** Partially mitigated with try-catch blocks, but needs a more robust "Controller Registry."
 
+### F. Desktop Download Maintenance
+*   **Observation:** The manual `HttpClient` and `IOSink` approach for desktop downloads is intentional for fine-grained control (pause/cancel/resume).
+*   **Status:** Logged for future consideration if maintenance becomes burdensome; no cross-platform library currently offers the required level of control.
+
+### G. Theming Consistency (Cosmetic)
+*   **Bug:** Several UI components still use hardcoded pure black (`#000000`) backgrounds.
+*   **Impact:** Inconsistent transition from the new `#282828` splash screen to the runtime UI.
+*   **Status:** Needs a "Cosmetic Cleanup" to unify dark backgrounds to `#282828`.
+
 ---
 
 ## 3. SUMMARY: Is MIRA "Future-Proof"?

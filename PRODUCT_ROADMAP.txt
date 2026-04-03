@@ -1,44 +1,125 @@
 PRIORITY 1 — CRASHES (App is unusable)
-IDIssueC01Stale WebView controller after LRU evictionC02iOS shelf proxy not tied to app lifecycleC03flutter_downloader callback on dead isolateC04WebView2 controller accessed before ready on WindowsC05preferencesServiceProvider throws with unhelpful errorC06No error boundary on notifier exceptions
+IDIssueStatus
+C01Stale WebView controller after LRU eviction
+C02iOS shelf proxy not tied to app lifecycle
+C03flutter_downloader callback on dead isolate
+C04WebView2 controller accessed before ready on Windows
+C05preferencesServiceProvider throws with unhelpful error
+C06No error boundary on notifier exceptions
 
 PRIORITY 2 — APP STORE BLOCKERS (Will prevent release)
-IDIssueA01iOS PrivacyInfo.xcprivacy missing — App Store rejection since 2024A02Android Play Store Data Safety section not declaredA03macOS sandbox entitlements missing — silent failure on distributionA04No update/force-upgrade mechanism
+IDIssueStatus
+A01iOS PrivacyInfo.xcprivacy missing — App Store rejection since 2024
+A02Android Play Store Data Safety section not declared
+A03macOS sandbox entitlements missing — silent failure on distribution
+A04No update/force-upgrade mechanism
 
 PRIORITY 3 — SECURITY FOUNDATIONS (Makes privacy claim credible)
-IDIssueS01No certificate pinning on MIRA's own endpointsS02No mixed content policy enforcementS03Ad-block scripts in SharedPreferences have no tamper validationS04No Safe Browsing integrationS05Ad-block rules compiled into binary — no remote update mechanism
+IDIssueStatus
+S01No certificate pinning on MIRA's own endpoints
+S02No mixed content policy enforcement
+S03Ad-block scripts in SharedPreferences have no tamper validation
+S04No Safe Browsing integration
+S05Ad-block rules compiled into binary — no remote update mechanism
 
 PRIORITY 4 — PRIVACY TIER 1 (Minimum to use the word "privacy")
-IDFeatureP01Tracker blocking — Disconnect.me or EasyPrivacy listP02Remote updatable filter lists — EasyList + EasyPrivacy, versioned, cached locallyP03HTTPS-only mode with user override interstitialP04DNS over HTTPS — default Cloudflare 1.1.1.1 or Quad9P05Block third-party cookies by defaultP06Clear-on-exit for normal mode — cache, cookies, storageP07No telemetry, no outbound calls on launch — verifiable
+IDFeatureStatus
+P01Tracker blocking — Disconnect.me or EasyPrivacy list
+P02Remote updatable filter lists — EasyList + EasyPrivacy, versioned, cached locally
+P03HTTPS-only mode with user override interstitial
+P04DNS over HTTPS — default Cloudflare 1.1.1.1 or Quad9
+P05Block third-party cookies by default
+P06Clear-on-exit for normal mode — cache, cookies, storage
+P07No telemetry, no outbound calls on launch — verifiable
 
 PRIORITY 5 — DATA INTEGRITY (Silent data loss)
-IDIssueD01No schema versioning on SharedPreferences JSOND02SharedPreferences serialising monolithic JSON — blocks main thread at scale, needs Isar or DriftD03Desktop download progress not persisted across restartsD04History has no timestamp
+IDIssueStatus
+D01No schema versioning on SharedPreferences JSON
+D02SharedPreferences serialising monolithic JSON — blocks main thread at scale, needs Isar or Drift
+D03Desktop download progress not persisted across restarts
+D04History has no timestamp
 
 PRIORITY 6 — PRIVACY TIER 2 (Beats Firefox Focus)
-IDFeatureP08Canvas fingerprint blockingP09WebGL fingerprint blockingP10User agent spoofing / normalisationP11Timezone and locale normalisationP12First-party isolation per domainP13Referrer policy enforcement — strip to origin onlyP14Link decoration stripping — fbclid, utm, gclidP15Permission memory per siteP16Privacy-preserving Safe Browsing via hash-prefix method
+IDFeatureStatus
+P08Canvas fingerprint blocking
+P09WebGL fingerprint blocking
+P10User agent spoofing / normalisation
+P11Timezone and locale normalisation
+P12First-party isolation per domain
+P13Referrer policy enforcement — strip to origin only
+P14Link decoration stripping — fbclid, utm, gclid
+P15Permission memory per site
+P16Privacy-preserving Safe Browsing via hash-prefix method
 
 PRIORITY 7 — DESKTOP UX (Your current differentiator)
-IDIssueX01Desktop download stream not cancelled on app closeX02No drag-to-reorder or middle-click-close on tab stripX03No keyboard shortcuts — Ctrl+T, Ctrl+W, Ctrl+L, Ctrl+R, Ctrl+TabX04Window title never updates to reflect current page titleX05Right-click shows native WebView menu, not custom MIRA sheetX06LRU limit of 3 too low for desktop — should be 10X07Proxy not implemented on desktop
+IDIssueStatus
+X01Desktop download stream not cancelled on app close
+X02No drag-to-reorder or middle-click-close on tab strip
+X03No keyboard shortcuts — Ctrl+T, Ctrl+W, Ctrl+L, Ctrl+R, Ctrl+TabDONE
+X04Window title never updates to reflect current page title
+X05Right-click shows native WebView menu, not custom MIRA sheet
+X06LRU limit of 3 too low for desktop — should be 10
+X07Proxy not implemented on desktop
 
 PRIORITY 8 — MOBILE BUGS
-IDIssueM01Android storage permission not re-requested after denialM02Ghost tabs have no controller after hot restartM03Back gesture conflicts with WebView navigation on iOSM04Tab scroll position lost on LRU evictionM05Ad-block CSS injected on subframesM06Download progress lost when downloads screen is popped
+IDIssueStatus
+M01Android storage permission not re-requested after denial
+M02Ghost tabs have no controller after hot restart
+M03Back gesture conflicts with WebView navigation on iOS
+M04Tab scroll position lost on LRU eviction
+M05Ad-block CSS injected on subframes
+M06Download progress lost when downloads screen is popped
 
 PRIORITY 9 — PRIVACY TIER 3 (Trust and transparency)
-IDFeatureP17Per-site privacy report — show blocked trackers, ads, fingerprint attemptsP18Filter list tamper detection — hash-verify before applyingP19On-device crash logs, user-exportable — no serverP20Open source filter list rules on GitHub — auditableP21No cloud sync — make it a feature, market it explicitly
+IDFeatureStatus
+P17Per-site privacy report — show blocked trackers, ads, fingerprint attempts
+P18Filter list tamper detection — hash-verify before applying
+P19On-device crash logs, user-exportable — no server
+P20Open source filter list rules on GitHub — auditable
+P21No cloud sync — make it a feature, market it explicitly
 
 PRIORITY 10 — MISSING BROWSER FUNDAMENTALS
-IDIssueB01No find-in-pageB02No print supportB03No share sheet integrationB04No reading modeB05No content zoom persistence per siteB06No cookie/site data management per domainB07Speed dial not user-configurableB08WebView dark mode forced globally — breaks light-declared sites
+IDIssueStatus
+B01No find-in-pageDONE
+B02No print support
+B03No share sheet integration
+B04No reading mode
+B05No content zoom persistence per site
+B06No cookie/site data management per domain
+B07Speed dial not user-configurable
+B08WebView dark mode forced globally — breaks light-declared sites
 
 PRIORITY 11 — PRIVACY TIER 4 (Power user differentiators)
-IDFeatureP22First-class proxy/VPN integration per-tab or global — your existing moatP23Custom DoH server — user points to own resolverP24Script blocking per siteP25Custom filter list import — EasyList formatP26Tab isolation — separate cookie/storage context per tabP27Media device enumeration blocking
+IDFeatureStatus
+P22First-class proxy/VPN integration per-tab or global — your existing moat
+P23Custom DoH server — user points to own resolver
+P24Script blocking per site
+P25Custom filter list import — EasyList format
+P26Tab isolation — separate cookie/storage context per tab
+P27Media device enumeration blocking
 
 PRIORITY 12 — OBSERVABILITY & ACCESSIBILITY
-IDIssueO01No crash reporting — shipping blindO02No semantic labels on custom UI — screen readers see nothing, iOS review risk
+IDIssueStatus
+O01No crash reporting — shipping blind
+O02No semantic labels on custom UI — screen readers see nothing, iOS review risk
 
 PRIORITY 13 — PRIVACY TIER 5 (Activist/journalist grade)
-IDFeatureP28Panic button — one tap clears everythingP29App lock / biometric lockP30Screen capture prevention — FLAG_SECURE Android, equivalent iOSP31Network request log — local only, every outbound request visibleP32Steganographic icon optionP33Reproducible builds
+IDFeatureStatus
+P28Panic button — one tap clears everything
+P29App lock / biometric lock
+P30Screen capture prevention — FLAG_SECURE Android, equivalent iOS
+P31Network request log — local only, every outbound request visible
+P32Steganographic icon option
+P33Reproducible builds
 
 Master Count:
 PriorityCategoryCount1Crashes62App Store Blockers43Security Foundations54Privacy Tier 175Data Integrity46Privacy Tier 297Desktop UX78Mobile Bugs69Privacy Tier 3510Browser Fundamentals811Privacy Tier 4612Observability & Accessibility213Privacy Tier 56Total75
 
 Version milestone map:
-VersionComplete whenv0.8 — StableP1 + P2 + P3 donev0.9 — Private Beta+ P4 + P5 donev1.0 — Public Launch+ P6 + P7 donev1.5 — Privacy Browser+ P8 + P9 donev2.0 — Power User+ P10 + P11 donev3.0 — Activist Grade+ P12 + P13 done
+VersionComplete when
+v0.8 — StableP1 + P2 + P3 done
+v0.9 — Private Beta+ P4 + P5 done
+v1.0 — Public Launch+ P6 + P7 done
+v1.5 — Privacy Browser+ P8 + P9 done
+v2.0 — Power User+ P10 + P11 done
+v3.0 — Activist Grade+ P12 + P13 done
