@@ -66,6 +66,6 @@ class SecurityNotifier extends StateNotifier<SecurityState> {
 }
 
 final securityProvider = StateNotifierProvider<SecurityNotifier, SecurityState>((ref) {
-  final prefs = ref.watch(preferencesServiceProvider);
+  final prefs = ref.read(preferencesServiceProvider);
   return SecurityNotifier(prefs);
 });

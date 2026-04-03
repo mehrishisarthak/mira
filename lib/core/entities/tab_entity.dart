@@ -38,9 +38,9 @@ class BrowserTab {
 
   factory BrowserTab.fromMap(Map<String, dynamic> map) {
     return BrowserTab(
-      id: map['id'],
-      url: map['url'] ?? '',
-      title: map['title'] ?? 'New Tab',
+      id: map['id'] as String? ?? const Uuid().v4(),
+      url: map['url'] as String? ?? '',
+      title: map['title'] as String? ?? 'New Tab',
     );
   }
 

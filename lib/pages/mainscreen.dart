@@ -82,7 +82,8 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
   void _openDesktopFindBar() {
     if (!mounted) return;
     final find = ref.read(activeFindInteractionProvider);
-    if (find == null) {
+    final web = ref.read(browserChromeProvider).controller;
+    if (find == null && web == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Open a web page tab to use find in page.'),

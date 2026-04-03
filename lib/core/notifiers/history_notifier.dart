@@ -53,6 +53,6 @@ class HistoryNotifier extends StateNotifier<List<HistoryItem>> {
 }
 
 final historyProvider = StateNotifierProvider<HistoryNotifier, List<HistoryItem>>((ref) {
-  final prefsService = ref.watch(preferencesServiceProvider);
+  final prefsService = ref.read(preferencesServiceProvider);
   return HistoryNotifier(prefsService);
 });

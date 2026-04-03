@@ -37,6 +37,6 @@ class ThemeNotifier extends StateNotifier<MiraTheme> {
 }
 
 final themeProvider = StateNotifierProvider<ThemeNotifier, MiraTheme>((ref) {
-  final prefs = ref.watch(preferencesServiceProvider);
+  final prefs = ref.read(preferencesServiceProvider);
   return ThemeNotifier(prefs);
 });

@@ -26,7 +26,7 @@ class SearchEngineNotifier extends StateNotifier<String> {
 }
 
 final searchEngineProvider = StateNotifierProvider<SearchEngineNotifier, String>((ref) {
-  final prefsService = ref.watch(preferencesServiceProvider);
+  final prefsService = ref.read(preferencesServiceProvider);
   return SearchEngineNotifier(prefsService);
 });
 

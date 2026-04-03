@@ -55,6 +55,6 @@ class BookmarksNotifier extends StateNotifier<List<Bookmark>> {
 }
 
 final bookmarksProvider = StateNotifierProvider<BookmarksNotifier, List<Bookmark>>((ref) {
-  final prefs = ref.watch(preferencesServiceProvider);
+  final prefs = ref.read(preferencesServiceProvider);
   return BookmarksNotifier(prefs);
 });

@@ -45,6 +45,11 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
 
   static const _skeletonAutoDismiss = Duration(seconds: 14);
 
+  bool get _supportsNativeFindInteraction {
+    if (kIsWeb) return false;
+    return Platform.isAndroid || Platform.isIOS;
+  }
+
   // ── LIFECYCLE ──────────────────────────────────────────────────────────────
 
   @override
@@ -204,6 +209,7 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
       forceDark: forceDarkSetting,
       algorithmicDarkeningAllowed: (theme.mode == ThemeMode.dark),
       useHybridComposition: !kIsWeb && Platform.isAndroid,
+      transparentBackground: false,
       userAgent: securityState.isDesktopMode
           ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
           : null,
@@ -454,7 +460,7 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
 
     ref.listen(currentActiveTabProvider, (previous, next) {
       ref.read(activeFindInteractionProvider.notifier).state =
-          _findControllers[next.id];
+          _supportsNativeFindInteraction ? _findControllers[next.id] : null;
       if (previous?.id != next.id) {
         _syncChromeToActiveWebView(next);
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -488,7 +494,7 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
     final progress = chrome.loadingProgress;
     
     final activeTabUrl = tabs.isNotEmpty ? tabs[activeIndex].url : '';
-    final bool isLoading = progress < 100 && activeTabUrl.isNotEmpty;
+    final bool isLoading = !(!kIsWeb && Platform.isWindows) && progress < 100 && activeTabUrl.isNotEmpty;
 
     if (errorMessage != null && tabs.isNotEmpty) {
       return CustomErrorScreen(
@@ -513,23 +519,27 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
 
     return Stack(
       children: [
-        IndexedStack(
-          index: activeIndex,
-          children: tabs.map((tab) {
-            if (tab.url.isEmpty) {
-              return const BrandingScreen();
-            }
+        // Keep desktop WebView surfaces laid out even when hidden; offstage-style
+        // hiding can make WebView2 lose paint/input until the next resize.
+        ...tabs.asMap().entries.map((entry) {
+          final index = entry.key;
+          final tab = entry.value;
+          final isShowing = index == activeIndex;
 
-            if (!awakeTabIds.contains(tab.id)) {
-              return _buildHibernatedPlaceholder(tab);
-            }
+          Widget content;
+          if (tab.url.isEmpty) {
+            content = const BrandingScreen();
+          } else if (!awakeTabIds.contains(tab.id)) {
+            content = _buildHibernatedPlaceholder(tab);
+          } else {
+            final findCtrl = _supportsNativeFindInteraction
+                ? _findControllers.putIfAbsent(
+                    tab.id,
+                    () => FindInteractionController(),
+                  )
+                : null;
 
-            final findCtrl = _findControllers.putIfAbsent(
-              tab.id,
-              () => FindInteractionController(),
-            );
-
-            return InAppWebView(
+            content = InAppWebView(
               key: ObjectKey(tab.id),
               initialUrlRequest: URLRequest(url: WebUri(_getEffectiveUrl(tab.url, securityState))),
               contextMenu: _desktopLinkContextMenu(),
@@ -547,7 +557,8 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
                 forceDark: forceDarkSetting,
                 algorithmicDarkeningAllowed: (theme.mode == ThemeMode.dark),
                 useHybridComposition: !kIsWeb && Platform.isAndroid,
-                hardwareAcceleration: true, 
+                hardwareAcceleration: true,
+                transparentBackground: false,
                 userAgent: securityState.isDesktopMode 
                     ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" 
                     : null,
@@ -568,13 +579,10 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
               },
               onWebViewCreated: (controller) {
                 _controllers[tab.id] = controller;
-                // Re-read active tab id fresh — do not use the stale closure value.
                 final isGhostNow = ref.read(isGhostModeProvider);
-                final currentState = isGhostNow
-                    ? ref.read(ghostTabsProvider)
-                    : ref.read(tabsProvider);
-                final currentActiveId = currentState.tabs.isNotEmpty
-                    ? currentState.tabs[currentState.activeIndex].id
+                final currentState = isGhostNow ? ref.read(ghostTabsProvider) : ref.read(tabsProvider);
+                final currentActiveId = currentState.tabs.isNotEmpty 
+                    ? currentState.tabs[currentState.activeIndex].id 
                     : '';
                 if (tab.id == currentActiveId) {
                   _webviewJustCreatedForTabId = tab.id;
@@ -582,15 +590,12 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
                   n.setLoadingProgress(0);
                   n.setController(controller);
                   ref.read(activeFindInteractionProvider.notifier).state =
-                      _findControllers[tab.id];
+                      _supportsNativeFindInteraction ? _findControllers[tab.id] : null;
                 }
               },
               onCreateWindow: (controller, createWindowAction) async {
                 final url = createWindowAction.request.url;
-                if (url == null || url.toString().isEmpty || url.toString() == 'about:blank') {
-                  return true; 
-                }
-                HapticFeedback.lightImpact(); 
+                if (url == null || url.toString().isEmpty || url.toString() == 'about:blank') return true;
                 if (isGhost) {
                   ref.read(ghostTabsProvider.notifier).addTab(url: url.toString());
                 } else {
@@ -609,14 +614,19 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
                    final displayUrl = urlString.contains('localhost') && urlString.contains('/http') 
                        ? urlString.split('/http').last.replaceFirst('s:', 'https:').replaceFirst(':', 'http:')
                        : urlString;
-
-                   if (isGhost) {
-                     ref.read(ghostTabsProvider.notifier).updateUrl(displayUrl);
-                   } else {
-                     ref.read(tabsProvider.notifier).updateUrl(displayUrl);
-                   }
-                 }
-              },
+                    if (isGhost) {
+                      ref.read(ghostTabsProvider.notifier).updateUrlForTab(
+                        tab.id,
+                        displayUrl,
+                      );
+                    } else {
+                      ref.read(tabsProvider.notifier).updateUrlForTab(
+                        tab.id,
+                        displayUrl,
+                      );
+                    }
+                  }
+               },
               onProgressChanged: (controller, p) {
                 _lastProgressByTabId[tab.id] = p;
                 if (tab.id == activeTabId) {
@@ -629,120 +639,56 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
                     _cancelSkeletonDismissTimer();
                     ref.read(browserChromeProvider.notifier).setLoadingProgress(100);
                   }
-                  if (url != null) {
-                    if (isGhost) {
-                      ref.read(ghostTabsProvider.notifier).updateUrl(url.toString());
-                    } else {
-                      ref.read(tabsProvider.notifier).updateUrl(url.toString());
-                    }
-
-                    if (isGhost || securityState.isIncognito) {
-                      if (!kIsWeb && Platform.isAndroid) {
-                        // ignore: deprecated_member_use
-                        WebStorageManager.instance().android.deleteAllData();
-                      } else {
-                        WebStorageManager.instance().deleteAllData();
-                      }
-                    }
-                  }
-              },
+                   if (url != null) {
+                     if (isGhost) {
+                      ref.read(ghostTabsProvider.notifier).updateUrlForTab(
+                        tab.id,
+                        url.toString(),
+                      );
+                     } else {
+                      ref.read(tabsProvider.notifier).updateUrlForTab(
+                        tab.id,
+                        url.toString(),
+                      );
+                     }
+                   }
+               },
               onReceivedError: (controller, request, error) {
-                final desc = error.description;
-                if (desc.contains("net::ERR_ABORTED") ||
-                    desc.contains("net::ERR_NETWORK_CHANGED") ||
-                    desc.contains("net::ERR_INTERNET_DISCONNECTED")) {
-                   return; 
-                }
                 if (request.isForMainFrame ?? true) {
                    if (tab.id == activeTabId) {
-                     ref.read(browserChromeProvider.notifier).setWebError(desc);
-                   }
-                }
-              },
-              onReceivedHttpError: (controller, request, response) {
-                if (request.isForMainFrame ?? true) {
-                   final code = response.statusCode;
-                   if (code != null && code >= 400 && code != 403) {
-                     if (tab.id == activeTabId) {
-                       ref.read(browserChromeProvider.notifier)
-                           .setWebError("HTTP Error: $code");
-                     }
+                     ref.read(browserChromeProvider.notifier).setWebError(error.description);
                    }
                 }
               },
               onTitleChanged: (controller, title) {
-                  if (title != null) {
+                if (title != null) {
                     if (isGhost) {
-                      ref.read(ghostTabsProvider.notifier).updateTitle(title);
+                      ref.read(ghostTabsProvider.notifier).updateTitleForTab(
+                        tab.id,
+                        title,
+                      );
                     } else {
-                      ref.read(tabsProvider.notifier).updateTitle(title);
+                      ref.read(tabsProvider.notifier).updateTitleForTab(
+                        tab.id,
+                        title,
+                      );
                     }
                   }
               },
-              shouldOverrideUrlLoading: (controller, navigationAction) async {
-                final uri = navigationAction.request.url;
-                if (uri == null) return NavigationActionPolicy.ALLOW;
-
-                if (['http', 'https', 'file', 'chrome', 'data', 'javascript', 'about'].contains(uri.scheme)) {
-                  return NavigationActionPolicy.ALLOW;
-                }
-
-                if (['mailto', 'tel', 'sms'].contains(uri.scheme)) {
-                  if (await canLaunchUrl(uri)) {
-                    await launchUrl(uri);
-                    return NavigationActionPolicy.CANCEL;
-                  }
-                }
-
-                try {
-                  if (await canLaunchUrl(uri)) {
-                    await launchUrl(uri, mode: LaunchMode.externalApplication);
-                    return NavigationActionPolicy.CANCEL;
-                  }
-                } catch (e) {
-                  debugPrint("Deep Link failed: $e");
-                }
-                return NavigationActionPolicy.CANCEL; 
-              },
-              onDownloadStartRequest: (controller, downloadRequest) async {
-                  HapticFeedback.mediumImpact();
-                  await ref.read(downloadsProvider.notifier).startDownload(
-                    downloadRequest.url.toString(),
-                    filename: downloadRequest.suggestedFilename,
-                  );
-              },
-              onLongPressHitTestResult: (controller, hitTestResult) async {
-                final url = hitTestResult.extra;
-                if (url != null &&
-                    url.isNotEmpty &&
-                    _isLinkHitType(hitTestResult.type)) {
-                  HapticFeedback.mediumImpact();
-                  _showLinkContextMenu(url);
-                }
-              },
-              onPermissionRequest: (controller, request) async {
-                final resources = request.resources;
-                if (securityState.isLocationBlocked && resources.contains(PermissionResourceType.DEVICE_ORIENTATION_AND_MOTION)) {
-                    return PermissionResponse(resources: resources, action: PermissionResponseAction.DENY);
-                }
-                if (securityState.isCameraBlocked) {
-                  if (resources.contains(PermissionResourceType.CAMERA) || 
-                      resources.contains(PermissionResourceType.MICROPHONE)) {
-                    return PermissionResponse(resources: resources, action: PermissionResponseAction.DENY);
-                  }
-                }
-                return PermissionResponse(
-                    resources: resources, action: PermissionResponseAction.GRANT);
-              },
-              onGeolocationPermissionsShowPrompt: (controller, origin) async {
-                  if (securityState.isLocationBlocked) {
-                    return GeolocationPermissionShowPromptResponse(origin: origin, allow: false, retain: false);
-                  }
-                  return GeolocationPermissionShowPromptResponse(origin: origin, allow: true, retain: false);
-              },
             );
-          }).toList(),
-        ),
+          }
+
+          return Positioned.fill(
+            key: ValueKey('vis_${tab.id}'),
+            child: IgnorePointer(
+              ignoring: !isShowing,
+              child: Opacity(
+                opacity: isShowing ? 1.0 : 0.0,
+                child: content,
+              ),
+            ),
+          );
+        }),
 
         // Skeleton Loader Overlay
         IgnorePointer(

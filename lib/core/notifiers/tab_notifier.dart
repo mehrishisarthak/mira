@@ -92,9 +92,23 @@ class TabsNotifier extends StateNotifier<TabsState> {
   void updateUrl(String newUrl) {
     _updateActiveTab((tab) => tab.copyWith(url: newUrl, title: newUrl));
   }
+
+  void updateUrlForTab(String tabId, String newUrl) {
+    _updateTabById(
+      tabId,
+      (tab) => tab.copyWith(url: newUrl, title: newUrl),
+    );
+  }
   
   void updateTitle(String newTitle) {
      _updateActiveTab((tab) => tab.copyWith(title: newTitle));
+  }
+
+  void updateTitleForTab(String tabId, String newTitle) {
+    _updateTabById(
+      tabId,
+      (tab) => tab.copyWith(title: newTitle),
+    );
   }
 
   // This resets the persistent tabs to a single blank tab
@@ -111,11 +125,24 @@ class TabsNotifier extends StateNotifier<TabsState> {
     state = TabsState(tabs: currentTabs, activeIndex: state.activeIndex);
     _saveToPrefs();
   }
+
+  void _updateTabById(
+    String tabId,
+    BrowserTab Function(BrowserTab) updater,
+  ) {
+    final index = state.tabs.indexWhere((tab) => tab.id == tabId);
+    if (index == -1) return;
+
+    final currentTabs = [...state.tabs];
+    currentTabs[index] = updater(currentTabs[index]);
+    state = TabsState(tabs: currentTabs, activeIndex: state.activeIndex);
+    _saveToPrefs();
+  }
 }
 
 // --- 3. THE PROVIDER ---
 final tabsProvider = StateNotifierProvider<TabsNotifier, TabsState>((ref) {
-  final prefsService = ref.watch(preferencesServiceProvider);
+  final prefsService = ref.read(preferencesServiceProvider);
   return TabsNotifier(prefsService);
 });
 

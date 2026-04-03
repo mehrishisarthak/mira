@@ -42,15 +42,41 @@ class GhostTabsNotifier extends StateNotifier<TabsState> {
   void updateUrl(String url) {
     _updateActiveTab((tab) => tab.copyWith(url: url, title: url));
   }
+
+  void updateUrlForTab(String tabId, String url) {
+    _updateTabById(
+      tabId,
+      (tab) => tab.copyWith(url: url, title: url),
+    );
+  }
   
   void updateTitle(String title) {
     _updateActiveTab((tab) => tab.copyWith(title: title));
+  }
+
+  void updateTitleForTab(String tabId, String title) {
+    _updateTabById(
+      tabId,
+      (tab) => tab.copyWith(title: title),
+    );
   }
 
   void _updateActiveTab(BrowserTab Function(BrowserTab) updater) {
     final currentTabs = [...state.tabs];
     final activeTab = currentTabs[state.activeIndex];
     currentTabs[state.activeIndex] = updater(activeTab);
+    state = TabsState(tabs: currentTabs, activeIndex: state.activeIndex);
+  }
+
+  void _updateTabById(
+    String tabId,
+    BrowserTab Function(BrowserTab) updater,
+  ) {
+    final index = state.tabs.indexWhere((tab) => tab.id == tabId);
+    if (index == -1) return;
+
+    final currentTabs = [...state.tabs];
+    currentTabs[index] = updater(currentTabs[index]);
     state = TabsState(tabs: currentTabs, activeIndex: state.activeIndex);
   }
 
