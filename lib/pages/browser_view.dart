@@ -56,9 +56,6 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // Register once for the widget lifetime — not in build() where new closures
-    // would be created every frame and the listener cascade causes redraws.
-    _registerBrowserSideEffectListeners();
 
     // Initial wake for active tab
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -493,7 +490,10 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
     return originalUrl;
   }
 
-  /// Side effects only — must run from [build] every frame (Riverpod [ref.listen]).
+  /// Side effects only — **must** be called from [build]: Riverpod only allows
+  /// [ref.listen] during a [ConsumerWidget] build. Riverpod deduplicates the
+  /// same listener across rebuilds; expensive WebView rebuilds are avoided by
+  /// structural [ref.watch] + isolated skeleton overlay elsewhere.
   ///
   /// Order matters:
   /// 1. Tab lists (wake LRU target, pause/resume WebViews, clear errors on id change)
@@ -588,6 +588,7 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
   @override
   Widget build(BuildContext context) {
     final isGhost = ref.watch(isGhostModeProvider);
+    _registerBrowserSideEffectListeners();
 
     // Structural watch: rebuilds only when tab count / ordering / active index /
     // url-presence changes — NOT on every URL or title mutation that WebView
@@ -607,8 +608,8 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
 
     // Security & theme are read, not watched.  `initialSettings` are consumed
     // once at WebView mount; live updates to already-mounted WebViews are pushed
-    // by `ref.listen` handlers registered in initState
-    // (_applyThemeToAllControllers, applyProxy, _updateWebViewSettings).
+    // by `ref.listen` handlers in [_registerBrowserSideEffectListeners]
+    // (_applyThemeToAllControllers, applyProxy).
     final securityState = ref.read(securityProvider);
     final theme = ref.read(themeProvider);
 
