@@ -42,17 +42,32 @@ class MobileDownloadService implements DownloadService {
 
   @override
   Future<void> pauseDownload(String taskId) async {
-    // TODO: implement pause for mobile downloads (flutter_downloader)
+    try {
+      await FlutterDownloader.pause(taskId: taskId);
+    } catch (e) {
+      debugPrint('MIRA_DOWNLOAD: pause failed -> $e');
+    }
+    onTasksReloaded(await loadExistingTasks());
   }
 
   @override
   Future<void> cancelDownload(String taskId) async {
-    // TODO: implement cancel for mobile downloads (flutter_downloader)
+    try {
+      await FlutterDownloader.cancel(taskId: taskId);
+    } catch (e) {
+      debugPrint('MIRA_DOWNLOAD: cancel failed -> $e');
+    }
+    onTasksReloaded(await loadExistingTasks());
   }
 
   @override
   Future<void> resumeDownload(String taskId) async {
-    // TODO: implement resume for mobile downloads (flutter_downloader)
+    try {
+      await FlutterDownloader.resume(taskId: taskId);
+    } catch (e) {
+      debugPrint('MIRA_DOWNLOAD: resume failed -> $e');
+    }
+    onTasksReloaded(await loadExistingTasks());
   }
 
   @override

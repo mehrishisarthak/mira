@@ -3,16 +3,23 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mira/core/notifiers/ghost_notifier.dart';
 import 'package:mira/core/notifiers/tab_notifier.dart';
 import 'package:mira/core/entities/tab_entity.dart';
+import 'package:mira/core/entities/theme_entity.dart';
 import 'package:mira/core/notifiers/theme_notifier.dart';
 
 class TabsSheet extends ConsumerWidget {
   const TabsSheet({super.key});
 
+  static const _gridDelegate = SliverGridDelegateWithFixedCrossAxisCount(
+    crossAxisCount: 2,
+    crossAxisSpacing: 12,
+    mainAxisSpacing: 12,
+    childAspectRatio: 1.3,
+  );
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isGhostModeActive = ref.watch(isGhostModeProvider);
-    
-    // Watch Tab States
+
     final normalTabsState = ref.watch(tabsProvider);
     final normalTabs = normalTabsState.tabs;
     final activeNormalTab = normalTabsState.activeTab;
@@ -21,10 +28,10 @@ class TabsSheet extends ConsumerWidget {
     final ghostTabs = ghostTabsState.tabs;
     final activeGhostTab = ghostTabsState.activeTab;
 
-    // Theme Logic
     final appTheme = ref.watch(themeProvider);
     final backgroundColor = appTheme.surfaceColor;
-    final textColor = appTheme.mode == ThemeMode.light ? Colors.black87 : Colors.white;
+    final textColor =
+        appTheme.mode == ThemeMode.light ? kMiraInkPrimary : Colors.white;
 
     return Container(
       decoration: BoxDecoration(
@@ -32,76 +39,120 @@ class TabsSheet extends ConsumerWidget {
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         border: Border(
           top: BorderSide(
-            color: isGhostModeActive ? Colors.redAccent : appTheme.primaryColor, 
-            width: 3
-          )
+            color: isGhostModeActive ? Colors.redAccent : appTheme.primaryColor,
+            width: 3,
+          ),
         ),
         boxShadow: [
-          BoxShadow(color: Colors.black.withAlpha(51), blurRadius: 20, spreadRadius: 5)
+          BoxShadow(
+              color: kMiraMatteBlack.withAlpha(51),
+              blurRadius: 20,
+              spreadRadius: 5)
         ],
       ),
       child: Column(
         children: [
           const SizedBox(height: 12),
           Container(
-            height: 4, 
-            width: 40, 
+            height: 4,
+            width: 40,
             decoration: BoxDecoration(
-              color: textColor.withAlpha(51), 
-              borderRadius: BorderRadius.circular(10)
-            )
+              color: textColor.withAlpha(51),
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
-          
           Expanded(
-            child: SingleChildScrollView(
+            child: Padding(
               padding: const EdgeInsets.only(top: 20, bottom: 40),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  
-                  // --- GHOST SECTION ---
-                  if (ghostTabs.isNotEmpty) ...[
-                    _buildSectionHeader(
-                      context, ref,
+              child: CustomScrollView(
+                slivers: [
+                if (ghostTabs.isNotEmpty) ...[
+                  SliverToBoxAdapter(
+                    child: _buildSectionHeader(
+                      context,
+                      ref,
                       title: "GHOST PROTOCOL",
                       count: ghostTabs.length,
                       isGhost: true,
                       color: Colors.redAccent,
-                      onAdd: () => ref.read(ghostTabsProvider.notifier).addTab(),
-                      onClear: () => ref.read(ghostTabsProvider.notifier).nuke(),
+                      onClear: () =>
+                          ref.read(ghostTabsProvider.notifier).nuke(),
                     ),
-                    _buildTabGrid(
-                      context, ref,
-                      tabs: ghostTabs,
-                      activeTabId: isGhostModeActive ? activeGhostTab.id : '',
-                      isGhost: true,
-                      accentColor: Colors.redAccent,
-                      textColor: textColor,
+                  ),
+                  SliverPadding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    sliver: SliverGrid(
+                      gridDelegate: _gridDelegate,
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) => _buildTabCard(
+                          context,
+                          ref,
+                          tab: ghostTabs[index],
+                          activeTabId:
+                              isGhostModeActive ? activeGhostTab.id : '',
+                          isGhost: true,
+                          accentColor: Colors.redAccent,
+                          textColor: textColor,
+                          tabIndex: index,
+                        ),
+                        childCount: ghostTabs.length,
+                      ),
                     ),
-                    const SizedBox(height: 24),
-                    Divider(color: textColor.withAlpha(26), thickness: 1),
-                    const SizedBox(height: 16),
-                  ],
-
-                  // --- NORMAL SECTION ---
-                  _buildSectionHeader(
-                    context, ref,
+                  ),
+                  SliverToBoxAdapter(
+                    child: Divider(
+                        color: textColor.withAlpha(26), thickness: 1),
+                  ),
+                  const SliverToBoxAdapter(child: SizedBox(height: 16)),
+                ],
+                SliverToBoxAdapter(
+                  child: _buildSectionHeader(
+                    context,
+                    ref,
                     title: "ACTIVE SESSIONS",
                     count: normalTabs.length,
                     isGhost: false,
                     color: appTheme.primaryColor,
-                    onAdd: () => ref.read(tabsProvider.notifier).addTab(),
                     onClear: () => ref.read(tabsProvider.notifier).nuke(),
                   ),
-                  _buildTabGrid(
-                    context, ref,
-                    tabs: normalTabs,
-                    activeTabId: !isGhostModeActive ? activeNormalTab.id : '',
-                    isGhost: false,
-                    accentColor: appTheme.primaryColor,
-                    textColor: textColor,
+                ),
+                if (normalTabs.isEmpty)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32.0),
+                      child: Center(
+                        child: Text(
+                          "No Active Tabs",
+                          style: TextStyle(
+                            color: textColor.withAlpha(77),
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    sliver: SliverGrid(
+                      gridDelegate: _gridDelegate,
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) => _buildTabCard(
+                          context,
+                          ref,
+                          tab: normalTabs[index],
+                          activeTabId:
+                              !isGhostModeActive ? activeNormalTab.id : '',
+                          isGhost: false,
+                          accentColor: appTheme.primaryColor,
+                          textColor: textColor,
+                          tabIndex: index,
+                        ),
+                        childCount: normalTabs.length,
+                      ),
+                    ),
                   ),
-                ],
+              ],
               ),
             ),
           ),
@@ -111,59 +162,66 @@ class TabsSheet extends ConsumerWidget {
   }
 
   Widget _buildSectionHeader(
-    BuildContext context, 
-    WidgetRef ref, 
-    {
-      required String title, 
-      required int count,
-      required bool isGhost, 
-      required Color color, 
-      required VoidCallback onAdd,
-      required VoidCallback onClear
-    }
-  ) {
+    BuildContext context,
+    WidgetRef ref, {
+    required String title,
+    required int count,
+    required bool isGhost,
+    required Color color,
+    required VoidCallback onClear,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(color: color.withAlpha(26), borderRadius: BorderRadius.circular(8)),
-            child: Icon(isGhost ? Icons.privacy_tip_outlined : Icons.public, size: 18, color: color),
+            decoration: BoxDecoration(
+                color: color.withAlpha(26),
+                borderRadius: BorderRadius.circular(8)),
+            child: Icon(
+                isGhost ? Icons.privacy_tip_outlined : Icons.public,
+                size: 18,
+                color: color),
           ),
           const SizedBox(width: 12),
           Text(
-            title, 
+            title,
             style: TextStyle(
-              color: color, 
-              fontWeight: FontWeight.bold, 
-              fontSize: 12, 
-              letterSpacing: 1.5
-            )
+              color: color,
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+              letterSpacing: 1.5,
+            ),
           ),
           const SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(
               color: color,
-              borderRadius: BorderRadius.circular(10)
+              borderRadius: BorderRadius.circular(10),
             ),
             child: Text(
               "$count",
-              style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold),
             ),
           ),
           const Spacer(),
           IconButton(
-            icon: Icon(Icons.delete_sweep_outlined, color: color.withAlpha(153), size: 20),
+            icon: Icon(Icons.delete_sweep_outlined,
+                color: color.withAlpha(153), size: 20),
             onPressed: onClear,
             tooltip: "Close All",
           ),
           IconButton(
+            tooltip: 'New normal tab',
             icon: Icon(Icons.add_circle_outline, color: color, size: 24),
             onPressed: () {
-              onAdd();
-              ref.read(isGhostModeProvider.notifier).state = isGhost;
+              ref.read(tabsProvider.notifier).addTab();
+              ref.read(isGhostModeProvider.notifier).state = false;
               Navigator.pop(context);
             },
           ),
@@ -172,138 +230,126 @@ class TabsSheet extends ConsumerWidget {
     );
   }
 
-  Widget _buildTabGrid(
-    BuildContext context, 
-    WidgetRef ref, 
-    {
-      required List<BrowserTab> tabs, 
-      required String activeTabId, 
-      required bool isGhost, 
-      required Color accentColor,
-      required Color textColor
-    }
-  ) {
-    if (tabs.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.all(32.0),
-        child: Center(
-          child: Text(
-            "No Active Tabs", 
-            style: TextStyle(color: textColor.withAlpha(77), fontStyle: FontStyle.italic)
-          )
-        ),
-      );
-    }
+  Widget _buildTabCard(
+    BuildContext context,
+    WidgetRef ref, {
+    required BrowserTab tab,
+    required String activeTabId,
+    required bool isGhost,
+    required Color accentColor,
+    required Color textColor,
+    required int tabIndex,
+  }) {
+    final isActive = tab.id == activeTabId;
 
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 1.3, 
-      ),
-      itemCount: tabs.length,
-      itemBuilder: (context, index) {
-        final tab = tabs[index];
-        final isActive = tab.id == activeTabId;
-
-        // FIXED: Reverted to standard GestureDetector with no delay/animation
-        return GestureDetector(
-          onTap: () {
-            // Direct logic execution without delays
-            if (context.mounted) {
-               ref.read(isGhostModeProvider.notifier).state = isGhost;
-               if (isGhost) {
-                 ref.read(ghostTabsProvider.notifier).switchTab(index);
-               } else {
-                 ref.read(tabsProvider.notifier).switchTab(index);
-               }
-               Navigator.pop(context);
-            }
-          },
-          child: Container(
-            decoration: BoxDecoration(
-              color: isGhost 
-                  ? const Color(0xFF2C2C2C) 
-                  : accentColor.withAlpha(13),
-              border: Border.all(
-                color: isActive ? accentColor : Colors.transparent, 
-                width: 2
-              ),
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Positioned.fill(
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
               borderRadius: BorderRadius.circular(16),
-            ),
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+              onTap: () {
+                if (context.mounted) {
+                  ref.read(isGhostModeProvider.notifier).state = isGhost;
+                  if (isGhost) {
+                    ref.read(ghostTabsProvider.notifier).switchTab(tabIndex);
+                  } else {
+                    ref.read(tabsProvider.notifier).switchTab(tabIndex);
+                  }
+                  Navigator.pop(context);
+                }
+              },
+              child: Container(
+                decoration: BoxDecoration(
+                  color: isGhost
+                      ? const Color(0xFF2C2C2C)
+                      : accentColor.withAlpha(13),
+                  border: Border.all(
+                    color: isActive ? accentColor : Colors.transparent,
+                    width: 2,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                padding: const EdgeInsets.fromLTRB(12, 12, 36, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    CircleAvatar(
-                      radius: 8,
-                      backgroundColor: isActive ? accentColor : textColor.withAlpha(26),
-                      child: isActive 
-                          ? const SizedBox() 
-                          : Icon(Icons.web, size: 10, color: textColor.withAlpha(128)),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        tab.title.isEmpty ? (isGhost ? "Ghost Tab" : "New Tab") : tab.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: isGhost ? Colors.white : textColor,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 8,
+                          backgroundColor: isActive
+                              ? accentColor
+                              : textColor.withAlpha(26),
+                          child: isActive
+                              ? const SizedBox()
+                              : Icon(Icons.web,
+                                  size: 10, color: textColor.withAlpha(128)),
                         ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            tab.title.isEmpty
+                                ? (isGhost ? "Ghost Tab" : "New Tab")
+                                : tab.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: isGhost ? Colors.white : textColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Spacer(),
+                    Text(
+                      tab.url.isEmpty ? "Start Page" : tab.url,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: isGhost
+                            ? Colors.white54
+                            : textColor.withAlpha(128),
+                        fontSize: 11,
                       ),
                     ),
                   ],
                 ),
-                
-                const Spacer(),
-                
-                Text(
-                  tab.url.isEmpty ? "Start Page" : tab.url,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: isGhost ? Colors.white54 : textColor.withAlpha(128), 
-                    fontSize: 11
-                  ),
-                ),
-                
-                const SizedBox(height: 8),
-                
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: InkWell(
-                    onTap: () {
-                      if (isGhost) {
-                        ref.read(ghostTabsProvider.notifier).closeTab(tab.id);
-                      } else {
-                        ref.read(tabsProvider.notifier).closeTab(tab.id);
-                      }
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withAlpha(26),
-                        shape: BoxShape.circle
-                      ),
-                      child: Icon(Icons.close, size: 14, color: textColor.withAlpha(153)),
-                    ),
-                  ),
-                )
-              ],
+              ),
             ),
           ),
-        );
-      },
+        ),
+        Positioned(
+          top: 4,
+          right: 4,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () {
+                if (isGhost) {
+                  ref.read(ghostTabsProvider.notifier).closeTab(tab.id);
+                } else {
+                  ref.read(tabsProvider.notifier).closeTab(tab.id);
+                }
+              },
+              customBorder: const CircleBorder(),
+              child: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: kMiraMatteBlack.withAlpha(26),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.close,
+                    size: 14, color: textColor.withAlpha(153)),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
-

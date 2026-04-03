@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mira/core/entities/theme_entity.dart';
 import 'package:mira/core/notifiers/ghost_notifier.dart';
 import 'package:mira/core/notifiers/tab_notifier.dart';
 import 'package:mira/core/notifiers/theme_notifier.dart';
@@ -23,52 +24,56 @@ class _GhostLandingPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xFF000000), // Pure Black for Ghost
+      color: kMiraMatteBlack,
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 32),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(
-            child: Icon(Icons.privacy_tip, size: 80, color: Colors.redAccent.withAlpha(204)),
-          ),
-          const SizedBox(height: 24),
-          const Center(
-            child: Text(
-              "GHOST PROTOCOL ACTIVE",
-              style: TextStyle(
-                color: Colors.redAccent,
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 4,
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Icon(Icons.privacy_tip, size: 80, color: Colors.redAccent.withAlpha(204)),
               ),
-            ),
-          ),
-          const SizedBox(height: 48),
+              const SizedBox(height: 24),
+              const Center(
+                child: Text(
+                  "GHOST PROTOCOL ACTIVE",
+                  style: TextStyle(
+                    color: Colors.redAccent,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 4,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 48),
 
-          // PROTECTED LIST
-          const Text(
-            "SYSTEMS OFFLINE (NOT SAVED):",
-            style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 12),
-          _buildGhostItem(Icons.history, "Browsing History"),
-          _buildGhostItem(Icons.cookie, "Cookies & Site Data"),
-          _buildGhostItem(Icons.cached, "Form Data & Cache"),
+              // PROTECTED LIST
+              const Text(
+                "SYSTEMS OFFLINE (NOT SAVED):",
+                style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              _buildGhostItem(Icons.history, "Browsing History"),
+              _buildGhostItem(Icons.cookie, "Cookies & Site Data"),
+              _buildGhostItem(Icons.cached, "Form Data & Cache"),
 
-          const SizedBox(height: 32),
+              const SizedBox(height: 32),
 
-          // VISIBLE LIST
-          const Text(
-            "VISIBLE TO OTHERS:",
-            style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
+              // VISIBLE LIST
+              const Text(
+                "VISIBLE TO OTHERS:",
+                style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              _buildGhostItem(Icons.wifi, "Network Provider / ISP", isWarning: true),
+              _buildGhostItem(Icons.download, "Files Saved to Device", isWarning: true),
+              _buildGhostItem(Icons.admin_panel_settings, "Websites you visit", isWarning: true),
+            ],
           ),
-          const SizedBox(height: 12),
-          _buildGhostItem(Icons.wifi, "Network Provider / ISP", isWarning: true),
-          _buildGhostItem(Icons.download, "Files Saved to Device", isWarning: true),
-          _buildGhostItem(Icons.admin_panel_settings, "Websites you visit", isWarning: true),
-        ],
+        ),
       ),
     );
   }
@@ -105,7 +110,8 @@ class _NormalSpeedDial extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final appTheme = ref.watch(themeProvider);
     
-    final textColor = appTheme.mode == ThemeMode.light ? Colors.black87 : Colors.white;
+    final textColor =
+        appTheme.mode == ThemeMode.light ? kMiraInkPrimary : Colors.white;
     final cardColor = appTheme.primaryColor.withAlpha(26);
     final borderColor = appTheme.primaryColor.withAlpha(77);
 

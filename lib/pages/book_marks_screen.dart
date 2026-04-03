@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:mira/core/entities/theme_entity.dart';
 import 'package:mira/core/notifiers/bookmarks_notifier.dart';
 import 'package:mira/core/notifiers/tab_notifier.dart';
 import 'package:mira/core/notifiers/theme_notifier.dart';
-import 'package:mira/pages/mainscreen.dart';
+import 'package:mira/pages/browser_chrome_providers.dart';
 
 class BookmarksPage extends ConsumerWidget {
   const BookmarksPage({super.key});
@@ -14,7 +15,7 @@ class BookmarksPage extends ConsumerWidget {
     final bookmarks = ref.watch(bookmarksProvider);
     final appTheme = ref.watch(themeProvider);
     final isLightMode = appTheme.mode == ThemeMode.light;
-    final contentColor = isLightMode ? Colors.black87 : Colors.white;
+    final contentColor = isLightMode ? kMiraInkPrimary : Colors.white;
 
     return Scaffold(
       backgroundColor: appTheme.backgroundColor,
@@ -56,7 +57,7 @@ class BookmarksPage extends ConsumerWidget {
                   onTap: () {
                     // Load URL and close screen
                     ref.read(tabsProvider.notifier).updateUrl(bookmark.url);
-                    ref.read(webViewControllerProvider)?.loadUrl(
+                    ref.read(browserChromeProvider).controller?.loadUrl(
                       urlRequest: URLRequest(url: WebUri(bookmark.url))
                     );
                     Navigator.pop(context);

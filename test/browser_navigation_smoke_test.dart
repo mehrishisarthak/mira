@@ -33,7 +33,7 @@ void main() {
 
     expect(find.text('ACTIVE SESSIONS'), findsOneWidget);
     expect(find.text('GHOST PROTOCOL'), findsOneWidget);
-    expect(find.byType(GridView), findsNWidgets(2));
+    expect(find.byType(SliverGrid), findsNWidgets(2));
     expect(find.text('New Tab'), findsWidgets);
   });
 

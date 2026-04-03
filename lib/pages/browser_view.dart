@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:collection';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -19,12 +20,13 @@ import 'package:mira/core/notifiers/security_notifier.dart';
 import 'package:mira/core/notifiers/tab_notifier.dart';
 import 'package:mira/core/entities/tab_entity.dart';
 import 'package:mira/core/notifiers/proxy_notifier.dart';
+import 'package:mira/core/services/proxy_service.dart';
 import 'package:mira/shell/proxy/proxy_provider.dart'; 
 
 import 'package:mira/pages/branding_screen.dart';
 import 'package:mira/pages/custom_error_screen.dart'; 
 import 'package:mira/pages/skelleton_loader.dart';
-import 'package:mira/pages/mainscreen.dart'; 
+import 'package:mira/pages/browser_chrome_providers.dart';
 
 class BrowserView extends ConsumerStatefulWidget {
   const BrowserView({super.key});
@@ -35,6 +37,13 @@ class BrowserView extends ConsumerStatefulWidget {
 
 class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingObserver {
   final Map<String, InAppWebViewController> _controllers = {};
+  final Map<String, FindInteractionController> _findControllers = {};
+  final Map<String, int> _lastProgressByTabId = {};
+  Timer? _skeletonDismissTimer;
+  /// Set in [onWebViewCreated] for the active tab so we do not mark load 100% for a new mount.
+  String? _webviewJustCreatedForTabId;
+
+  static const _skeletonAutoDismiss = Duration(seconds: 14);
 
   // ── LIFECYCLE ──────────────────────────────────────────────────────────────
 
@@ -60,9 +69,68 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
 
   @override
   void dispose() {
+    _skeletonDismissTimer?.cancel();
+    for (final c in _findControllers.values) {
+      try {
+        c.dispose();
+      } catch (_) {}
+    }
+    _findControllers.clear();
     WidgetsBinding.instance.removeObserver(this);
     _controllers.clear();
     super.dispose();
+  }
+
+  void _cancelSkeletonDismissTimer() {
+    _skeletonDismissTimer?.cancel();
+    _skeletonDismissTimer = null;
+  }
+
+  /// SPAs sometimes never report progress 100; still clear after [onLoadStop],
+  /// but this guarantees the overlay cannot stick forever.
+  void _armSkeletonDismissTimer(String tabIdWhenArmed) {
+    _cancelSkeletonDismissTimer();
+    _skeletonDismissTimer = Timer(_skeletonAutoDismiss, () {
+      if (!mounted) return;
+      final ghost = ref.read(isGhostModeProvider);
+      final state = ghost ? ref.read(ghostTabsProvider) : ref.read(tabsProvider);
+      if (state.tabs.isEmpty) return;
+      final activeId = state.tabs[state.activeIndex].id;
+      if (activeId != tabIdWhenArmed) return;
+      ref.read(browserChromeProvider.notifier).setLoadingProgress(100);
+    });
+  }
+
+  bool _isLinkHitType(InAppWebViewHitTestResultType? type) {
+    return type == InAppWebViewHitTestResultType.SRC_ANCHOR_TYPE ||
+        type == InAppWebViewHitTestResultType.SRC_IMAGE_ANCHOR_TYPE;
+  }
+
+  /// Desktop / WebView2: right-click raises [ContextMenu.onCreateContextMenu].
+  ContextMenu? _desktopLinkContextMenu() {
+    if (kIsWeb || Platform.isAndroid || Platform.isIOS) return null;
+    return ContextMenu(
+      settings: ContextMenuSettings(
+        hideDefaultSystemContextMenuItems: false,
+      ),
+      onCreateContextMenu: (hitTestResult) {
+        final url = hitTestResult.extra;
+        if (url != null &&
+            url.isNotEmpty &&
+            _isLinkHitType(hitTestResult.type)) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _showLinkContextMenu(url);
+          });
+        }
+      },
+    );
+  }
+
+  String? _activeTabIdFromState(TabsState? state) {
+    if (state == null || state.tabs.isEmpty) return null;
+    final idx = state.activeIndex;
+    if (idx < 0 || idx >= state.tabs.length) return null;
+    return state.tabs[idx].id;
   }
 
   @override
@@ -105,6 +173,15 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
 
   void _cleanUpClosedTabs(List<dynamic> currentTabs) {
     final currentTabIds = currentTabs.map((tab) => tab.id as String).toSet();
+    final removedIds =
+        _controllers.keys.where((id) => !currentTabIds.contains(id)).toList();
+    for (final id in removedIds) {
+      _lastProgressByTabId.remove(id);
+      try {
+        _findControllers[id]?.dispose();
+      } catch (_) {}
+      _findControllers.remove(id);
+    }
     _controllers.removeWhere((id, _) => !currentTabIds.contains(id));
     ref.read(hibernationProvider.notifier).onTabsClosed(currentTabIds);
   }
@@ -144,9 +221,34 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
     }
   }
 
+  /// Binds [browserChromeProvider] to the active tab's live WebView.
+  ///
+  /// [updateProgress] is false on a post-frame pass so a newly created WebView after
+  /// hibernation is not marked complete until [onLoadStart]/[onProgressChanged] run.
+  void _syncChromeToActiveWebView(BrowserTab active, {bool updateProgress = true}) {
+    final awake = ref.read(hibernationProvider);
+    final hasLiveWebView = active.url.isNotEmpty && awake.contains(active.id);
+    final ctrl = hasLiveWebView ? _controllers[active.id] : null;
+    final chrome = ref.read(browserChromeProvider.notifier);
+    chrome.setController(ctrl);
+    if (!updateProgress) return;
+    if (hasLiveWebView && ctrl != null) {
+      if (_webviewJustCreatedForTabId == active.id) {
+        return;
+      }
+      final stored = _lastProgressByTabId[active.id];
+      chrome.setLoadingProgress(stored ?? 100);
+    } else if (active.url.isEmpty) {
+      chrome.setLoadingProgress(100);
+    } else {
+      chrome.setLoadingProgress(0);
+    }
+  }
+
   Widget _buildHibernatedPlaceholder(BrowserTab tab) {
+    final bg = ref.watch(themeProvider).backgroundColor;
     return Container(
-      color: Colors.black,
+      color: bg,
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -169,7 +271,7 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
     final theme = ref.read(themeProvider);
     final isGhost = ref.read(isGhostModeProvider);
     final isLight = theme.mode == ThemeMode.light;
-    final textColor = isLight ? Colors.black87 : Colors.white;
+    final textColor = isLight ? kMiraInkPrimary : Colors.white;
 
     showModalBottomSheet(
       context: context,
@@ -264,11 +366,106 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
     
     final gateway = ref.read(proxyServiceProvider);
     final isGatewayRunning = ref.watch(proxyGatewayStatusProvider);
-    if (!kIsWeb && Platform.isIOS && security.isProxyEnabled && isGatewayRunning) {
+    if (!kIsWeb &&
+        gateway.runtimeBackend == ProxyRuntimeBackend.iosLocalGateway &&
+        security.isProxyEnabled &&
+        isGatewayRunning) {
       if (originalUrl.startsWith('http://localhost')) return originalUrl;
       return gateway.getProxiedUrl(originalUrl);
     }
     return originalUrl;
+  }
+
+  /// Side effects only — must run from [build] every frame (Riverpod [ref.listen]).
+  ///
+  /// Order matters:
+  /// 1. Tab lists (wake LRU target, pause/resume WebViews, clear errors on id change)
+  /// 2. Ghost session switch
+  /// 3. Security / proxy wiring, theme push to engines
+  /// 4. Hibernation eviction (drop controller maps **before** rebinding chrome)
+  /// 5. Active tab → [browserChromeProvider] + find controller
+  void _registerBrowserSideEffectListeners() {
+    ref.listen(tabsProvider, (previous, next) {
+      if (!ref.read(isGhostModeProvider)) {
+        final prevId = _activeTabIdFromState(previous);
+        final nextId = _activeTabIdFromState(next);
+        if (prevId != nextId) {
+          ref.read(browserChromeProvider.notifier).clearWebError();
+          _cancelSkeletonDismissTimer();
+        }
+        _cleanUpClosedTabs(next.tabs);
+        if (previous?.activeIndex != next.activeIndex && next.tabs.isNotEmpty) {
+          final newActiveId = next.tabs[next.activeIndex].id;
+          ref.read(hibernationProvider.notifier).wakeTab(newActiveId);
+          _updateControllersPauseState(newActiveId);
+        }
+      }
+    });
+
+    ref.listen(ghostTabsProvider, (previous, next) {
+      if (ref.read(isGhostModeProvider)) {
+        final prevId = _activeTabIdFromState(previous);
+        final nextId = _activeTabIdFromState(next);
+        if (prevId != nextId) {
+          ref.read(browserChromeProvider.notifier).clearWebError();
+          _cancelSkeletonDismissTimer();
+        }
+        _cleanUpClosedTabs(next.tabs);
+        if (previous?.activeIndex != next.activeIndex && next.tabs.isNotEmpty) {
+          final newActiveId = next.tabs[next.activeIndex].id;
+          ref.read(hibernationProvider.notifier).wakeTab(newActiveId);
+          _updateControllersPauseState(newActiveId);
+        }
+      }
+    });
+
+    ref.listen(isGhostModeProvider, (_, isGhostNow) {
+      ref.read(browserChromeProvider.notifier).clearWebError();
+      _cancelSkeletonDismissTimer();
+      final switchedState = isGhostNow
+          ? ref.read(ghostTabsProvider)
+          : ref.read(tabsProvider);
+      if (switchedState.tabs.isNotEmpty) {
+        final activeId = switchedState.tabs[switchedState.activeIndex].id;
+        ref.read(hibernationProvider.notifier).wakeTab(activeId);
+      }
+    });
+
+    ref.listen(securityProvider, (previous, next) {
+      if (previous?.isProxyEnabled != next.isProxyEnabled ||
+          previous?.proxyUrl != next.proxyUrl) {
+        ref.read(browserServiceProvider).applyProxy(next);
+      }
+    });
+
+    ref.listen(themeProvider, (_, next) => _applyThemeToAllControllers(next));
+
+    ref.listen(hibernationProvider, (previous, next) {
+      final prev = previous ?? <String>{};
+      for (final id in prev.difference(next)) {
+        _controllers.remove(id);
+        _lastProgressByTabId.remove(id);
+        try {
+          _findControllers[id]?.dispose();
+        } catch (_) {}
+        _findControllers.remove(id);
+      }
+    });
+
+    ref.listen(currentActiveTabProvider, (previous, next) {
+      ref.read(activeFindInteractionProvider.notifier).state =
+          _findControllers[next.id];
+      if (previous?.id != next.id) {
+        _syncChromeToActiveWebView(next);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _webviewJustCreatedForTabId = null;
+          final now = ref.read(currentActiveTabProvider);
+          if (now.id != next.id) return;
+          _syncChromeToActiveWebView(now, updateProgress: false);
+        });
+      }
+    });
   }
 
   @override
@@ -281,51 +478,14 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
     
     final awakeTabIds = ref.watch(hibernationProvider);
 
-    ref.listen(tabsProvider, (previous, next) {
-      if (!isGhost) {
-        _cleanUpClosedTabs(next.tabs);
-        if (previous?.activeIndex != next.activeIndex && next.tabs.isNotEmpty) {
-          final newActiveId = next.tabs[next.activeIndex].id;
-          ref.read(hibernationProvider.notifier).wakeTab(newActiveId);
-          _updateControllersPauseState(newActiveId);
-        }
-      }
-    });
+    _registerBrowserSideEffectListeners();
 
-    ref.listen(ghostTabsProvider, (previous, next) {
-      if (isGhost) {
-        _cleanUpClosedTabs(next.tabs);
-        if (previous?.activeIndex != next.activeIndex && next.tabs.isNotEmpty) {
-          final newActiveId = next.tabs[next.activeIndex].id;
-          ref.read(hibernationProvider.notifier).wakeTab(newActiveId);
-          _updateControllersPauseState(newActiveId);
-        }
-      }
-    });
-
-    ref.listen(isGhostModeProvider, (_, isGhostNow) {
-      final switchedState = isGhostNow
-          ? ref.read(ghostTabsProvider)
-          : ref.read(tabsProvider);
-      if (switchedState.tabs.isNotEmpty) {
-        final activeId = switchedState.tabs[switchedState.activeIndex].id;
-        ref.read(hibernationProvider.notifier).wakeTab(activeId);
-      }
-    });
-    
     final securityState = ref.watch(securityProvider);
 
-    ref.listen(securityProvider, (previous, next) {
-      if (previous?.isProxyEnabled != next.isProxyEnabled || previous?.proxyUrl != next.proxyUrl) {
-        ref.read(browserServiceProvider).applyProxy(next);
-      }
-    });
-
-    ref.listen(themeProvider, (_, next) => _applyThemeToAllControllers(next));
-
     final theme = ref.watch(themeProvider);
-    final errorMessage = ref.watch(webErrorProvider);
-    final progress = ref.watch(loadingProgressProvider);
+    final chrome = ref.watch(browserChromeProvider);
+    final errorMessage = chrome.webError;
+    final progress = chrome.loadingProgress;
     
     final activeTabUrl = tabs.isNotEmpty ? tabs[activeIndex].url : '';
     final bool isLoading = progress < 100 && activeTabUrl.isNotEmpty;
@@ -336,8 +496,8 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
         url: tabs[activeIndex].url,
         onRetry: () {
           HapticFeedback.mediumImpact();
-          ref.read(webErrorProvider.notifier).state = null;
-          final retryController = ref.read(webViewControllerProvider);
+          ref.read(browserChromeProvider.notifier).clearWebError();
+          final retryController = ref.read(browserChromeProvider).controller;
           if (retryController != null) {
             retryController.reload();
           } else {
@@ -364,10 +524,16 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
               return _buildHibernatedPlaceholder(tab);
             }
 
+            final findCtrl = _findControllers.putIfAbsent(
+              tab.id,
+              () => FindInteractionController(),
+            );
+
             return InAppWebView(
               key: ObjectKey(tab.id),
               initialUrlRequest: URLRequest(url: WebUri(_getEffectiveUrl(tab.url, securityState))),
-              
+              contextMenu: _desktopLinkContextMenu(),
+              findInteractionController: findCtrl,
               initialUserScripts: securityState.isAdBlockEnabled
                   ? UnmodifiableListView<UserScript>(AdBlockServiceWebview.initialUserScripts)
                   : null,
@@ -411,7 +577,12 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
                     ? currentState.tabs[currentState.activeIndex].id
                     : '';
                 if (tab.id == currentActiveId) {
-                  ref.read(webViewControllerProvider.notifier).state = controller;
+                  _webviewJustCreatedForTabId = tab.id;
+                  final n = ref.read(browserChromeProvider.notifier);
+                  n.setLoadingProgress(0);
+                  n.setController(controller);
+                  ref.read(activeFindInteractionProvider.notifier).state =
+                      _findControllers[tab.id];
                 }
               },
               onCreateWindow: (controller, createWindowAction) async {
@@ -428,8 +599,10 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
                 return true;
               },
               onLoadStart: (controller, url) {
+                 _lastProgressByTabId[tab.id] = 0;
                  if (tab.id == activeTabId) {
-                   ref.read(webErrorProvider.notifier).state = null;
+                   ref.read(browserChromeProvider.notifier).clearWebError();
+                   _armSkeletonDismissTimer(tab.id);
                  }
                  if (url != null) {
                    final urlString = url.toString();
@@ -445,11 +618,17 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
                  }
               },
               onProgressChanged: (controller, p) {
+                _lastProgressByTabId[tab.id] = p;
                 if (tab.id == activeTabId) {
-                  ref.read(loadingProgressProvider.notifier).state = p;
+                  ref.read(browserChromeProvider.notifier).setLoadingProgress(p);
                 }
               },
               onLoadStop: (controller, url) {
+                  _lastProgressByTabId[tab.id] = 100;
+                  if (tab.id == activeTabId) {
+                    _cancelSkeletonDismissTimer();
+                    ref.read(browserChromeProvider.notifier).setLoadingProgress(100);
+                  }
                   if (url != null) {
                     if (isGhost) {
                       ref.read(ghostTabsProvider.notifier).updateUrl(url.toString());
@@ -468,14 +647,15 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
                   }
               },
               onReceivedError: (controller, request, error) {
-                if (error.description.contains("net::ERR_ABORTED") || 
-                    error.description.contains("net::ERR_NETWORK_CHANGED") ||
-                    error.description.contains("net::ERR_INTERNET_DISCONNECTED")) {
+                final desc = error.description;
+                if (desc.contains("net::ERR_ABORTED") ||
+                    desc.contains("net::ERR_NETWORK_CHANGED") ||
+                    desc.contains("net::ERR_INTERNET_DISCONNECTED")) {
                    return; 
                 }
                 if (request.isForMainFrame ?? true) {
                    if (tab.id == activeTabId) {
-                     ref.read(webErrorProvider.notifier).state = error.description;
+                     ref.read(browserChromeProvider.notifier).setWebError(desc);
                    }
                 }
               },
@@ -484,7 +664,8 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
                    final code = response.statusCode;
                    if (code != null && code >= 400 && code != 403) {
                      if (tab.id == activeTabId) {
-                       ref.read(webErrorProvider.notifier).state = "HTTP Error: $code";
+                       ref.read(browserChromeProvider.notifier)
+                           .setWebError("HTTP Error: $code");
                      }
                    }
                 }
@@ -532,12 +713,9 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
               },
               onLongPressHitTestResult: (controller, hitTestResult) async {
                 final url = hitTestResult.extra;
-                if (url != null && url.isNotEmpty &&
-                    (hitTestResult.type ==
-                            InAppWebViewHitTestResultType.SRC_ANCHOR_TYPE ||
-                        hitTestResult.type ==
-                            InAppWebViewHitTestResultType
-                                .SRC_IMAGE_ANCHOR_TYPE)) {
+                if (url != null &&
+                    url.isNotEmpty &&
+                    _isLinkHitType(hitTestResult.type)) {
                   HapticFeedback.mediumImpact();
                   _showLinkContextMenu(url);
                 }
@@ -553,7 +731,8 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
                     return PermissionResponse(resources: resources, action: PermissionResponseAction.DENY);
                   }
                 }
-                return PermissionResponse(resources: resources, action: PermissionResponseAction.DENY);
+                return PermissionResponse(
+                    resources: resources, action: PermissionResponseAction.GRANT);
               },
               onGeolocationPermissionsShowPrompt: (controller, origin) async {
                   if (securityState.isLocationBlocked) {

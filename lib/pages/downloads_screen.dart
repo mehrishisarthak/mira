@@ -32,7 +32,7 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
     final tasks = ref.watch(downloadsProvider);
     final appTheme = ref.watch(themeProvider);
     final isLightMode = appTheme.mode == ThemeMode.light;
-    final contentColor = isLightMode ? Colors.black87 : Colors.white;
+    final contentColor = isLightMode ? kMiraInkPrimary : Colors.white;
 
     return Scaffold(
       backgroundColor: appTheme.backgroundColor,
@@ -95,6 +95,10 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
         statusIcon = Icons.hourglass_empty;
         statusColor = contentColor.withAlpha(128);
         statusText = "Pending";
+      case MiraDownloadStatus.paused:
+        statusIcon = Icons.pause_circle_outline;
+        statusColor = Colors.orangeAccent;
+        statusText = "${task.progress}% · Paused";
     }
 
     return ListTile(
@@ -146,9 +150,31 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
           ],
         ),
       ),
-      trailing: IconButton(
-        icon: Icon(Icons.delete_outline, color: contentColor.withAlpha(128)),
-        onPressed: () => ref.read(downloadsProvider.notifier).deleteTask(task),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (task.status == MiraDownloadStatus.running)
+            IconButton(
+              tooltip: 'Pause',
+              icon: Icon(Icons.pause, color: contentColor.withAlpha(179)),
+              onPressed: () =>
+                  ref.read(downloadsProvider.notifier).pauseTask(task),
+            ),
+          if (task.status == MiraDownloadStatus.running ||
+              task.status == MiraDownloadStatus.pending)
+            IconButton(
+              tooltip: 'Cancel',
+              icon: Icon(Icons.stop, color: contentColor.withAlpha(179)),
+              onPressed: () =>
+                  ref.read(downloadsProvider.notifier).cancelTask(task),
+            ),
+          IconButton(
+            tooltip: 'Remove',
+            icon: Icon(Icons.delete_outline, color: contentColor.withAlpha(128)),
+            onPressed: () =>
+                ref.read(downloadsProvider.notifier).deleteTask(task),
+          ),
+        ],
       ),
       onTap: () {
         if (task.status == MiraDownloadStatus.completed) {
@@ -157,6 +183,11 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
           ref.read(downloadsProvider.notifier).retryTask(task);
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Retrying...")),
+          );
+        } else if (task.status == MiraDownloadStatus.paused) {
+          ref.read(downloadsProvider.notifier).resumeTask(task);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Resuming download…')),
           );
         }
       },

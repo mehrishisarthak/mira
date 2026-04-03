@@ -2,6 +2,9 @@ import 'package:mira/core/services/proxy_service.dart';
 
 class StubProxyService implements ProxyService {
   @override
+  ProxyRuntimeBackend get runtimeBackend => ProxyRuntimeBackend.none;
+
+  @override
   int? get port => null;
 
   @override

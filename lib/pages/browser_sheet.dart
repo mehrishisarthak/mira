@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mira/core/entities/theme_entity.dart';
 import 'package:mira/core/notifiers/search_notifier.dart';
 import 'package:mira/core/notifiers/theme_notifier.dart';
 import '../constants/search_engines.dart';
@@ -12,7 +13,7 @@ class BrowserSheet extends ConsumerWidget {
     final currentEngine = ref.watch(searchEngineProvider);
     final appTheme = ref.watch(themeProvider);
     final isLightMode = appTheme.mode == ThemeMode.light;
-    final contentColor = isLightMode ? Colors.black87 : Colors.white;
+    final contentColor = isLightMode ? kMiraInkPrimary : Colors.white;
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),

@@ -64,6 +64,18 @@ class DownloadsNotifier extends StateNotifier<List<MiraDownloadTask>> {
     await _service.retryTask(task.id, task.url, task.savePath, updateTask);
   }
 
+  Future<void> pauseTask(MiraDownloadTask task) async {
+    await _service.pauseDownload(task.id);
+  }
+
+  Future<void> cancelTask(MiraDownloadTask task) async {
+    await _service.cancelDownload(task.id);
+  }
+
+  Future<void> resumeTask(MiraDownloadTask task) async {
+    await _service.resumeDownload(task.id);
+  }
+
   /// Saves an already-fetched [html] string to the downloads folder and adds
   /// a completed entry so it appears in the Downloads screen immediately.
   Future<String?> savePage(String html, String filename) async {

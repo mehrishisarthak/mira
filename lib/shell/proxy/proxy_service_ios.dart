@@ -10,6 +10,9 @@ class IOSProxyService implements ProxyService {
   int? _port;
 
   @override
+  ProxyRuntimeBackend get runtimeBackend => ProxyRuntimeBackend.iosLocalGateway;
+
+  @override
   int? get port => _port;
 
   @override

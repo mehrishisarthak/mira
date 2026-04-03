@@ -8,24 +8,58 @@ import 'package:uuid/uuid.dart';
 import 'package:mira/core/entities/download_entity.dart';
 import 'package:mira/core/services/download_service.dart';
 
+class _DesktopTransfer {
+  _DesktopTransfer({required this.url, required this.savePath});
+  final String url;
+  final String savePath;
+  bool pauseRequested = false;
+  bool cancelRequested = false;
+  HttpClient? client;
+  IOSink? sink;
+}
+
 class DesktopDownloadService implements DownloadService {
-  /// Called once when a new download task is created (status: pending).
-  /// The owning notifier should prepend this task to its state list.
-  final void Function(MiraDownloadTask task) onTaskAdded;
-
-  /// Called whenever an in-progress task changes (status, progress, error).
-  /// The owning notifier should apply the updater function to the matching task.
-  final void Function(
-    String taskId,
-    MiraDownloadTask Function(MiraDownloadTask) updater,
-  ) onTaskUpdated;
-
   DesktopDownloadService({
     required this.onTaskAdded,
     required this.onTaskUpdated,
   });
 
-  // ── DownloadService interface ──────────────────────────────────────────────
+  final void Function(MiraDownloadTask task) onTaskAdded;
+  final void Function(
+    String taskId,
+    MiraDownloadTask Function(MiraDownloadTask) updater,
+  ) onTaskUpdated;
+
+  final Map<String, _DesktopTransfer> _active = {};
+  final Map<String, String> _urlByTaskId = {};
+  final Map<String, String> _pathByTaskId = {};
+
+  void _removeActive(String taskId) {
+    _active.remove(taskId);
+  }
+
+  Future<void> _abortTransfer(
+    String taskId,
+    _DesktopTransfer t, {
+    required bool deletePartial,
+  }) async {
+    try {
+      await t.sink?.flush();
+    } catch (_) {}
+    try {
+      await t.sink?.close();
+    } catch (_) {}
+    try {
+      t.client?.close(force: true);
+    } catch (_) {}
+    if (deletePartial) {
+      try {
+        final f = File(t.savePath);
+        if (await f.exists()) await f.delete();
+      } catch (_) {}
+    }
+    _removeActive(taskId);
+  }
 
   @override
   Future<void> startDownload(String url, String filename) async {
@@ -34,8 +68,9 @@ class DesktopDownloadService implements DownloadService {
     final savePath = p.join(directory.path, filename);
     final taskId = const Uuid().v4();
 
-    // Notify the notifier to add a pending entry immediately so the
-    // Downloads screen is not blank while the transfer is in flight.
+    _urlByTaskId[taskId] = url;
+    _pathByTaskId[taskId] = savePath;
+
     onTaskAdded(MiraDownloadTask(
       id: taskId,
       url: url,
@@ -44,23 +79,60 @@ class DesktopDownloadService implements DownloadService {
       status: MiraDownloadStatus.pending,
     ));
 
-    // Run without awaiting — progress updates stream in via onTaskUpdated.
-    unawaited(_stream(taskId, url, savePath));
+    _active[taskId] = _DesktopTransfer(url: url, savePath: savePath);
+    unawaited(_runDownload(taskId));
   }
 
   @override
   Future<void> pauseDownload(String taskId) async {
-    // TODO: implement pause for desktop downloads
+    final t = _active[taskId];
+    if (t != null) {
+      t.pauseRequested = true;
+    }
   }
 
   @override
   Future<void> cancelDownload(String taskId) async {
-    // TODO: implement cancel for desktop downloads
+    final t = _active[taskId];
+    if (t != null) {
+      t.cancelRequested = true;
+      return;
+    }
+    onTaskUpdated(
+      taskId,
+      (x) {
+        if (x.status == MiraDownloadStatus.completed) return x;
+        return x.copyWith(
+          status: MiraDownloadStatus.failed,
+          progress: 0,
+          error: 'Cancelled',
+        );
+      },
+    );
   }
 
   @override
   Future<void> resumeDownload(String taskId) async {
-    // TODO: implement resume for desktop downloads
+    final url = _urlByTaskId[taskId];
+    final path = _pathByTaskId[taskId];
+    if (url == null || path == null) return;
+
+    try {
+      final f = File(path);
+      if (await f.exists()) await f.delete();
+    } catch (_) {}
+
+    onTaskUpdated(
+      taskId,
+      (t) => t.copyWith(
+        status: MiraDownloadStatus.pending,
+        progress: 0,
+        clearError: true,
+      ),
+    );
+
+    _active[taskId] = _DesktopTransfer(url: url, savePath: path);
+    unawaited(_runDownload(taskId));
   }
 
   @override
@@ -76,12 +148,18 @@ class DesktopDownloadService implements DownloadService {
 
   @override
   Future<void> deleteTask(String taskId, String savePath) async {
+    final t = _active[taskId];
+    if (t != null) {
+      await _abortTransfer(taskId, t, deletePartial: true);
+    }
     try {
       final file = File(savePath);
       if (await file.exists()) await file.delete();
     } catch (e) {
       debugPrint('MIRA_DOWNLOAD: Delete error -> $e');
     }
+    _urlByTaskId.remove(taskId);
+    _pathByTaskId.remove(taskId);
   }
 
   @override
@@ -92,78 +170,146 @@ class DesktopDownloadService implements DownloadService {
     void Function(String id, MiraDownloadTask Function(MiraDownloadTask) fn)
         onUpdate,
   ) async {
-    onUpdate(taskId, (t) => t.copyWith(
-          status: MiraDownloadStatus.pending,
-          progress: 0,
-          clearError: true,
-        ));
-    unawaited(_stream(taskId, url, savePath));
+    _urlByTaskId[taskId] = url;
+    _pathByTaskId[taskId] = savePath;
+    onUpdate(
+      taskId,
+      (t) => t.copyWith(
+        status: MiraDownloadStatus.pending,
+        progress: 0,
+        clearError: true,
+      ),
+    );
+    _active[taskId] = _DesktopTransfer(url: url, savePath: savePath);
+    unawaited(_runDownload(taskId));
   }
 
-  // ── Private: HttpClient streaming ─────────────────────────────────────────
-
-  Future<void> _stream(
-    String taskId,
-    String url,
-    String savePath, {
+  Future<void> _runDownload(
+    String taskId, {
     int redirectCount = 0,
   }) async {
     const maxRedirects = 5;
+    final t = _active[taskId];
+    if (t == null) return;
+
     try {
+      if (t.cancelRequested) {
+        await _abortTransfer(taskId, t, deletePartial: true);
+        onTaskUpdated(
+          taskId,
+          (x) => x.copyWith(
+            status: MiraDownloadStatus.failed,
+            progress: 0,
+            error: 'Cancelled',
+          ),
+        );
+        return;
+      }
+
       onTaskUpdated(
-          taskId, (t) => t.copyWith(status: MiraDownloadStatus.running));
+        taskId,
+        (x) => x.copyWith(status: MiraDownloadStatus.running),
+      );
 
       final client = HttpClient();
+      t.client = client;
 
-      final request = await client.getUrl(Uri.parse(url));
-      request.followRedirects = false; // handle manually for progress accuracy
+      final request = await client.getUrl(Uri.parse(t.url));
+      request.followRedirects = false;
       request.headers.set(
-          HttpHeaders.userAgentHeader, 'Mozilla/5.0 (compatible; MIRABrowser/1.0)');
+        HttpHeaders.userAgentHeader,
+        'Mozilla/5.0 (compatible; MIRABrowser/1.0)',
+      );
 
       final response = await request.close();
 
-      // Manual redirect following
+      if (t.cancelRequested) {
+        await _abortTransfer(taskId, t, deletePartial: true);
+        onTaskUpdated(
+          taskId,
+          (x) => x.copyWith(
+            status: MiraDownloadStatus.failed,
+            progress: 0,
+            error: 'Cancelled',
+          ),
+        );
+        return;
+      }
+
       if (response.isRedirect && redirectCount < maxRedirects) {
         final location = response.headers.value(HttpHeaders.locationHeader);
         client.close();
+        _removeActive(taskId);
         if (location != null) {
-          await _stream(taskId, location, savePath,
-              redirectCount: redirectCount + 1);
-          return;
+          _urlByTaskId[taskId] = location;
+          _active[taskId] =
+              _DesktopTransfer(url: location, savePath: t.savePath);
+          unawaited(_runDownload(taskId, redirectCount: redirectCount + 1));
         }
+        return;
       }
 
-      final totalBytes = response.contentLength; // -1 when unknown
+      final totalBytes = response.contentLength;
       int receivedBytes = 0;
 
-      final file = File(savePath);
+      final file = File(t.savePath);
       await file.create(recursive: true);
       final sink = file.openWrite();
+      t.sink = sink;
 
       await for (final chunk in response) {
+        if (t.cancelRequested) {
+          await _abortTransfer(taskId, t, deletePartial: true);
+          onTaskUpdated(
+            taskId,
+            (x) => x.copyWith(
+              status: MiraDownloadStatus.failed,
+              progress: 0,
+              error: 'Cancelled',
+            ),
+          );
+          return;
+        }
+        if (t.pauseRequested) {
+          await _abortTransfer(taskId, t, deletePartial: false);
+          onTaskUpdated(
+            taskId,
+            (x) => x.copyWith(status: MiraDownloadStatus.paused),
+          );
+          return;
+        }
+
         sink.add(chunk);
         receivedBytes += chunk.length;
         if (totalBytes > 0) {
           final pct =
               ((receivedBytes / totalBytes) * 100).round().clamp(0, 100);
-          onTaskUpdated(taskId, (t) => t.copyWith(progress: pct));
+          onTaskUpdated(taskId, (x) => x.copyWith(progress: pct));
         }
       }
 
       await sink.flush();
       await sink.close();
       client.close();
+      _removeActive(taskId);
 
-      onTaskUpdated(taskId, (t) => t.copyWith(
-            status: MiraDownloadStatus.completed,
-            progress: 100,
-          ));
-      debugPrint('MIRA_DOWNLOAD: Complete -> $savePath');
+      onTaskUpdated(
+        taskId,
+        (x) => x.copyWith(
+          status: MiraDownloadStatus.completed,
+          progress: 100,
+        ),
+      );
+      debugPrint('MIRA_DOWNLOAD: Complete -> ${t.savePath}');
     } catch (e) {
-      onTaskUpdated(taskId, (t) => t.copyWith(
-            status: MiraDownloadStatus.failed,
-            error: e.toString(),
-          ));
+      _removeActive(taskId);
+      onTaskUpdated(
+        taskId,
+        (x) => x.copyWith(
+          status: MiraDownloadStatus.failed,
+          error: e.toString(),
+        ),
+      );
       debugPrint('MIRA_DOWNLOAD: Error -> $e');
     }
   }

@@ -5,7 +5,9 @@ import 'package:mira/core/services/proxy_service.dart';
 import 'package:mira/shell/proxy/proxy_service_ios.dart';
 import 'package:mira/shell/proxy/proxy_service_stub.dart';
 
-/// Provider for the platform-appropriate ProxyService.
+/// In-app proxy: [IOSProxyService] (local Shelf gateway) on iOS; [StubProxyService]
+/// elsewhere. Use [ProxyService.runtimeBackend] or [ProxyRuntimeBackend] instead
+/// of scattering `Platform.isIOS` checks when deciding whether URLs are rewritten.
 final proxyServiceProvider = Provider<ProxyService>((ref) {
   if (!kIsWeb && Platform.isIOS) {
     return IOSProxyService();

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // For Haptics
 import 'package:google_fonts/google_fonts.dart';
+import 'package:mira/core/entities/theme_entity.dart';
 import 'package:mira/core/services/update_service.dart';
 import 'package:mira/pages/update_screen.dart';
 import 'dart:async';
@@ -105,7 +106,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     const Color brandColor = Colors.greenAccent; 
 
     return Scaffold(
-      backgroundColor: Colors.black, // The Void
+      backgroundColor: kMiraMatteBlack,
       body: Center(
         child: AnimatedBuilder(
           animation: _controller,

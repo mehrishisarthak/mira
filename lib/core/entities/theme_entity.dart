@@ -1,5 +1,17 @@
 import 'package:flutter/material.dart';
 
+/// Matte black (#282828) — used instead of pure black for large surfaces to reduce eye strain.
+const Color kMiraMatteBlack = Color(0xFF282828);
+
+/// Dark theme surface slightly above [kMiraMatteBlack] for elevation separation.
+const Color kMiraMatteSurface = Color(0xFF323232);
+
+/// Light-mode primary text (same ink as matte black — consistent with dark chrome).
+const Color kMiraInkPrimary = kMiraMatteBlack;
+
+/// Light-mode secondary / hint / de-emphasized text.
+final Color kMiraInkMuted = kMiraMatteBlack.withValues(alpha: 0.55);
+
 enum MiraStyle {
   tacticalGreen, 
   cyberYellow,   
@@ -21,8 +33,8 @@ class MiraTheme {
     required this.mode,
     required this.primaryColor,
     required this.accentColor,
-    this.backgroundColor = const Color(0xFF121212),
-    this.surfaceColor = const Color(0xFF1E1E1E),
+    this.backgroundColor = kMiraMatteBlack,
+    this.surfaceColor = kMiraMatteSurface,
   });
 
   factory MiraTheme.fromStyle(MiraStyle style, ThemeMode mode) {
@@ -40,8 +52,8 @@ class MiraTheme {
       mode: mode,
       primaryColor: primary,
       accentColor: primary,
-      backgroundColor: mode == ThemeMode.light ? Colors.white : const Color(0xFF121212),
-      surfaceColor: mode == ThemeMode.light ? Colors.grey[100]! : const Color(0xFF1E1E1E),
+      backgroundColor: mode == ThemeMode.light ? Colors.white : kMiraMatteBlack,
+      surfaceColor: mode == ThemeMode.light ? Colors.grey[100]! : kMiraMatteSurface,
     );
   }
 }

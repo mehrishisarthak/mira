@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:mira/core/entities/theme_entity.dart';
 import 'package:mira/core/services/update_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -22,7 +23,7 @@ class UpdateScreen extends StatelessWidget {
         : 'A new version of Mira (${result.latestVersion}) is available. Update now for the latest security features.';
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: kMiraMatteBlack,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),

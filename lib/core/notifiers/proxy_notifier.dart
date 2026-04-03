@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mira/core/services/proxy_service.dart';
@@ -24,10 +23,10 @@ class ProxyGatewayNotifier extends StateNotifier<bool> {
   }
 
   Future<void> _syncGateway(SecurityState security) async {
-    // We only need the gateway on iOS (or if we want a universal solution)
-    final bool shouldRun = security.isProxyEnabled && 
-                           security.proxyUrl.isNotEmpty && 
-                           !kIsWeb && Platform.isIOS;
+    final bool shouldRun = security.isProxyEnabled &&
+        security.proxyUrl.isNotEmpty &&
+        !kIsWeb &&
+        _service.runtimeBackend == ProxyRuntimeBackend.iosLocalGateway;
 
     if (shouldRun && !_service.isRunning) {
       await _service.start(security.proxyUrl);

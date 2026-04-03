@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mira/core/entities/theme_entity.dart';
 import 'package:mira/core/notifiers/theme_notifier.dart';
 
 class CustomErrorScreen extends ConsumerWidget {
@@ -18,7 +19,7 @@ class CustomErrorScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final appTheme = ref.watch(themeProvider);
     final isLightMode = appTheme.mode == ThemeMode.light;
-    final contentColor = isLightMode ? Colors.black87 : Colors.white;
+    final contentColor = isLightMode ? kMiraInkPrimary : Colors.white;
 
     final errorInfo = _getErrorInfo(error);
 

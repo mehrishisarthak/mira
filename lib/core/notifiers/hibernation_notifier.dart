@@ -1,11 +1,10 @@
 import 'dart:collection';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mira/core/config/hibernation_limits.dart';
 
 /// Manages which tabs are currently 'awake' in memory.
 /// This decouples LRU logic from the BrowserView UI.
 class HibernationNotifier extends StateNotifier<Set<String>> {
-  static const int _maxAliveTabs = 3;
-  
   // Use a LinkedHashSet to track order (oldest first)
   final LinkedHashSet<String> _mruSet = LinkedHashSet<String>();
 
@@ -15,7 +14,8 @@ class HibernationNotifier extends StateNotifier<Set<String>> {
     _mruSet.remove(tabId);
     _mruSet.add(tabId);
 
-    while (_mruSet.length > _maxAliveTabs) {
+    final cap = maxAliveWebViewTabs();
+    while (_mruSet.length > cap) {
       _mruSet.remove(_mruSet.first);
     }
 

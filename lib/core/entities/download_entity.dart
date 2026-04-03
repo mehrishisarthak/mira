@@ -3,7 +3,7 @@ import 'package:path/path.dart' as p;
 
 // ── UNIFIED MODEL ─────────────────────────────────────────────────────────────
 
-enum MiraDownloadStatus { pending, running, completed, failed }
+enum MiraDownloadStatus { pending, running, completed, failed, paused }
 
 class MiraDownloadTask {
   final String id;
@@ -53,6 +53,8 @@ class MiraDownloadTask {
     } else if (task.status == DownloadTaskStatus.running ||
         task.status == DownloadTaskStatus.enqueued) {
       status = MiraDownloadStatus.running;
+    } else if (task.status == DownloadTaskStatus.paused) {
+      status = MiraDownloadStatus.paused;
     } else {
       status = MiraDownloadStatus.pending;
     }

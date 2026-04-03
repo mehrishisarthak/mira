@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,8 +20,7 @@ import 'package:mira/pages/book_marks_screen.dart';
 import 'package:mira/pages/downloads_screen.dart';
 import 'package:mira/pages/browser_sheet.dart';
 
-// Access global providers (webViewControllerProvider, webErrorProvider)
-import 'package:mira/pages/mainscreen.dart';
+import 'package:mira/pages/browser_chrome_providers.dart';
 
 /// Full-page replacement for the old end-drawer.
 /// Opened via Navigator.push so it sits on the back stack — no swipe-to-open
@@ -34,7 +35,7 @@ class MiraMenuPage extends ConsumerWidget {
     final theme = ref.watch(themeProvider);
 
     final isLight = theme.mode == ThemeMode.light;
-    final appTextColor = isLight ? Colors.black87 : Colors.white;
+    final appTextColor = isLight ? kMiraInkPrimary : Colors.white;
     final primaryAccent = isGhost ? Colors.redAccent : theme.primaryColor;
 
     return Scaffold(
@@ -130,7 +131,12 @@ class MiraMenuPage extends ConsumerWidget {
               title: Text('Copy URL', style: TextStyle(color: appTextColor)),
               onTap: () {
                 final url = ref.read(currentActiveTabProvider).url;
-                if (url.isEmpty) return;
+                if (url.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('No page loaded yet')),
+                  );
+                  return;
+                }
                 Clipboard.setData(ClipboardData(text: url));
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('URL copied to clipboard')),
@@ -145,10 +151,19 @@ class MiraMenuPage extends ConsumerWidget {
                   Text('Open Externally', style: TextStyle(color: appTextColor)),
               onTap: () async {
                 final url = ref.read(currentActiveTabProvider).url;
-                if (url.isEmpty) return;
+                if (url.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('No page loaded yet')),
+                  );
+                  return;
+                }
                 final uri = Uri.tryParse(url);
                 if (uri != null && await canLaunchUrl(uri)) {
                   await launchUrl(uri, mode: LaunchMode.externalApplication);
+                } else if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Could not open this URL')),
+                  );
                 }
               },
             ),
@@ -158,11 +173,24 @@ class MiraMenuPage extends ConsumerWidget {
                   Icon(Icons.save_alt, color: appTextColor.withAlpha(179)),
               title: Text('Save Page', style: TextStyle(color: appTextColor)),
               onTap: () async {
-                final controller = ref.read(webViewControllerProvider);
-                if (controller == null) return;
+                final controller = ref.read(browserChromeProvider).controller;
+                if (controller == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('No page loaded yet')),
+                  );
+                  return;
+                }
                 final url = ref.read(currentActiveTabProvider).url;
                 final html = await controller.getHtml();
-                if (html == null) return;
+                if (html == null) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text('Could not read page content')),
+                    );
+                  }
+                  return;
+                }
                 final host =
                     (Uri.tryParse(url)?.host ?? 'page').replaceAll('.', '_');
                 final filename =
@@ -244,10 +272,10 @@ class MiraMenuPage extends ConsumerWidget {
                   await cookieManager.deleteAllCookies();
 
                   ref.read(historyProvider.notifier).clearHistory();
-                  ref.read(webViewControllerProvider.notifier).state = null;
+                  ref.read(browserChromeProvider.notifier).resetSessionChrome();
                   ref.read(tabsProvider.notifier).nuke();
                   ref.read(ghostTabsProvider.notifier).nuke();
-                  ref.read(webErrorProvider.notifier).state = null;
+                  ref.read(browserChromeProvider.notifier).setLoadingProgress(100);
 
                   if (context.mounted) {
                     Navigator.pop(context);
@@ -301,27 +329,98 @@ class MiraMenuPage extends ConsumerWidget {
             ),
 
             // ── PROXY ──────────────────────────────────────────────────────
-            SwitchListTile(
-              title: Text("Network Proxy",
-                  style: TextStyle(color: appTextColor)),
-              secondary: Icon(Icons.router,
-                  color: securityState.isProxyEnabled
-                      ? Colors.orangeAccent
-                      : appTextColor.withAlpha(128)),
-              subtitle: Text(
-                securityState.proxyUrl.isEmpty
-                    ? "No Proxy Set"
-                    : securityState.proxyUrl,
-                style: TextStyle(
-                    color: appTextColor.withAlpha(128), fontSize: 11),
-              ),
-              value: securityState.isProxyEnabled,
-              activeThumbColor: Colors.orangeAccent,
-              onChanged: (val) =>
-                  ref.read(securityProvider.notifier).toggleProxy(val),
+            Builder(
+              builder: (context) {
+                final isIos =
+                    !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+                final isAndroid =
+                    !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+                final proxyUiAvailable = isIos || isAndroid;
+                String capability;
+                if (kIsWeb) {
+                  capability =
+                      'Not available in the web build. Use your browser or OS network settings.';
+                } else if (isIos) {
+                  capability =
+                      'Uses an on-device gateway so pages can load through your HTTP proxy.';
+                } else if (isAndroid) {
+                  capability =
+                      'Uses Android WebView proxy settings (your HTTP/HTTPS proxy URL).';
+                } else {
+                  capability =
+                      'Not built into Mira on desktop — use a system VPN or OS proxy.';
+                }
+
+                return SwitchListTile(
+                  title: Text("Network Proxy",
+                      style: TextStyle(color: appTextColor)),
+                  secondary: Icon(Icons.router,
+                      color: securityState.isProxyEnabled
+                          ? Colors.orangeAccent
+                          : appTextColor.withAlpha(128)),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        capability,
+                        style: TextStyle(
+                          color: appTextColor.withAlpha(140),
+                          fontSize: 11,
+                          height: 1.25,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        securityState.proxyUrl.isEmpty
+                            ? (proxyUiAvailable
+                                ? "No proxy URL saved"
+                                : "—")
+                            : securityState.proxyUrl,
+                        style: TextStyle(
+                          color: appTextColor.withAlpha(180),
+                          fontSize: 11,
+                          fontFamily: 'monospace',
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (!proxyUiAvailable &&
+                          securityState.isProxyEnabled) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          'This setting is stored but has no effect here. Turn it off or use mobile.',
+                          style: TextStyle(
+                            color: Colors.orangeAccent.withAlpha(220),
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  value: securityState.isProxyEnabled,
+                  activeThumbColor: Colors.orangeAccent,
+                  onChanged: proxyUiAvailable
+                      ? (val) => ref
+                          .read(securityProvider.notifier)
+                          .toggleProxy(val)
+                      : securityState.isProxyEnabled
+                          ? (val) {
+                              if (!val) {
+                                ref
+                                    .read(securityProvider.notifier)
+                                    .toggleProxy(false);
+                              }
+                            }
+                          : null,
+                );
+              },
             ),
 
-            if (securityState.isProxyEnabled)
+            if (securityState.isProxyEnabled &&
+                !kIsWeb &&
+                (defaultTargetPlatform == TargetPlatform.iOS ||
+                    defaultTargetPlatform == TargetPlatform.android))
               ListTile(
                 dense: true,
                 contentPadding:
