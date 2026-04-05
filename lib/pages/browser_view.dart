@@ -36,9 +36,24 @@ class BrowserView extends ConsumerStatefulWidget {
 }
 
 class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingObserver {
+  static final UnmodifiableListView<UserScript> _kAdBlockUserScripts =
+      UnmodifiableListView<UserScript>(AdBlockServiceWebview.initialUserScripts);
+
   final Map<String, InAppWebViewController> _controllers = {};
   final Map<String, FindInteractionController> _findControllers = {};
   final Map<String, int> _lastProgressByTabId = {};
+  /// Stable [URLRequest] / settings objects for [InAppWebView]. New instances
+  /// every build make flutter_inappwebview_windows dispose/recreate WebView2.
+  final Map<String, URLRequest> _memoUrlRequestByTabId = {};
+  final Map<String, String> _memoEffectiveUrlByTabId = {};
+  String? _cachedWebSettingsSignature;
+  InAppWebViewSettings? _cachedWebSettings;
+  ContextMenu? _cachedDesktopContextMenu;
+  /// Stable closure so Windows WebView2 is not torn down when [build] runs again.
+  Future<WebResourceResponse?> Function(
+    InAppWebViewController controller,
+    WebResourceRequest request,
+  )? _stableShouldInterceptRequest;
   Timer? _skeletonDismissTimer;
   /// Set in [onWebViewCreated] for the active tab so we do not mark load 100% for a new mount.
   String? _webviewJustCreatedForTabId;
@@ -111,10 +126,66 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
         type == InAppWebViewHitTestResultType.SRC_IMAGE_ANCHOR_TYPE;
   }
 
+  /// Same [URLRequest] instance across rebuilds while the tab's effective URL is
+  /// unchanged (or after mount — frozen) so Windows WebView2 is not torn down.
+  URLRequest _stableInitialUrlRequest(String tabId, String effectiveUrl) {
+    if (_controllers.containsKey(tabId)) {
+      final memo = _memoUrlRequestByTabId[tabId];
+      if (memo != null) return memo;
+      final r = URLRequest(url: WebUri(effectiveUrl));
+      _memoUrlRequestByTabId[tabId] = r;
+      _memoEffectiveUrlByTabId[tabId] = effectiveUrl;
+      return r;
+    }
+    if (_memoEffectiveUrlByTabId[tabId] == effectiveUrl &&
+        _memoUrlRequestByTabId.containsKey(tabId)) {
+      return _memoUrlRequestByTabId[tabId]!;
+    }
+    _memoEffectiveUrlByTabId[tabId] = effectiveUrl;
+    final req = URLRequest(url: WebUri(effectiveUrl));
+    _memoUrlRequestByTabId[tabId] = req;
+    return req;
+  }
+
+  InAppWebViewSettings _stableWebSettings({
+    required bool isGhost,
+    required SecurityState securityState,
+    required MiraTheme theme,
+    required ForceDark forceDarkSetting,
+  }) {
+    final sig =
+        '$isGhost|${securityState.isIncognito}|${securityState.isAdBlockEnabled}|'
+        '${securityState.isDesktopMode}|${theme.mode}|$forceDarkSetting';
+    if (_cachedWebSettingsSignature == sig && _cachedWebSettings != null) {
+      return _cachedWebSettings!;
+    }
+    _cachedWebSettingsSignature = sig;
+    _cachedWebSettings = InAppWebViewSettings(
+      incognito: isGhost || securityState.isIncognito,
+      clearCache: isGhost || securityState.isIncognito,
+      cacheMode: CacheMode.LOAD_DEFAULT,
+      contentBlockers: securityState.isAdBlockEnabled
+          ? AdBlockServiceWebview.contentBlockers
+          : [],
+      forceDark: forceDarkSetting,
+      algorithmicDarkeningAllowed: (theme.mode == ThemeMode.dark),
+      useHybridComposition: !kIsWeb && Platform.isAndroid,
+      hardwareAcceleration: true,
+      transparentBackground: false,
+      userAgent: securityState.isDesktopMode
+          ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+          : null,
+      preferredContentMode: securityState.isDesktopMode
+          ? UserPreferredContentMode.DESKTOP
+          : UserPreferredContentMode.MOBILE,
+    );
+    return _cachedWebSettings!;
+  }
+
   /// Desktop / WebView2: right-click raises [ContextMenu.onCreateContextMenu].
   ContextMenu? _desktopLinkContextMenu() {
     if (kIsWeb || Platform.isAndroid || Platform.isIOS) return null;
-    return ContextMenu(
+    return _cachedDesktopContextMenu ??= ContextMenu(
       settings: ContextMenuSettings(
         hideDefaultSystemContextMenuItems: false,
       ),
@@ -140,7 +211,14 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+    final isDesktop =
+        !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
+    // Windows fires [inactive] often (window focus, menus). Pausing every
+    // WebView2 surface there causes jank and stuck media; only pause on true
+    // background ([paused]).
+    final shouldPauseAll = state == AppLifecycleState.paused ||
+        (!isDesktop && state == AppLifecycleState.inactive);
+    if (shouldPauseAll) {
       for (var controller in _controllers.values) {
         try {
           controller.pause();
@@ -153,11 +231,9 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
       final tabsState = isGhost ? ref.read(ghostTabsProvider) : ref.read(tabsProvider);
       if (tabsState.tabs.isNotEmpty) {
         final activeTabId = tabsState.tabs[tabsState.activeIndex].id;
-        try {
-          _controllers[activeTabId]?.resume();
-        } catch (e) {
-          debugPrint("Safe Resume Fail: $e");
-        }
+        // After minimize we paused *all* controllers; restore pause/resume
+        // parity for every awake tab (not only the active one).
+        _updateControllersPauseState(activeTabId);
       }
     }
   }
@@ -182,6 +258,8 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
         _controllers.keys.where((id) => !currentTabIds.contains(id)).toList();
     for (final id in removedIds) {
       _lastProgressByTabId.remove(id);
+      _memoUrlRequestByTabId.remove(id);
+      _memoEffectiveUrlByTabId.remove(id);
       try {
         _findControllers[id]?.dispose();
       } catch (_) {}
@@ -204,11 +282,13 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
     final settings = InAppWebViewSettings(
       incognito: isGhost || securityState.isIncognito,
       clearCache: isGhost || securityState.isIncognito,
+      cacheMode: CacheMode.LOAD_DEFAULT,
       contentBlockers:
           securityState.isAdBlockEnabled ? AdBlockServiceWebview.contentBlockers : [],
       forceDark: forceDarkSetting,
       algorithmicDarkeningAllowed: (theme.mode == ThemeMode.dark),
       useHybridComposition: !kIsWeb && Platform.isAndroid,
+      hardwareAcceleration: true,
       transparentBackground: false,
       userAgent: securityState.isDesktopMode
           ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -293,8 +373,11 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
 
   void _showDesktopLinkPopup(
       String linkUrl, dynamic theme, bool isGhost, Color textColor) {
-    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
-    final position = _lastPointerPosition ?? overlay.localToGlobal(Offset.zero);
+    final overlayBox =
+        Overlay.maybeOf(context)?.context.findRenderObject() as RenderBox?;
+    final position = _lastPointerPosition ??
+        overlayBox?.localToGlobal(Offset.zero) ??
+        Offset.zero;
 
     showMenu<String>(
       context: context,
@@ -562,6 +645,8 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
       for (final id in prev.difference(next)) {
         _controllers.remove(id);
         _lastProgressByTabId.remove(id);
+        _memoUrlRequestByTabId.remove(id);
+        _memoEffectiveUrlByTabId.remove(id);
         try {
           _findControllers[id]?.dispose();
         } catch (_) {}
@@ -664,38 +749,27 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
 
             content = InAppWebView(
               key: ObjectKey(tab.id),
-              initialUrlRequest: URLRequest(url: WebUri(_getEffectiveUrl(tab.url, securityState))),
+              initialUrlRequest: _stableInitialUrlRequest(
+                tab.id,
+                _getEffectiveUrl(tab.url, securityState),
+              ),
               contextMenu: _desktopLinkContextMenu(),
               findInteractionController: findCtrl,
               initialUserScripts: securityState.isAdBlockEnabled
-                  ? UnmodifiableListView<UserScript>(AdBlockServiceWebview.initialUserScripts)
+                  ? _kAdBlockUserScripts
                   : null,
-                  
-              initialSettings: InAppWebViewSettings(
-                incognito: isGhost || securityState.isIncognito, 
-                clearCache: isGhost || securityState.isIncognito,
-                cacheMode: CacheMode.LOAD_DEFAULT, 
-                
-                contentBlockers: securityState.isAdBlockEnabled ? AdBlockServiceWebview.contentBlockers : [],
-                forceDark: forceDarkSetting,
-                algorithmicDarkeningAllowed: (theme.mode == ThemeMode.dark),
-                useHybridComposition: !kIsWeb && Platform.isAndroid,
-                hardwareAcceleration: true,
-                transparentBackground: false,
-                userAgent: securityState.isDesktopMode 
-                    ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" 
-                    : null,
-                preferredContentMode: securityState.isDesktopMode 
-                    ? UserPreferredContentMode.DESKTOP 
-                    : UserPreferredContentMode.MOBILE,
+              initialSettings: _stableWebSettings(
+                isGhost: isGhost,
+                securityState: securityState,
+                theme: theme,
+                forceDarkSetting: forceDarkSetting,
               ),
-              shouldInterceptRequest: (controller, request) async {
-                // Read at request time so the callback always reflects the
-                // current toggle state, even though build() no longer re-runs
-                // on every securityProvider change.
+              shouldInterceptRequest: _stableShouldInterceptRequest ??=
+                  (controller, request) async {
                 if (!ref.read(securityProvider).isAdBlockEnabled) return null;
                 final host = request.url.host;
-                if (AdBlockServiceWebview.blockedDomains.any((domain) => host.contains(domain))) {
+                if (AdBlockServiceWebview.blockedDomains
+                    .any((domain) => host.contains(domain))) {
                   return WebResourceResponse(
                     contentType: 'text/plain',
                     data: Uint8List(0),
