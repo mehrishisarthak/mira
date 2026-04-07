@@ -670,9 +670,18 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
                       if (signal is PointerScrollEvent) {
                         final c = _desktopTabScrollController;
                         if (c != null && c.hasClients) {
-                          final next = (c.offset + signal.scrollDelta.dy)
+                          // Support both vertical (dy) and horizontal (dx) scroll signals
+                          // for better trackpad support.
+                          final delta = signal.scrollDelta.dx != 0 
+                              ? signal.scrollDelta.dx 
+                              : signal.scrollDelta.dy;
+                          final next = (c.offset + delta)
                               .clamp(0.0, c.position.maxScrollExtent);
-                          c.jumpTo(next);
+                          c.animateTo(
+                            next,
+                            duration: const Duration(milliseconds: 150),
+                            curve: Curves.easeOutCubic,
+                          );
                         }
                       }
                     },
