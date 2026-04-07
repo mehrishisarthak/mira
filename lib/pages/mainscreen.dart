@@ -1,5 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:mira/shell/desktop/desktop_windowing.dart';
 import 'package:flutter/services.dart'; 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -52,7 +53,21 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
         (Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
       _desktopTabScrollController = ScrollController();
       HardwareKeyboard.instance.addHandler(_handleDesktopHotkey);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _syncDesktopWindowTitle(ref.read(currentActiveTabProvider));
+      });
     }
+  }
+
+  Future<void> _syncDesktopWindowTitle(BrowserTab tab) async {
+    if (kIsWeb ||
+        !(Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
+      return;
+    }
+    final raw = tab.title.trim();
+    final label = raw.isEmpty ? 'Mira' : raw;
+    await desktopSetWindowTitle('$label — Mira');
   }
 
   @override
@@ -311,6 +326,13 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     final ghostTabsList = ref.watch(ghostTabsProvider).tabs;
     final tabCount = normalTabsList.length + ghostTabsList.length;
     final double progress = ref.watch(browserChromeProvider).loadingProgress / 100;
+
+    if (!kIsWeb &&
+        (Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
+      ref.listen<BrowserTab>(currentActiveTabProvider, (prev, next) {
+        _syncDesktopWindowTitle(next);
+      });
+    }
     
     final bookmarks = ref.watch(bookmarksProvider);
     final isBookmarked = bookmarks.any((b) => b.url == activeUrl);
@@ -536,63 +558,76 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
         ? Border.all(color: Colors.redAccent.withValues(alpha: 0.35))
         : null;
 
-    return GestureDetector(
-      onTap: () {
-        ref.read(isGhostModeProvider.notifier).state = tabIsGhost;
+    return Listener(
+      behavior: HitTestBehavior.deferToChild,
+      onPointerDown: (PointerDownEvent e) {
+        if (e.kind != PointerDeviceKind.mouse) return;
+        if ((e.buttons & kMiddleMouseButton) == 0) return;
+        if (!showClose) return;
         if (tabIsGhost) {
-          ref.read(ghostTabsProvider.notifier).switchTab(stackIndex);
+          ref.read(ghostTabsProvider.notifier).closeTab(tab.id);
         } else {
-          ref.read(tabsProvider.notifier).switchTab(stackIndex);
+          ref.read(tabsProvider.notifier).closeTab(tab.id);
         }
       },
-      child: Container(
-        width: 180,
-        margin: const EdgeInsets.only(right: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          color: isActive ? tabAccent.withValues(alpha: 0.22) : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
-          border: isActive
-              ? Border.all(color: tabAccent.withValues(alpha: 0.65), width: 1.5)
-              : idleBorder,
-        ),
-        child: Row(
-          children: [
-            if (tabIsGhost)
-              Padding(
-                padding: const EdgeInsets.only(right: 6),
-                child: Icon(
-                  Icons.privacy_tip_outlined,
-                  size: 14,
-                  color: Colors.redAccent.withValues(alpha: isActive ? 1 : 0.65),
+      child: GestureDetector(
+        onTap: () {
+          ref.read(isGhostModeProvider.notifier).state = tabIsGhost;
+          if (tabIsGhost) {
+            ref.read(ghostTabsProvider.notifier).switchTab(stackIndex);
+          } else {
+            ref.read(tabsProvider.notifier).switchTab(stackIndex);
+          }
+        },
+        child: Container(
+          width: 180,
+          margin: const EdgeInsets.only(right: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: isActive ? tabAccent.withValues(alpha: 0.22) : Colors.transparent,
+            borderRadius: BorderRadius.circular(6),
+            border: isActive
+                ? Border.all(color: tabAccent.withValues(alpha: 0.65), width: 1.5)
+                : idleBorder,
+          ),
+          child: Row(
+            children: [
+              if (tabIsGhost)
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: Icon(
+                    Icons.privacy_tip_outlined,
+                    size: 14,
+                    color: Colors.redAccent.withValues(alpha: isActive ? 1 : 0.65),
+                  ),
+                ),
+              Expanded(
+                child: Text(
+                  tab.title.isEmpty
+                      ? (tabIsGhost ? "Ghost Tab" : "New Tab")
+                      : tab.title,
+                  style: GoogleFonts.jetBrainsMono(
+                    color: contentColor,
+                    fontSize: 12,
+                    fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-            Expanded(
-              child: Text(
-                tab.title.isEmpty
-                    ? (tabIsGhost ? "Ghost Tab" : "New Tab")
-                    : tab.title,
-                style: GoogleFonts.jetBrainsMono(
-                  color: contentColor,
-                  fontSize: 12,
-                  fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+              if (showClose)
+                GestureDetector(
+                  onTap: () {
+                    if (tabIsGhost) {
+                      ref.read(ghostTabsProvider.notifier).closeTab(tab.id);
+                    } else {
+                      ref.read(tabsProvider.notifier).closeTab(tab.id);
+                    }
+                  },
+                  child: Icon(Icons.close,
+                      size: 14, color: contentColor.withValues(alpha: 0.5)),
                 ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            if (showClose)
-              GestureDetector(
-                onTap: () {
-                  if (tabIsGhost) {
-                    ref.read(ghostTabsProvider.notifier).closeTab(tab.id);
-                  } else {
-                    ref.read(tabsProvider.notifier).closeTab(tab.id);
-                  }
-                },
-                child: Icon(Icons.close,
-                    size: 14, color: contentColor.withValues(alpha: 0.5)),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -614,46 +649,6 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     double progress,
     bool hasWebView,
   ) {
-    final stripChildren = <Widget>[];
-    for (var i = 0; i < normalTabs.length; i++) {
-      stripChildren.add(
-        _buildDesktopTabChip(
-          tab: normalTabs[i],
-          stackIndex: i,
-          tabIsGhost: false,
-          tabAccent: themePrimary,
-          showClose: normalTabs.length > 1,
-          activeTab: activeTab,
-          sessionIsGhost: isGhost,
-          contentColor: contentColor,
-        ),
-      );
-    }
-    if (normalTabs.isNotEmpty && ghostTabs.isNotEmpty) {
-      stripChildren.add(
-        Container(
-          margin: const EdgeInsets.symmetric(horizontal: 6),
-          width: 1,
-          height: 22,
-          color: contentColor.withValues(alpha: 0.2),
-        ),
-      );
-    }
-    for (var i = 0; i < ghostTabs.length; i++) {
-      stripChildren.add(
-        _buildDesktopTabChip(
-          tab: ghostTabs[i],
-          stackIndex: i,
-          tabIsGhost: true,
-          tabAccent: Colors.redAccent,
-          showClose: ghostTabs.length > 1,
-          activeTab: activeTab,
-          sessionIsGhost: isGhost,
-          contentColor: contentColor,
-        ),
-      );
-    }
-
     return Container(
       color: bgColor,
       child: Column(
@@ -685,10 +680,78 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
                         }
                       }
                     },
-                    child: ListView(
+                    child: SingleChildScrollView(
                       controller: _desktopTabScrollController,
                       scrollDirection: Axis.horizontal,
-                      children: stripChildren,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (normalTabs.isNotEmpty)
+                            ReorderableListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              buildDefaultDragHandles: true,
+                              itemExtent: 212,
+                              itemCount: normalTabs.length,
+                              onReorder: (oldIndex, newIndex) => ref
+                                  .read(tabsProvider.notifier)
+                                  .reorderTab(oldIndex, newIndex),
+                              itemBuilder: (context, i) {
+                                final tab = normalTabs[i];
+                                return KeyedSubtree(
+                                  key: ValueKey<String>('n-${tab.id}'),
+                                  child: _buildDesktopTabChip(
+                                    tab: tab,
+                                    stackIndex: i,
+                                    tabIsGhost: false,
+                                    tabAccent: themePrimary,
+                                    showClose: normalTabs.length > 1,
+                                    activeTab: activeTab,
+                                    sessionIsGhost: isGhost,
+                                    contentColor: contentColor,
+                                  ),
+                                );
+                              },
+                            ),
+                          if (normalTabs.isNotEmpty && ghostTabs.isNotEmpty)
+                            Container(
+                              margin:
+                                  const EdgeInsets.symmetric(horizontal: 6),
+                              width: 1,
+                              height: 22,
+                              color: contentColor.withValues(alpha: 0.2),
+                            ),
+                          if (ghostTabs.isNotEmpty)
+                            ReorderableListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              buildDefaultDragHandles: true,
+                              itemExtent: 212,
+                              itemCount: ghostTabs.length,
+                              onReorder: (oldIndex, newIndex) => ref
+                                  .read(ghostTabsProvider.notifier)
+                                  .reorderTab(oldIndex, newIndex),
+                              itemBuilder: (context, i) {
+                                final tab = ghostTabs[i];
+                                return KeyedSubtree(
+                                  key: ValueKey<String>('g-${tab.id}'),
+                                  child: _buildDesktopTabChip(
+                                    tab: tab,
+                                    stackIndex: i,
+                                    tabIsGhost: true,
+                                    tabAccent: Colors.redAccent,
+                                    showClose: ghostTabs.length > 1,
+                                    activeTab: activeTab,
+                                    sessionIsGhost: isGhost,
+                                    contentColor: contentColor,
+                                  ),
+                                );
+                              },
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -839,6 +902,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     final settings = InAppWebViewSettings(
       incognito: isGhost || securityState.isIncognito,
       clearCache: isGhost || securityState.isIncognito,
+      useOnDownloadStart: true,
       contentBlockers: securityState.isAdBlockEnabled ? AdBlockServiceWebview.contentBlockers : [],
       forceDark: forceDarkSetting,
       algorithmicDarkeningAllowed: (theme.mode == ThemeMode.dark),

@@ -68,4 +68,27 @@ class MiraDownloadTask {
       progress: task.progress,
     );
   }
+
+  /// Desktop JSON persistence (see [DownloadsNotifier]).
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'url': url,
+        'filename': filename,
+        'savePath': savePath,
+        'status': status.name,
+        'progress': progress,
+        'error': error,
+      };
+
+  static MiraDownloadTask fromJson(Map<String, dynamic> m) {
+    return MiraDownloadTask(
+      id: m['id'] as String,
+      url: m['url'] as String? ?? '',
+      filename: m['filename'] as String? ?? 'download',
+      savePath: m['savePath'] as String? ?? '',
+      status: MiraDownloadStatus.values.byName(m['status'] as String? ?? 'pending'),
+      progress: (m['progress'] as num?)?.toInt() ?? 0,
+      error: m['error'] as String?,
+    );
+  }
 }

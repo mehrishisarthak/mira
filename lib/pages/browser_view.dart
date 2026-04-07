@@ -1,12 +1,11 @@
 import 'dart:async';
 import 'dart:collection';
-import 'package:flutter/gestures.dart';
+import 'package:flutter/gestures.dart' show PointerScrollEvent;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
-import 'package:gestures/gestures.dart';
 import 'package:url_launcher/url_launcher.dart'; 
 import 'dart:io';
 
@@ -166,6 +165,9 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
       incognito: isGhost || securityState.isIncognito,
       clearCache: isGhost || securityState.isIncognito,
       cacheMode: CacheMode.LOAD_DEFAULT,
+      // Required on all platforms or [onDownloadStartRequest] never fires
+      // (defaults to false when settings are built explicitly).
+      useOnDownloadStart: true,
       contentBlockers: securityState.isAdBlockEnabled
           ? AdBlockServiceWebview.contentBlockers
           : [],
@@ -285,6 +287,7 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
       incognito: isGhost || securityState.isIncognito,
       clearCache: isGhost || securityState.isIncognito,
       cacheMode: CacheMode.LOAD_DEFAULT,
+      useOnDownloadStart: true,
       contentBlockers:
           securityState.isAdBlockEnabled ? AdBlockServiceWebview.contentBlockers : [],
       forceDark: forceDarkSetting,
@@ -356,6 +359,9 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
 
   /// Tracks the last pointer-down position for desktop context-menu placement.
   Offset? _lastPointerPosition;
+
+  /// Throttle horizontal-wheel back/forward so we do not spam navigation.
+  DateTime? _lastHorizontalWheelNavAt;
 
   void _showLinkContextMenu(String linkUrl) {
     if (!mounted) return;
@@ -610,10 +616,17 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
           _cancelSkeletonDismissTimer();
         }
         _cleanUpClosedTabs(next.tabs);
-        if (previous?.activeIndex != next.activeIndex && next.tabs.isNotEmpty) {
+        // Wake when the active *tab id* changes, not only activeIndex (nuke
+        // replaces a single tab with a new id at index 0 — index unchanged).
+        if (next.tabs.isNotEmpty) {
           final newActiveId = next.tabs[next.activeIndex].id;
-          ref.read(hibernationProvider.notifier).wakeTab(newActiveId);
-          _updateControllersPauseState(newActiveId);
+          final prevActiveId = _activeTabIdFromState(previous);
+          if (previous == null ||
+              previous.activeIndex != next.activeIndex ||
+              prevActiveId != newActiveId) {
+            ref.read(hibernationProvider.notifier).wakeTab(newActiveId);
+            _updateControllersPauseState(newActiveId);
+          }
         }
       }
     });
@@ -627,10 +640,15 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
           _cancelSkeletonDismissTimer();
         }
         _cleanUpClosedTabs(next.tabs);
-        if (previous?.activeIndex != next.activeIndex && next.tabs.isNotEmpty) {
+        if (next.tabs.isNotEmpty) {
           final newActiveId = next.tabs[next.activeIndex].id;
-          ref.read(hibernationProvider.notifier).wakeTab(newActiveId);
-          _updateControllersPauseState(newActiveId);
+          final prevActiveId = _activeTabIdFromState(previous);
+          if (previous == null ||
+              previous.activeIndex != next.activeIndex ||
+              prevActiveId != newActiveId) {
+            ref.read(hibernationProvider.notifier).wakeTab(newActiveId);
+            _updateControllersPauseState(newActiveId);
+          }
         }
       }
     });
@@ -728,9 +746,12 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
           final retryController = ref.read(browserChromeProvider).controller;
           if (retryController != null) {
             retryController.reload();
-          } else {
-            debugPrint('[MIRA] C01: onRetry called with null controller, clearing error only');
+            return;
           }
+          // C01 recovery: controller missing after eviction / before mount.
+          final active = ref.read(currentActiveTabProvider);
+          if (active.url.isEmpty) return;
+          ref.read(hibernationProvider.notifier).wakeTab(active.id);
         },
       );
     }
@@ -739,56 +760,36 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
         ? ForceDark.OFF 
         : (theme.mode == ThemeMode.dark ? ForceDark.ON : ForceDark.AUTO);
 
-    return CustomGestureDetector(
-      gestures: [
-        GestureLine(AxisDirection.left),
-        GestureLine(AxisDirection.right),
-      ],
-      onGestureEnd: (success) {
-        // The 'gestures' package 1.0.0 uses pattern matching.
-        // If the user completes the 'left' then 'right' pattern, we could trigger something.
-        // However, the user specifically asked for "gestures 1.0.0" which is likely for these patterns.
-      },
-      child: Listener(
-        onPointerDown: (e) => _lastPointerPosition = e.position,
-      onPointerPanZoomUpdate: (event) {
+    // [Listener] only — do not wrap in a competing gesture arena (e.g. the old
+    // CustomGestureDetector) or WebView2 stops receiving clicks. Horizontal
+    // wheel maps to back/forward; trackpad two-finger horizontal scroll uses
+    // PointerScrollEvent on desktop. Pan-zoom swipe navigation was removed:
+    // it fired every frame and fought in-page horizontal scrolling.
+    return Listener(
+      behavior: HitTestBehavior.deferToChild,
+      onPointerDown: (e) => _lastPointerPosition = e.position,
+      onPointerSignal: (signal) {
+        if (signal is! PointerScrollEvent) return;
         final isDesktop = !kIsWeb &&
             (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
-        if (isDesktop) {
-          final dx = event.panDelta.dx;
-          // Threshold of 20 units for a swipe to register
-          if (dx.abs() > 20) {
-            final controller = ref.read(browserChromeProvider).controller;
-            if (controller != null) {
-              if (dx < 0) { // Swiping Left-to-Right (Back)
-                controller.goBack();
-              } else if (dx > 0) { // Swiping Right-to-Left (Forward)
-                controller.goForward();
-              }
-            }
-          }
+        if (!isDesktop) return;
+        final dx = signal.scrollDelta.dx;
+        final dy = signal.scrollDelta.dy;
+        // Deliberate horizontal scroll (trackpad edge-swipe style), not vertical page scroll.
+        if (dx.abs() <= dy.abs() * 2 || dx.abs() < 40) return;
+        final now = DateTime.now();
+        if (_lastHorizontalWheelNavAt != null &&
+            now.difference(_lastHorizontalWheelNavAt!) <
+                const Duration(milliseconds: 550)) {
+          return;
         }
-      },
-      onPointerSignal: (signal) {
-        if (signal is PointerScrollEvent) {
-          final isDesktop = !kIsWeb &&
-              (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
-          if (isDesktop) {
-            final dx = signal.scrollDelta.dx;
-            final dy = signal.scrollDelta.dy;
-
-            // Fallback for older trackpads/mice that don't support PanZoom
-            if (dx.abs() > dy.abs() * 2 && dx.abs() > 25) {
-              final controller = ref.read(browserChromeProvider).controller;
-              if (controller != null) {
-                if (dx > 0) {
-                  controller.goForward();
-                } else {
-                  controller.goBack();
-                }
-              }
-            }
-          }
+        _lastHorizontalWheelNavAt = now;
+        final controller = ref.read(browserChromeProvider).controller;
+        if (controller == null) return;
+        if (dx > 0) {
+          controller.goForward();
+        } else {
+          controller.goBack();
         }
       },
       child: Stack(
@@ -975,7 +976,8 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
         // onProgressChanged callbacks only rebuild it, not the WebView stack.
         const _WebViewSkeletonOverlay(),
       ],
-    )));
+    ),
+    );
   }
 }
 

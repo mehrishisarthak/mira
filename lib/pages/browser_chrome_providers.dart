@@ -82,6 +82,17 @@ final browserChromeProvider =
   return BrowserChromeNotifier();
 });
 
+/// Same as [BrowserChromeState.controller] — the live [InAppWebViewController]
+/// for the **current** tab as last synced by [BrowserView].
+///
+/// **C01:** This is often `null` (hibernated tab, WebView2 still mounting after
+/// wake, LRU eviction). Never call [InAppWebViewController.reload] (etc.)
+/// without a null check; use error-screen recovery or wake the tab first.
+final activeChromeWebViewControllerProvider =
+    Provider<InAppWebViewController?>((ref) {
+  return ref.watch(browserChromeProvider).controller;
+});
+
 /// Active tab's [FindInteractionController] for "Find in page" (desktop).
 final activeFindInteractionProvider =
     StateProvider<FindInteractionController?>((ref) => null);

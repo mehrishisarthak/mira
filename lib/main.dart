@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mira/core/services/download_manager.dart';
+import 'package:mira/shell/desktop/desktop_windowing.dart';
 import 'package:mira/core/notifiers/theme_notifier.dart';
 import 'package:mira/pages/onboarding_screen.dart';
 import 'package:mira/pages/splashscreen.dart';
@@ -14,6 +15,7 @@ import 'package:mira/pages/mainscreen.dart'; // Ensure filename matches (mainscr
 void main() async {
   // 1. Ensure Flutter bindings are ready for async code
   WidgetsFlutterBinding.ensureInitialized();
+  await desktopWindowManagerInit();
 
   // 2. Initialize SharedPreferences & Service
   final prefs = await SharedPreferences.getInstance();

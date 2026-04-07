@@ -108,10 +108,18 @@ class MobileDownloadService implements DownloadService {
     final deviceInfo = await DeviceInfoPlugin().androidInfo;
     if (deviceInfo.version.sdkInt >= 33) return true;
 
-    final status = await Permission.storage.status;
-    if (status != PermissionStatus.granted) {
-      final result = await Permission.storage.request();
-      return result == PermissionStatus.granted;
+    var status = await Permission.storage.status;
+    if (status.isPermanentlyDenied) {
+      await openAppSettings();
+      return false;
+    }
+    if (!status.isGranted) {
+      status = await Permission.storage.request();
+      if (status.isGranted) return true;
+      if (status.isPermanentlyDenied) {
+        await openAppSettings();
+      }
+      return false;
     }
     return true;
   }

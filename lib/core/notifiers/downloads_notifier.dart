@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,16 +16,27 @@ class DownloadsNotifier extends StateNotifier<List<MiraDownloadTask>> {
     loadTasks();
   }
 
+  @override
+  void dispose() {
+    _persistDebounce?.cancel();
+    super.dispose();
+  }
+
+  bool get _isDesktop =>
+      !kIsWeb && !Platform.isAndroid && !Platform.isIOS;
+
   // ── Public callback targets (called by service callbacks) ─────────────────
 
   /// Prepend a newly-created task to state.
   void addTask(MiraDownloadTask task) {
     if (mounted) state = [task, ...state];
+    _schedulePersistDesktopCatalog();
   }
 
   /// Replace the entire task list (used after mobile reloads).
   void setTasks(List<MiraDownloadTask> tasks) {
     if (mounted) state = tasks;
+    _schedulePersistDesktopCatalog();
   }
 
   /// Apply an updater function to a single in-flight task.
@@ -35,12 +48,17 @@ class DownloadsNotifier extends StateNotifier<List<MiraDownloadTask>> {
     final updated = [...state];
     updated[idx] = updater(updated[idx]);
     state = updated;
+    _schedulePersistDesktopCatalog();
   }
 
   // ── Public API ─────────────────────────────────────────────────────────────
 
-  /// Loads persisted tasks from the platform backend (no-op on desktop).
+  /// Loads persisted tasks from the platform backend (mobile) or JSON file (desktop).
   Future<void> loadTasks() async {
+    if (_isDesktop) {
+      await _loadDesktopCatalogIfAny();
+      if (state.isNotEmpty) return;
+    }
     final tasks = await _service.loadExistingTasks();
     if (tasks.isNotEmpty && mounted) state = tasks;
   }
@@ -58,6 +76,7 @@ class DownloadsNotifier extends StateNotifier<List<MiraDownloadTask>> {
   Future<void> deleteTask(MiraDownloadTask task) async {
     await _service.deleteTask(task.id, task.savePath);
     if (mounted) state = state.where((t) => t.id != task.id).toList();
+    _schedulePersistDesktopCatalog();
   }
 
   Future<void> retryTask(MiraDownloadTask task) async {
@@ -97,6 +116,7 @@ class DownloadsNotifier extends StateNotifier<List<MiraDownloadTask>> {
           ),
           ...state,
         ];
+        _schedulePersistDesktopCatalog();
       }
       debugPrint('MIRA_DOWNLOAD: Page saved -> $savePath');
       return savePath;
@@ -106,7 +126,50 @@ class DownloadsNotifier extends StateNotifier<List<MiraDownloadTask>> {
     }
   }
 
-  // ── Helpers ────────────────────────────────────────────────────────────────
+  // ── Desktop catalog (M06) ─────────────────────────────────────────────────
+
+  Timer? _persistDebounce;
+
+  void _schedulePersistDesktopCatalog() {
+    if (!_isDesktop) return;
+    _persistDebounce?.cancel();
+    _persistDebounce = Timer(const Duration(milliseconds: 450), () {
+      unawaited(_persistDesktopCatalog());
+    });
+  }
+
+  Future<void> _persistDesktopCatalog() async {
+    if (!_isDesktop || !mounted) return;
+    try {
+      final dir = await getApplicationSupportDirectory();
+      final f = File(p.join(dir.path, 'mira_desktop_downloads.json'));
+      await f.writeAsString(
+        jsonEncode(state.map((t) => t.toJson()).toList()),
+      );
+    } catch (e) {
+      debugPrint('MIRA_DOWNLOAD: persist desktop -> $e');
+    }
+  }
+
+  Future<void> _loadDesktopCatalogIfAny() async {
+    try {
+      final dir = await getApplicationSupportDirectory();
+      final f = File(p.join(dir.path, 'mira_desktop_downloads.json'));
+      if (!await f.exists()) return;
+      final raw = await f.readAsString();
+      if (raw.isEmpty) return;
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return;
+      final tasks = decoded
+          .map((e) => MiraDownloadTask.fromJson(e as Map<String, dynamic>))
+          .toList();
+      if (tasks.isNotEmpty && mounted) state = tasks;
+    } catch (e) {
+      debugPrint('MIRA_DOWNLOAD: restore desktop -> $e');
+    }
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
 
   static String _resolveFilename(String url, String? suggested) {
     if (suggested != null && suggested.isNotEmpty) return suggested;

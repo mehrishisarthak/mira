@@ -99,6 +99,38 @@ class TabsNotifier extends StateNotifier<TabsState> {
     }
   }
 
+  /// Reorder tabs (e.g. future drag-and-drop strip). Indices are pre-[ReorderableListView] rules.
+  void reorderTab(int oldIndex, int newIndex) {
+    if (oldIndex < 0 ||
+        oldIndex >= state.tabs.length ||
+        newIndex < 0 ||
+        newIndex >= state.tabs.length) {
+      return;
+    }
+    if (oldIndex < newIndex) {
+      newIndex -= 1;
+    }
+    final tabs = [...state.tabs];
+    final item = tabs.removeAt(oldIndex);
+    tabs.insert(newIndex, item);
+
+    var active = state.activeIndex;
+    if (active == oldIndex) {
+      active = newIndex;
+    } else if (oldIndex < newIndex) {
+      if (active > oldIndex && active <= newIndex) {
+        active--;
+      }
+    } else {
+      if (active >= newIndex && active < oldIndex) {
+        active++;
+      }
+    }
+    active = active.clamp(0, tabs.length - 1);
+    state = TabsState(tabs: tabs, activeIndex: active);
+    _saveToPrefs();
+  }
+
   void updateUrl(String newUrl) {
     _updateActiveTab((tab) => tab.copyWith(url: newUrl));
   }

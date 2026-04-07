@@ -21,6 +21,7 @@ import 'package:mira/pages/downloads_screen.dart';
 import 'package:mira/pages/browser_sheet.dart';
 
 import 'package:mira/pages/browser_chrome_providers.dart';
+import 'package:mira/core/notifiers/hibernation_notifier.dart';
 
 /// Full-page replacement for the old end-drawer.
 /// Opened via Navigator.push so it sits on the back stack — no swipe-to-open
@@ -272,11 +273,18 @@ class MiraMenuPage extends ConsumerWidget {
                 );
 
                 if (confirm == true && context.mounted) {
-                  await InAppWebViewController.clearAllCache();
-                  final cookieManager = CookieManager.instance();
-                  await cookieManager.deleteAllCookies();
-                  
-                  // Enhanced with WebStorageManager purge for desktop & mobile
+                  try {
+                    await InAppWebViewController.clearAllCache();
+                  } catch (e) {
+                    debugPrint('MIRA_PURGE: clearAllCache -> $e');
+                  }
+                  try {
+                    final cookieManager = CookieManager.instance();
+                    await cookieManager.deleteAllCookies();
+                  } catch (e) {
+                    debugPrint('MIRA_PURGE: cookies -> $e');
+                  }
+
                   try {
                     final storageManager = WebStorageManager.instance();
                     await storageManager.deleteAllData();
@@ -289,6 +297,24 @@ class MiraMenuPage extends ConsumerWidget {
                   ref.read(tabsProvider.notifier).nuke();
                   ref.read(ghostTabsProvider.notifier).nuke();
                   ref.read(browserChromeProvider.notifier).setLoadingProgress(100);
+
+                  // Ensure the new blank tab is woken in LRU (listener may miss
+                  // index-only-unchanged edge case). Only wake the active session.
+                  if (ref.read(isGhostModeProvider)) {
+                    final gs = ref.read(ghostTabsProvider);
+                    if (gs.tabs.isNotEmpty) {
+                      ref
+                          .read(hibernationProvider.notifier)
+                          .wakeTab(gs.tabs[gs.activeIndex].id);
+                    }
+                  } else {
+                    final s = ref.read(tabsProvider);
+                    if (s.tabs.isNotEmpty) {
+                      ref
+                          .read(hibernationProvider.notifier)
+                          .wakeTab(s.tabs[s.activeIndex].id);
+                    }
+                  }
 
                   if (context.mounted) {
                     Navigator.pop(context);

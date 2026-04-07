@@ -9,10 +9,10 @@ import 'package:mira/shell/download/download_service_stub.dart';
 
 /// Single source of truth for the downloads state.
 ///
-/// Platform decision lives here; [DownloadsNotifier] is kept free of any
-/// Platform / kIsWeb checks.  The [late] variable pattern is safe because
-/// the service callbacks are only ever invoked after the notifier is
-/// fully constructed and assigned.
+/// Platform decision for [DownloadService] lives here. [DownloadsNotifier] also
+/// persists the catalog to JSON on desktop (see [DownloadsNotifier]).
+/// The [late] variable pattern is safe because the service callbacks are only ever
+/// invoked after the notifier is fully constructed and assigned.
 final downloadsProvider =
     StateNotifierProvider<DownloadsNotifier, List<MiraDownloadTask>>((ref) {
   if (kIsWeb) {
