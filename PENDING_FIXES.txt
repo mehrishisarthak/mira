@@ -1,0 +1,7 @@
+COMPLETED FIXES:
+
+1.[Desktop] Tab crashes immediately when a download is initiated.
+2.[Desktop & Mobile] No notification or popup appears to indicate that a download has started.
+3.[Desktop] "Nuke data" functionality is not working (Enhanced with WebStorageManager purge).
+4.[Desktop UI] Remove "Desktop Mode" toggle as it is redundant.
+5.[Desktop UI] Remove "Proxy" settings from the interface.

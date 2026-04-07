@@ -463,6 +463,13 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
           break;
         case 'download':
           ref.read(downloadsProvider.notifier).startDownload(linkUrl);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Download started'),
+              backgroundColor: Colors.blueAccent,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
           break;
       }
     });
@@ -549,6 +556,13 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
                 Navigator.pop(ctx);
                 HapticFeedback.mediumImpact();
                 ref.read(downloadsProvider.notifier).startDownload(linkUrl);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Download started'),
+                    backgroundColor: Colors.blueAccent,
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
               },
             ),
             const SizedBox(height: 8),
@@ -802,6 +816,21 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
                   ref.read(tabsProvider.notifier).addTab(url: url.toString());
                 }
                 return true;
+              },
+              onDownloadStartRequest: (controller, request) {
+                final url = request.url.toString();
+                debugPrint('MIRA_DOWNLOAD: Requested -> $url');
+                ref.read(downloadsProvider.notifier).startDownload(
+                      url,
+                      filename: request.suggestedFilename,
+                    );
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Download started: ${request.suggestedFilename ?? "file"}'),
+                    backgroundColor: Colors.blueAccent,
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
               },
               onLoadStart: (controller, url) {
                  _lastProgressByTabId[tab.id] = 0;

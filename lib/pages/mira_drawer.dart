@@ -34,6 +34,11 @@ class MiraMenuPage extends ConsumerWidget {
     final isGhost = ref.watch(isGhostModeProvider);
     final theme = ref.watch(themeProvider);
 
+    final isDesktop = !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.windows ||
+            defaultTargetPlatform == TargetPlatform.linux ||
+            defaultTargetPlatform == TargetPlatform.macOS);
+
     final isLight = theme.mode == ThemeMode.light;
     final appTextColor = isLight ? kMiraInkPrimary : Colors.white;
     final primaryAccent = isGhost ? Colors.redAccent : theme.primaryColor;
@@ -270,6 +275,14 @@ class MiraMenuPage extends ConsumerWidget {
                   await InAppWebViewController.clearAllCache();
                   final cookieManager = CookieManager.instance();
                   await cookieManager.deleteAllCookies();
+                  
+                  // Enhanced with WebStorageManager purge for desktop & mobile
+                  try {
+                    final storageManager = WebStorageManager.instance();
+                    await storageManager.deleteAllData();
+                  } catch (e) {
+                    debugPrint("MIRA_PURGE: WebStorageManager failed -> $e");
+                  }
 
                   ref.read(historyProvider.notifier).clearHistory();
                   ref.read(browserChromeProvider.notifier).resetSessionChrome();
@@ -329,174 +342,176 @@ class MiraMenuPage extends ConsumerWidget {
             ),
 
             // ── PROXY ──────────────────────────────────────────────────────
-            Builder(
-              builder: (context) {
-                final isIos =
-                    !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
-                final isAndroid =
-                    !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
-                final proxyUiAvailable = isIos || isAndroid;
-                String capability;
-                if (kIsWeb) {
-                  capability =
-                      'Not available in the web build. Use your browser or OS network settings.';
-                } else if (isIos) {
-                  capability =
-                      'Uses an on-device gateway so pages can load through your HTTP proxy.';
-                } else if (isAndroid) {
-                  capability =
-                      'Uses Android WebView proxy settings (your HTTP/HTTPS proxy URL).';
-                } else {
-                  capability =
-                      'Not built into Mira on desktop — use a system VPN or OS proxy.';
-                }
+            if (!isDesktop) ...[
+              Builder(
+                builder: (context) {
+                  final isIos =
+                      !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+                  final isAndroid =
+                      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+                  final proxyUiAvailable = isIos || isAndroid;
+                  String capability;
+                  if (kIsWeb) {
+                    capability =
+                        'Not available in the web build. Use your browser or OS network settings.';
+                  } else if (isIos) {
+                    capability =
+                        'Uses an on-device gateway so pages can load through your HTTP proxy.';
+                  } else if (isAndroid) {
+                    capability =
+                        'Uses Android WebView proxy settings (your HTTP/HTTPS proxy URL).';
+                  } else {
+                    capability =
+                        'Not built into Mira on desktop — use a system VPN or OS proxy.';
+                  }
 
-                return SwitchListTile(
-                  title: Text("Network Proxy",
-                      style: TextStyle(color: appTextColor)),
-                  secondary: Icon(Icons.router,
-                      color: securityState.isProxyEnabled
-                          ? Colors.orangeAccent
-                          : appTextColor.withAlpha(128)),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        capability,
-                        style: TextStyle(
-                          color: appTextColor.withAlpha(140),
-                          fontSize: 11,
-                          height: 1.25,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        securityState.proxyUrl.isEmpty
-                            ? (proxyUiAvailable
-                                ? "No proxy URL saved"
-                                : "—")
-                            : securityState.proxyUrl,
-                        style: TextStyle(
-                          color: appTextColor.withAlpha(180),
-                          fontSize: 11,
-                          fontFamily: 'monospace',
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (!proxyUiAvailable &&
-                          securityState.isProxyEnabled) ...[
-                        const SizedBox(height: 4),
+                  return SwitchListTile(
+                    title: Text("Network Proxy",
+                        style: TextStyle(color: appTextColor)),
+                    secondary: Icon(Icons.router,
+                        color: securityState.isProxyEnabled
+                            ? Colors.orangeAccent
+                            : appTextColor.withAlpha(128)),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
                         Text(
-                          'This setting is stored but has no effect here. Turn it off or use mobile.',
+                          capability,
                           style: TextStyle(
-                            color: Colors.orangeAccent.withAlpha(220),
+                            color: appTextColor.withAlpha(140),
                             fontSize: 11,
+                            height: 1.25,
                           ),
                         ),
-                      ],
-                    ],
-                  ),
-                  value: securityState.isProxyEnabled,
-                  activeThumbColor: Colors.orangeAccent,
-                  onChanged: proxyUiAvailable
-                      ? (val) => ref
-                          .read(securityProvider.notifier)
-                          .toggleProxy(val)
-                      : securityState.isProxyEnabled
-                          ? (val) {
-                              if (!val) {
-                                ref
-                                    .read(securityProvider.notifier)
-                                    .toggleProxy(false);
-                              }
-                            }
-                          : null,
-                );
-              },
-            ),
-
-            if (securityState.isProxyEnabled &&
-                !kIsWeb &&
-                (defaultTargetPlatform == TargetPlatform.iOS ||
-                    defaultTargetPlatform == TargetPlatform.android))
-              ListTile(
-                dense: true,
-                contentPadding:
-                    const EdgeInsets.only(left: 72, right: 16),
-                title: Text("Configure Proxy",
-                    style: TextStyle(
-                        color: theme.primaryColor,
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold)),
-                onTap: () async {
-                  final controller =
-                      TextEditingController(text: securityState.proxyUrl);
-                  final newUrl = await showDialog<String>(
-                    context: context,
-                    builder: (ctx) => AlertDialog(
-                      backgroundColor: theme.surfaceColor,
-                      title: Text("Proxy Configuration",
-                          style: TextStyle(color: appTextColor)),
-                      content: TextField(
-                        controller: controller,
-                        autofocus: true,
-                        style: TextStyle(color: appTextColor),
-                        decoration: InputDecoration(
-                          hintText: "http://your-proxy:port",
-                          hintStyle:
-                              TextStyle(color: appTextColor.withAlpha(80)),
-                          enabledBorder: UnderlineInputBorder(
-                              borderSide: BorderSide(
-                                  color:
-                                      theme.primaryColor.withAlpha(100))),
-                          focusedBorder: UnderlineInputBorder(
-                              borderSide:
-                                  BorderSide(color: theme.primaryColor)),
+                        const SizedBox(height: 4),
+                        Text(
+                          securityState.proxyUrl.isEmpty
+                              ? (proxyUiAvailable
+                                  ? "No proxy URL saved"
+                                  : "—")
+                              : securityState.proxyUrl,
+                          style: TextStyle(
+                            color: appTextColor.withAlpha(180),
+                            fontSize: 11,
+                            fontFamily: 'monospace',
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                      actions: [
-                        TextButton(
-                            onPressed: () => Navigator.pop(ctx),
-                            child: Text("Cancel",
-                                style: TextStyle(
-                                    color: appTextColor.withAlpha(128)))),
-                        TextButton(
-                            onPressed: () =>
-                                Navigator.pop(ctx, controller.text),
-                            child: Text("Save",
-                                style: TextStyle(
-                                    color: theme.primaryColor,
-                                    fontWeight: FontWeight.bold))),
+                        if (!proxyUiAvailable &&
+                            securityState.isProxyEnabled) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            'This setting is stored but has no effect here. Turn it off or use mobile.',
+                            style: TextStyle(
+                              color: Colors.orangeAccent.withAlpha(220),
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
+                    value: securityState.isProxyEnabled,
+                    activeThumbColor: Colors.orangeAccent,
+                    onChanged: proxyUiAvailable
+                        ? (val) => ref
+                            .read(securityProvider.notifier)
+                            .toggleProxy(val)
+                        : securityState.isProxyEnabled
+                            ? (val) {
+                                if (!val) {
+                                  ref
+                                      .read(securityProvider.notifier)
+                                      .toggleProxy(false);
+                                }
+                              }
+                            : null,
                   );
-                  if (newUrl != null) {
-                    ref
-                        .read(securityProvider.notifier)
-                        .updateProxyUrl(newUrl);
-                  }
                 },
               ),
+              if (securityState.isProxyEnabled &&
+                  !kIsWeb &&
+                  (defaultTargetPlatform == TargetPlatform.iOS ||
+                      defaultTargetPlatform == TargetPlatform.android))
+                ListTile(
+                  dense: true,
+                  contentPadding:
+                      const EdgeInsets.only(left: 72, right: 16),
+                  title: Text("Configure Proxy",
+                      style: TextStyle(
+                          color: theme.primaryColor,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold)),
+                  onTap: () async {
+                    final controller =
+                        TextEditingController(text: securityState.proxyUrl);
+                    final newUrl = await showDialog<String>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        backgroundColor: theme.surfaceColor,
+                        title: Text("Proxy Configuration",
+                            style: TextStyle(color: appTextColor)),
+                        content: TextField(
+                          controller: controller,
+                          autofocus: true,
+                          style: TextStyle(color: appTextColor),
+                          decoration: InputDecoration(
+                            hintText: "http://your-proxy:port",
+                            hintStyle:
+                                TextStyle(color: appTextColor.withAlpha(80)),
+                            enabledBorder: UnderlineInputBorder(
+                                borderSide: BorderSide(
+                                    color:
+                                        theme.primaryColor.withAlpha(100))),
+                            focusedBorder: UnderlineInputBorder(
+                                borderSide:
+                                    BorderSide(color: theme.primaryColor)),
+                          ),
+                        ),
+                        actions: [
+                          TextButton(
+                              onPressed: () => Navigator.pop(ctx),
+                              child: Text("Cancel",
+                                  style: TextStyle(
+                                      color: appTextColor.withAlpha(128)))),
+                          TextButton(
+                              onPressed: () =>
+                                  Navigator.pop(ctx, controller.text),
+                              child: Text("Save",
+                                  style: TextStyle(
+                                      color: theme.primaryColor,
+                                      fontWeight: FontWeight.bold))),
+                        ],
+                      ),
+                    );
+                    if (newUrl != null) {
+                      ref
+                          .read(securityProvider.notifier)
+                          .updateProxyUrl(newUrl);
+                    }
+                  },
+                ),
+            ],
 
             Divider(color: appTextColor.withAlpha(51)),
 
             // ── CUSTOMIZATION ───────────────────────────────────────────────
             _sectionLabel("CUSTOMIZATION", primaryAccent),
 
-            SwitchListTile(
-              title: Text("Desktop Mode",
-                  style: TextStyle(color: appTextColor)),
-              secondary: Icon(Icons.desktop_windows,
-                  color: securityState.isDesktopMode
-                      ? Colors.blueAccent
-                      : appTextColor.withAlpha(128)),
-              value: securityState.isDesktopMode,
-              activeThumbColor: Colors.blueAccent,
-              onChanged: (val) =>
-                  ref.read(securityProvider.notifier).toggleDesktop(val),
-            ),
+            if (!isDesktop)
+              SwitchListTile(
+                title: Text("Desktop Mode",
+                    style: TextStyle(color: appTextColor)),
+                secondary: Icon(Icons.desktop_windows,
+                    color: securityState.isDesktopMode
+                        ? Colors.blueAccent
+                        : appTextColor.withAlpha(128)),
+                value: securityState.isDesktopMode,
+                activeThumbColor: Colors.blueAccent,
+                onChanged: (val) =>
+                    ref.read(securityProvider.notifier).toggleDesktop(val),
+              ),
 
             Padding(
               padding: const EdgeInsets.symmetric(
