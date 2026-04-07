@@ -13,6 +13,7 @@ class SecurityNotifier extends StateNotifier<SecurityState> {
     isAdBlockEnabled: true,
     isProxyEnabled: false,
     proxyUrl: "",
+    proxyAllowInsecureCertificates: false,
   )) {
     _loadSettings();
   }
@@ -26,6 +27,7 @@ class SecurityNotifier extends StateNotifier<SecurityState> {
       isAdBlockEnabled: _prefs.getAdBlock(), 
       isProxyEnabled: _prefs.getProxyEnabled(),
       proxyUrl: _prefs.getProxyUrl(),
+      proxyAllowInsecureCertificates: _prefs.getProxyAllowInsecureCertificates(),
     );
   }
 
@@ -62,6 +64,11 @@ class SecurityNotifier extends StateNotifier<SecurityState> {
   void updateProxyUrl(String value) {
     state = state.copyWith(proxyUrl: value);
     _prefs.setProxyUrl(value);
+  }
+
+  void toggleProxyAllowInsecureCertificates(bool value) {
+    state = state.copyWith(proxyAllowInsecureCertificates: value);
+    _prefs.setProxyAllowInsecureCertificates(value);
   }
 }
 

@@ -14,7 +14,13 @@ class StubProxyService implements ProxyService {
   String getProxiedUrl(String targetUrl) => targetUrl;
 
   @override
-  Future<void> start(String targetProxyUrl) async {}
+  String? decodeGatewayEmbeddedTarget(String loaderUrl) => null;
+
+  @override
+  Future<void> start(
+    String targetProxyUrl, {
+    bool allowInsecureCertificates = false,
+  }) async {}
 
   @override
   Future<void> stop() async {}

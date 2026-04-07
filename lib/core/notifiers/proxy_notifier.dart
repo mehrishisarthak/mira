@@ -11,13 +11,14 @@ class ProxyGatewayNotifier extends StateNotifier<bool> {
   final Ref _ref;
   final ProxyService _service;
   String? _previousProxyUrl;
+  bool? _previousAllowInsecure;
 
   ProxyGatewayNotifier(this._ref, this._service) : super(false) {
     // Listen to security settings and toggle the gateway
     _ref.listen(securityProvider, (previous, next) {
       _syncGateway(next);
     });
-    
+
     // Initial sync
     _syncGateway(_ref.read(securityProvider));
   }
@@ -28,17 +29,29 @@ class ProxyGatewayNotifier extends StateNotifier<bool> {
         !kIsWeb &&
         _service.runtimeBackend == ProxyRuntimeBackend.iosLocalGateway;
 
+    final gatewayConfigChanged = _previousProxyUrl != security.proxyUrl ||
+        _previousAllowInsecure != security.proxyAllowInsecureCertificates;
+
     if (shouldRun && !_service.isRunning) {
-      await _service.start(security.proxyUrl);
+      await _service.start(
+        security.proxyUrl,
+        allowInsecureCertificates: security.proxyAllowInsecureCertificates,
+      );
       _previousProxyUrl = security.proxyUrl;
+      _previousAllowInsecure = security.proxyAllowInsecureCertificates;
       if (mounted) state = _service.isRunning;
     } else if (!shouldRun && _service.isRunning) {
       await _service.stop();
+      _previousProxyUrl = null;
+      _previousAllowInsecure = null;
       if (mounted) state = false;
-    } else if (shouldRun && _service.isRunning && _previousProxyUrl != security.proxyUrl) {
-      // Restart if proxy URL changed
-      await _service.start(security.proxyUrl);
+    } else if (shouldRun && _service.isRunning && gatewayConfigChanged) {
+      await _service.start(
+        security.proxyUrl,
+        allowInsecureCertificates: security.proxyAllowInsecureCertificates,
+      );
       _previousProxyUrl = security.proxyUrl;
+      _previousAllowInsecure = security.proxyAllowInsecureCertificates;
       if (mounted) state = _service.isRunning;
     }
   }
@@ -48,4 +61,3 @@ final proxyGatewayStatusProvider = StateNotifierProvider<ProxyGatewayNotifier, b
   final service = ref.watch(proxyServiceProvider);
   return ProxyGatewayNotifier(ref, service);
 });
-

@@ -20,6 +20,7 @@ class PreferencesService {
   static const _keyAdBlock = 'mode_adblock'; 
   static const _keyProxyEnabled = 'mode_proxy_enabled';
   static const _keyProxyUrl = 'mode_proxy_url';
+  static const _keyProxyAllowInsecureTls = 'mode_proxy_allow_insecure_tls';
   
   // Bookmarks Key
   static const _keyBookmarks = 'saved_bookmarks';
@@ -86,6 +87,11 @@ class PreferencesService {
 
   String getProxyUrl() => _prefs.getString(_keyProxyUrl) ?? "";
   Future<void> setProxyUrl(String value) async => await _prefs.setString(_keyProxyUrl, value);
+
+  bool getProxyAllowInsecureCertificates() =>
+      _prefs.getBool(_keyProxyAllowInsecureTls) ?? false;
+  Future<void> setProxyAllowInsecureCertificates(bool value) async =>
+      await _prefs.setBool(_keyProxyAllowInsecureTls, value);
 
   // --- THEME (COLORS) ---
   // Returns the index of the selected theme (0 = Green, 1 = Yellow, etc.)

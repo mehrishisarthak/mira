@@ -17,8 +17,16 @@ abstract class ProxyService {
   /// Returns the formatted local URL for proxying.
   String getProxiedUrl(String targetUrl);
 
+  /// If [loaderUrl] is our iOS gateway wrapper (`?url=` or `/t/…`), returns the
+  /// real origin URL; otherwise null. Used to avoid double-wrapping and for the
+  /// address bar.
+  String? decodeGatewayEmbeddedTarget(String loaderUrl);
+
   /// Starts the proxy gateway pointing to [targetProxyUrl].
-  Future<void> start(String targetProxyUrl);
+  Future<void> start(
+    String targetProxyUrl, {
+    bool allowInsecureCertificates = false,
+  });
 
   /// Stops the proxy gateway.
   Future<void> stop();

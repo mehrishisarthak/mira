@@ -6,6 +6,9 @@ class SecurityState {
   final bool isAdBlockEnabled;
   final bool isProxyEnabled;
   final String proxyUrl;
+  /// When true, the iOS local gateway [HttpClient] accepts any server TLS certificate
+  /// (needed for some corporate / intercepting HTTP proxies). Off by default.
+  final bool proxyAllowInsecureCertificates;
 
   SecurityState({
     required this.isIncognito,
@@ -15,6 +18,7 @@ class SecurityState {
     required this.isAdBlockEnabled,
     required this.isProxyEnabled,
     required this.proxyUrl,
+    required this.proxyAllowInsecureCertificates,
   });
 
   SecurityState copyWith({
@@ -25,6 +29,7 @@ class SecurityState {
     bool? isAdBlockEnabled,
     bool? isProxyEnabled,
     String? proxyUrl,
+    bool? proxyAllowInsecureCertificates,
   }) {
     return SecurityState(
       isIncognito: isIncognito ?? this.isIncognito,
@@ -34,6 +39,8 @@ class SecurityState {
       isAdBlockEnabled: isAdBlockEnabled ?? this.isAdBlockEnabled,
       isProxyEnabled: isProxyEnabled ?? this.isProxyEnabled,
       proxyUrl: proxyUrl ?? this.proxyUrl,
+      proxyAllowInsecureCertificates: proxyAllowInsecureCertificates ??
+          this.proxyAllowInsecureCertificates,
     );
   }
 
@@ -47,7 +54,8 @@ class SecurityState {
           other.isDesktopMode == isDesktopMode &&
           other.isAdBlockEnabled == isAdBlockEnabled &&
           other.isProxyEnabled == isProxyEnabled &&
-          other.proxyUrl == proxyUrl);
+          other.proxyUrl == proxyUrl &&
+          other.proxyAllowInsecureCertificates == proxyAllowInsecureCertificates);
 
   @override
   int get hashCode => Object.hash(
@@ -58,5 +66,6 @@ class SecurityState {
         isAdBlockEnabled,
         isProxyEnabled,
         proxyUrl,
+        proxyAllowInsecureCertificates,
       );
 }

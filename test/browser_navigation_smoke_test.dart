@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mira/core/services/preferences_service.dart';
-import 'package:mira/core/notifiers/search_notifier.dart';
 import 'package:mira/core/notifiers/tab_notifier.dart';
-import 'package:mira/core/entities/tab_entity.dart';
 import 'package:mira/pages/tab_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

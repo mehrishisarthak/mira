@@ -1,0 +1,122 @@
+MIRA — iOS local HTTP(S) proxy gateway: issues and limitations
+================================================================
+This document describes known issues, tradeoffs, and gaps for the in-app
+proxy path on iOS (local gateway on 127.0.0.1 + dart:io HttpClient through
+the user-configured HTTP/SOCKS proxy). It is accurate as of the codebase
+that implements ProxyRuntimeBackend.iosLocalGateway.
+
+
+1. ARCHITECTURE (fundamental)
+-----------------------------
+- Not WKWebView-native: Unlike Android’s WebView proxy override, iOS does
+  not expose a supported public API to attach an HTTP proxy directly to
+  WKWebView for all loads. The app works around this by loading
+  http://127.0.0.1:<port>/__mira_proxy/... in the WebView and forwarding
+  traffic in Dart.
+
+- Double hop: Browser → localhost HttpServer → HttpClient → upstream proxy
+  → origin. Extra latency, memory, and failure modes versus a single native
+  proxy hop.
+
+- Parity with Android: Android can route WebView traffic via ProxyController;
+  behavior will not match iOS exactly (cookies, third-party contexts, plugin
+  code paths, etc.).
+
+
+2. SECURITY AND TRUST
+---------------------
+- “Trust proxy HTTPS” (allowInsecureCertificates): When enabled, the
+  gateway’s HttpClient accepts any TLS certificate for upstream HTTPS. That
+  is required for some corporate/intercepting proxies (e.g. Charles) but
+  weakens certificate validation for that traffic only while enabled.
+
+- User-supplied proxy URL: A malicious or mistyped proxy can see or modify
+  traffic. The UI should keep treating proxy configuration as high trust.
+
+- Token URLs (/__mira_proxy/t/<token>): Tokens are random and short-lived in
+  memory only, but anyone on the device who can hit localhost could in theory
+  guess/brute-force before eviction; risk is low on a locked device.
+
+
+3. URL AND ROUTING LIMITS
+-------------------------
+- Loader URL length: Very long target URLs are wrapped using a token path
+  to avoid huge ?url= query strings. There is still a practical ceiling on
+  what the WebView/HTTP stack accepts.
+
+- Token map: In-memory registry with a capped size; oldest entries are
+  dropped. Restarting the gateway clears tokens — tabs that still reference
+  an old token may fail until reloaded.
+
+- Loopback handling: Navigation to 127.0.0.1 / localhost is intentionally not
+  re-wrapped to avoid recursion; local-only sites are not sent through the
+  external proxy via this mechanism.
+
+
+4. PROTOCOL AND FEATURE COVERAGE
+--------------------------------
+- HTTP and HTTPS: Forwarded via HttpClient with findProxy (CONNECT for HTTPS).
+
+- WebSockets (ws/wss): Handled by upgrading the local request and opening a
+  WebSocket to the target with the same proxied HttpClient. Complex sites may
+  still hit edge cases (extensions, subprotocol quirks, mid-connection errors).
+
+- Non-HTTP(S) navigation: file:, data:, custom schemes are outside this
+  gateway’s model.
+
+- HTTP/2 / QUIC: Behavior depends on Dart’s HttpClient and the proxy; not
+  guaranteed to mirror a system browser.
+
+- Streaming / large uploads: Implemented as stream forwarding; very large
+  bodies or slow proxies can still timeout or OOM in pathological cases.
+
+
+5. PROXY TYPES
+--------------
+- HTTP forward proxy: Supported via findProxy PROXY host:port.
+
+- SOCKS: findProxy uses SOCKS5 / SOCKS4 strings for socks5/socks4/socks
+  schemes. Actual support depends on the Dart VM and OS networking stack;
+  some combinations may fail at runtime.
+
+- SOCKS authentication: Not implemented in the gateway’s HttpClient setup.
+
+- Authenticated HTTP proxy: user:pass in the proxy URL is passed via
+  addProxyCredentials (basic); schemes beyond that may not work.
+
+
+6. TLS / CERTIFICATE EDGE CASES
+-------------------------------
+- Corporate MITM: Often needs “Trust proxy HTTPS” so the client accepts the
+  proxy-issued certificates.
+
+- Certificate pinning inside WebView content is unrelated to the gateway’s
+  HttpClient — mixed behavior can occur for subresources depending on how
+  they load.
+
+
+7. PLATFORM / OS
+----------------
+- App Transport Security: Localhost loads must remain allowed for the WebView
+  to reach the gateway (typical dev/prod iOS setups already allow local
+  networking in many apps; project entitlements/Info.plist must stay correct).
+
+- Backgrounding / jetsam: The gateway process is part of the app; aggressive
+  memory pressure could kill the app like any other Flutter app.
+
+
+8. OBSERVABILITY
+----------------
+- Failures often surface as generic load errors or 502 from the gateway;
+  deep proxy diagnostics usually require external tools (Charles, proxy logs).
+
+
+9. RESOLVED IN CODE (historical note)
+-------------------------------------
+- Earlier misuse of shelf_proxy as a “forward proxy” was incorrect (reverse
+  proxy to one origin). The current implementation uses HttpClient +
+  findProxy so CONNECT-based HTTPS through an HTTP proxy behaves like a normal
+  forward proxy client.
+
+
+End of document.

@@ -23,11 +23,42 @@ import 'package:mira/pages/browser_sheet.dart';
 import 'package:mira/pages/browser_chrome_providers.dart';
 import 'package:mira/core/notifiers/hibernation_notifier.dart';
 
+/// Close the menu route, then push [page] on the root navigator (desktop popup).
+void _popMenuThenPush(BuildContext context, Widget page) {
+  final rootNav = Navigator.of(context, rootNavigator: true);
+  Navigator.of(context).pop();
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (rootNav.context.mounted) {
+      rootNav.push(MaterialPageRoute<void>(builder: (_) => page));
+    }
+  });
+}
+
+/// Close the menu, then show the search-engine sheet anchored to the browser shell.
+void _popMenuThenShowSearchSheet(BuildContext context) {
+  final rootNav = Navigator.of(context, rootNavigator: true);
+  Navigator.of(context).pop();
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (!rootNav.context.mounted) return;
+    showModalBottomSheet<void>(
+      context: rootNav.context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const BrowserSheet(),
+    );
+  });
+}
+
 /// Full-page replacement for the old end-drawer.
 /// Opened via Navigator.push so it sits on the back stack — no swipe-to-open
 /// gesture means the Android back-swipe no longer accidentally triggers it.
+///
+/// When [desktopOverlay] is true (desktop `...` popup), full-screen destinations
+/// close the popup first, then push on the root navigator so the WebView stays visible
+/// until the new page covers it.
 class MiraMenuPage extends ConsumerWidget {
-  const MiraMenuPage({super.key});
+  const MiraMenuPage({super.key, this.desktopOverlay = false});
+
+  final bool desktopOverlay;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -49,7 +80,10 @@ class MiraMenuPage extends ConsumerWidget {
       appBar: AppBar(
         backgroundColor: theme.surfaceColor,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: appTextColor),
+          icon: Icon(
+            desktopOverlay ? Icons.close : Icons.arrow_back,
+            color: appTextColor,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
@@ -82,11 +116,17 @@ class MiraMenuPage extends ConsumerWidget {
               enabled: !isGhost,
               onTap: isGhost
                   ? null
-                  : () => Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => const HistoryPage()),
-                      ),
+                  : () {
+                      if (desktopOverlay) {
+                        _popMenuThenPush(context, const HistoryPage());
+                      } else {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const HistoryPage()),
+                        );
+                      }
+                    },
             ),
 
             ListTile(
@@ -96,21 +136,33 @@ class MiraMenuPage extends ConsumerWidget {
               enabled: !isGhost,
               onTap: isGhost
                   ? null
-                  : () => Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => const BookmarksPage()),
-                      ),
+                  : () {
+                      if (desktopOverlay) {
+                        _popMenuThenPush(context, const BookmarksPage());
+                      } else {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const BookmarksPage()),
+                        );
+                      }
+                    },
             ),
 
             ListTile(
               leading:
                   Icon(Icons.download, color: appTextColor.withAlpha(179)),
               title: Text('Downloads', style: TextStyle(color: appTextColor)),
-              onTap: () => Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => const DownloadsPage()),
-              ),
+              onTap: () {
+                if (desktopOverlay) {
+                  _popMenuThenPush(context, const DownloadsPage());
+                } else {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (_) => const DownloadsPage()),
+                  );
+                }
+              },
             ),
 
             ListTile(
@@ -118,12 +170,20 @@ class MiraMenuPage extends ConsumerWidget {
               title: Text('Search Engine',
                   style: TextStyle(color: appTextColor)),
               onTap: () {
-                Navigator.pop(context);
-                showModalBottomSheet(
-                  context: context,
-                  backgroundColor: Colors.transparent,
-                  builder: (_) => const BrowserSheet(),
-                );
+                if (desktopOverlay) {
+                  _popMenuThenShowSearchSheet(context);
+                } else {
+                  final rootNav = Navigator.of(context, rootNavigator: true);
+                  Navigator.pop(context);
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (!rootNav.context.mounted) return;
+                    showModalBottomSheet<void>(
+                      context: rootNav.context,
+                      backgroundColor: Colors.transparent,
+                      builder: (_) => const BrowserSheet(),
+                    );
+                  });
+                }
               },
             ),
 
@@ -136,6 +196,7 @@ class MiraMenuPage extends ConsumerWidget {
               leading: Icon(Icons.link, color: appTextColor.withAlpha(179)),
               title: Text('Copy URL', style: TextStyle(color: appTextColor)),
               onTap: () {
+                final rootNav = Navigator.of(context, rootNavigator: true);
                 final url = ref.read(currentActiveTabProvider).url;
                 if (url.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -144,9 +205,21 @@ class MiraMenuPage extends ConsumerWidget {
                   return;
                 }
                 Clipboard.setData(ClipboardData(text: url));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('URL copied to clipboard')),
-                );
+                if (desktopOverlay) {
+                  Navigator.of(context).pop();
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (rootNav.context.mounted) {
+                      ScaffoldMessenger.of(rootNav.context).showSnackBar(
+                        const SnackBar(
+                            content: Text('URL copied to clipboard')),
+                      );
+                    }
+                  });
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('URL copied to clipboard')),
+                  );
+                }
               },
             ),
 
@@ -156,20 +229,25 @@ class MiraMenuPage extends ConsumerWidget {
               title:
                   Text('Open Externally', style: TextStyle(color: appTextColor)),
               onTap: () async {
+                final navigator = Navigator.of(context, rootNavigator: true);
+                final messenger = ScaffoldMessenger.of(context);
                 final url = ref.read(currentActiveTabProvider).url;
                 if (url.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  messenger.showSnackBar(
                     const SnackBar(content: Text('No page loaded yet')),
                   );
                   return;
                 }
                 final uri = Uri.tryParse(url);
-                if (uri != null && await canLaunchUrl(uri)) {
-                  await launchUrl(uri, mode: LaunchMode.externalApplication);
-                } else if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                if (uri == null || !await canLaunchUrl(uri)) {
+                  messenger.showSnackBar(
                     const SnackBar(content: Text('Could not open this URL')),
                   );
+                  return;
+                }
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+                if (desktopOverlay && navigator.context.mounted) {
+                  navigator.pop();
                 }
               },
             ),
@@ -179,6 +257,7 @@ class MiraMenuPage extends ConsumerWidget {
                   Icon(Icons.save_alt, color: appTextColor.withAlpha(179)),
               title: Text('Save Page', style: TextStyle(color: appTextColor)),
               onTap: () async {
+                final rootNav = Navigator.of(context, rootNavigator: true);
                 final controller = ref.read(browserChromeProvider).controller;
                 if (controller == null) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -204,10 +283,22 @@ class MiraMenuPage extends ConsumerWidget {
                 final savedPath = await ref
                     .read(downloadsProvider.notifier)
                     .savePage(html, filename);
-                if (context.mounted && savedPath != null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Saved: $filename')),
-                  );
+                if (!context.mounted) return;
+                if (savedPath != null) {
+                  if (desktopOverlay) {
+                    rootNav.pop();
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (rootNav.context.mounted) {
+                        ScaffoldMessenger.of(rootNav.context).showSnackBar(
+                          SnackBar(content: Text('Saved: $filename')),
+                        );
+                      }
+                    });
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Saved: $filename')),
+                    );
+                  }
                 }
               },
             ),
@@ -517,6 +608,32 @@ class MiraMenuPage extends ConsumerWidget {
                           .updateProxyUrl(newUrl);
                     }
                   },
+                ),
+              if (securityState.isProxyEnabled &&
+                  !kIsWeb &&
+                  defaultTargetPlatform == TargetPlatform.iOS)
+                SwitchListTile(
+                  dense: true,
+                  contentPadding:
+                      const EdgeInsets.only(left: 72, right: 16),
+                  title: Text(
+                    'Trust proxy HTTPS (Charles / corporate)',
+                    style: TextStyle(color: appTextColor, fontSize: 13),
+                  ),
+                  subtitle: Text(
+                    'Allows the gateway to accept any server certificate. '
+                    'Only enable for proxies you fully trust.',
+                    style: TextStyle(
+                      color: appTextColor.withAlpha(140),
+                      fontSize: 11,
+                      height: 1.25,
+                    ),
+                  ),
+                  value: securityState.proxyAllowInsecureCertificates,
+                  activeThumbColor: Colors.orangeAccent,
+                  onChanged: (val) => ref
+                      .read(securityProvider.notifier)
+                      .toggleProxyAllowInsecureCertificates(val),
                 ),
             ],
 
