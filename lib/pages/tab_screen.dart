@@ -26,7 +26,7 @@ class TabsSheet extends ConsumerWidget {
 
     final ghostTabsState = ref.watch(ghostTabsProvider);
     final ghostTabs = ghostTabsState.tabs;
-    final activeGhostTab = ghostTabsState.activeTab;
+    final activeGhostTab = ghostTabsState.safeActiveTab;
 
     final appTheme = ref.watch(themeProvider);
     final backgroundColor = appTheme.surfaceColor;
@@ -88,8 +88,9 @@ class TabsSheet extends ConsumerWidget {
                           context,
                           ref,
                           tab: ghostTabs[index],
-                          activeTabId:
-                              isGhostModeActive ? activeGhostTab.id : '',
+                          activeTabId: isGhostModeActive
+                              ? (activeGhostTab?.id ?? '')
+                              : '',
                           isGhost: true,
                           accentColor: Colors.redAccent,
                           textColor: textColor,

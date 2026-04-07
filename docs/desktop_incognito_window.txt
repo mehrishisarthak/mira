@@ -1,0 +1,26 @@
+MIRA desktop — separate OS window for private browsing (Chrome parity)
+========================================================================
+
+Private browsing can run in a **dedicated desktop window** (Chrome-like), using
+`desktop_multi_window`. A second Flutter engine receives `WindowConfiguration`
+arguments (`kMiraPrivateWindowArgs` in `lib/core/desktop/mira_window_args.dart`);
+`main.dart` boots that engine with ephemeral tab persistence and
+`Mainscreen(isPrivateBrowserWindow: true)`.
+
+**Open a private window**
+- File → New private window, or **Ctrl+Shift+N** (Cmd+Shift+N on macOS where
+  the same hotkey is wired).
+- Drawer (desktop): “New private window”.
+
+**Still in the main window**
+- Ghost / private tabs in the same window remain available (red-accent strip
+  when active). The private **window** is separate from that in-window mode.
+
+**Native**
+- Windows: `flutter_window.cpp` registers plugins on sub-window creation.
+- macOS: `MainFlutterWindow.swift` — `FlutterMultiWindowPlugin.setOnWindowCreatedCallback`.
+- Linux: `my_application.cc` — `desktop_multi_window_plugin_set_window_created_callback`.
+
+`window_manager` continues to manage title and the **current** window; it does
+not create additional engines — `desktop_multi_window` does.
+

@@ -56,7 +56,8 @@ class _GhostLandingPage extends StatelessWidget {
                 style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
-              _buildGhostItem(Icons.history, "Browsing History"),
+              _buildGhostItem(
+                  Icons.history, "New entries in History (not saved)"),
               _buildGhostItem(Icons.cookie, "Cookies & Site Data"),
               _buildGhostItem(Icons.cached, "Form Data & Cache"),
 

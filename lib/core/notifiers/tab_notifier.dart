@@ -11,7 +11,20 @@ class TabsState {
 
   TabsState({required this.tabs, required this.activeIndex});
 
-  BrowserTab get activeTab => tabs[activeIndex];
+  BrowserTab get activeTab {
+    if (tabs.isEmpty) {
+      throw StateError('TabsState has no tabs');
+    }
+    final i = activeIndex.clamp(0, tabs.length - 1);
+    return tabs[i];
+  }
+
+  /// Used when a session may have zero tabs (ghost/private before first tab).
+  BrowserTab? get safeActiveTab {
+    if (tabs.isEmpty) return null;
+    final i = activeIndex.clamp(0, tabs.length - 1);
+    return tabs[i];
+  }
 
   @override
   bool operator ==(Object other) =>
@@ -44,7 +57,24 @@ class TabsNotifier extends StateNotifier<TabsState> {
         if (safeIndex < 0 || safeIndex >= loadedTabs.length) {
           safeIndex = 0;
         }
-        state = TabsState(tabs: loadedTabs, activeIndex: safeIndex);
+        var nextTabs = loadedTabs;
+        var nextIndex = safeIndex;
+        var didPrependFreshDial = false;
+        final isDesktop = !kIsWeb &&
+            (defaultTargetPlatform == TargetPlatform.windows ||
+                defaultTargetPlatform == TargetPlatform.macOS ||
+                defaultTargetPlatform == TargetPlatform.linux);
+        if (isDesktop &&
+            loadedTabs.isNotEmpty &&
+            loadedTabs[safeIndex].url.isNotEmpty) {
+          nextTabs = [BrowserTab(), ...loadedTabs];
+          nextIndex = 0;
+          didPrependFreshDial = true;
+        }
+        state = TabsState(tabs: nextTabs, activeIndex: nextIndex);
+        if (didPrependFreshDial) {
+          _saveToPrefs();
+        }
       } catch (e, stack) {
         debugPrint('[MIRA] TabNotifier corrupted data: $e\n$stack');
         state = TabsState(
@@ -71,7 +101,9 @@ class TabsNotifier extends StateNotifier<TabsState> {
 
   void closeTab(String tabId) {
     if (state.tabs.length == 1) {
-      updateUrl(''); 
+      _updateActiveTab(
+        (tab) => tab.copyWith(url: '', title: 'New Tab'),
+      );
       return;
     }
 

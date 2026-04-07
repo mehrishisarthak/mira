@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mira/core/notifiers/ghost_notifier.dart';
 import 'package:mira/core/notifiers/tab_notifier.dart';
 import 'package:mira/pages/browser_chrome_providers.dart';
+import 'package:mira/shell/desktop/open_private_browser_window.dart';
 
 /// Returns `true` when the event was handled (Chrome-like desktop shortcuts).
 bool handleDesktopBrowserHotkey({
@@ -17,6 +18,7 @@ bool handleDesktopBrowserHotkey({
   required FocusNode urlFocusNode,
   required TextEditingController urlController,
   required void Function() openFindDialog,
+  bool standalonePrivateWindow = false,
 }) {
   if (kIsWeb || Platform.isAndroid || Platform.isIOS) return false;
   if (!mounted) return false;
@@ -47,16 +49,27 @@ bool handleDesktopBrowserHotkey({
 
   final web = ref.read(browserChromeProvider).controller;
 
+  if (mod &&
+      HardwareKeyboard.instance.isShiftPressed &&
+      key == LogicalKeyboardKey.keyN) {
+    openMiraPrivateBrowserWindow();
+    return true;
+  }
+
   if (key == LogicalKeyboardKey.keyT) {
-    ref.read(tabsProvider.notifier).addTab();
-    ref.read(isGhostModeProvider.notifier).state = false;
+    if (standalonePrivateWindow) {
+      ref.read(ghostTabsProvider.notifier).addTab();
+      ref.read(isGhostModeProvider.notifier).state = true;
+    } else {
+      ref.read(tabsProvider.notifier).addTab();
+      ref.read(isGhostModeProvider.notifier).state = false;
+    }
     return true;
   }
 
   if (key == LogicalKeyboardKey.keyW) {
-    final isGhost = ref.read(isGhostModeProvider);
     final active = ref.read(currentActiveTabProvider);
-    if (isGhost) {
+    if (standalonePrivateWindow || ref.read(isGhostModeProvider)) {
       ref.read(ghostTabsProvider.notifier).closeTab(active.id);
     } else {
       ref.read(tabsProvider.notifier).closeTab(active.id);
@@ -102,7 +115,11 @@ bool handleDesktopBrowserHotkey({
 
   if (key == LogicalKeyboardKey.tab) {
     final back = HardwareKeyboard.instance.isShiftPressed;
-    _cycleActiveTab(ref, forward: !back);
+    _cycleActiveTab(
+      ref,
+      forward: !back,
+      standalonePrivateWindow: standalonePrivateWindow,
+    );
     return true;
   }
 
@@ -120,7 +137,22 @@ bool handleDesktopBrowserHotkey({
   return false;
 }
 
-void _cycleActiveTab(WidgetRef ref, {required bool forward}) {
+void _cycleActiveTab(
+  WidgetRef ref, {
+  required bool forward,
+  required bool standalonePrivateWindow,
+}) {
+  if (standalonePrivateWindow) {
+    final s = ref.read(ghostTabsProvider);
+    if (s.tabs.isEmpty) return;
+    final n = s.tabs.length;
+    final next = forward
+        ? (s.activeIndex + 1) % n
+        : (s.activeIndex - 1 + n) % n;
+    ref.read(ghostTabsProvider.notifier).switchTab(next);
+    return;
+  }
+
   final isGhost = ref.read(isGhostModeProvider);
   if (isGhost) {
     final s = ref.read(ghostTabsProvider);

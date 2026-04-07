@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:mira/core/desktop/private_standalone_window_provider.dart';
 import 'package:mira/core/notifiers/ghost_notifier.dart';
 import 'package:mira/core/notifiers/security_notifier.dart';
 import 'package:mira/core/notifiers/tab_notifier.dart';
@@ -42,6 +43,19 @@ void registerBrowserViewSideEffects({
   });
 
   ref.listen(ghostTabsProvider, (previous, next) {
+    session.cleanUpClosedTabs(next.tabs, ref);
+
+    if (next.tabs.isEmpty) {
+      if (ref.read(privateStandaloneWindowProvider)) {
+        ref.read(ghostTabsProvider.notifier).addTab();
+        return;
+      }
+      if (ref.read(isGhostModeProvider)) {
+        ref.read(isGhostModeProvider.notifier).state = false;
+      }
+      return;
+    }
+
     if (ref.read(isGhostModeProvider)) {
       final prevId = activeTabIdFromState(previous);
       final nextId = activeTabIdFromState(next);
@@ -49,16 +63,13 @@ void registerBrowserViewSideEffects({
         ref.read(browserChromeProvider.notifier).clearWebError();
         session.cancelSkeletonDismissTimer();
       }
-      session.cleanUpClosedTabs(next.tabs, ref);
-      if (next.tabs.isNotEmpty) {
-        final newActiveId = next.tabs[next.activeIndex].id;
-        final prevActiveId = activeTabIdFromState(previous);
-        if (previous == null ||
-            previous.activeIndex != next.activeIndex ||
-            prevActiveId != newActiveId) {
-          ref.read(hibernationProvider.notifier).wakeTab(newActiveId);
-          session.updateControllersPauseState(newActiveId);
-        }
+      final newActiveId = next.tabs[next.activeIndex].id;
+      final prevActiveId = activeTabIdFromState(previous);
+      if (previous == null ||
+          previous.activeIndex != next.activeIndex ||
+          prevActiveId != newActiveId) {
+        ref.read(hibernationProvider.notifier).wakeTab(newActiveId);
+        session.updateControllersPauseState(newActiveId);
       }
     }
   });

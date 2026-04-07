@@ -30,8 +30,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('ACTIVE SESSIONS'), findsOneWidget);
-    expect(find.text('GHOST PROTOCOL'), findsOneWidget);
-    expect(find.byType(SliverGrid), findsNWidgets(2));
+    // Ghost/private section is omitted until the user starts a private session.
+    expect(find.text('GHOST PROTOCOL'), findsNothing);
+    expect(find.byType(SliverGrid), findsOneWidget);
     expect(find.text('New Tab'), findsWidgets);
   });
 

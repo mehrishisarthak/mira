@@ -22,6 +22,7 @@ import 'package:mira/pages/browser_sheet.dart';
 
 import 'package:mira/pages/browser_chrome_providers.dart';
 import 'package:mira/core/notifiers/hibernation_notifier.dart';
+import 'package:mira/shell/desktop/open_private_browser_window.dart';
 
 /// Close the menu route, then push [page] on the root navigator (desktop popup).
 void _popMenuThenPush(BuildContext context, Widget page) {
@@ -113,20 +114,16 @@ class MiraMenuPage extends ConsumerWidget {
             ListTile(
               leading: Icon(Icons.history, color: appTextColor.withAlpha(179)),
               title: Text('History', style: TextStyle(color: appTextColor)),
-              enabled: !isGhost,
-              onTap: isGhost
-                  ? null
-                  : () {
-                      if (desktopOverlay) {
-                        _popMenuThenPush(context, const HistoryPage());
-                      } else {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => const HistoryPage()),
-                        );
-                      }
-                    },
+              onTap: () {
+                if (desktopOverlay) {
+                  _popMenuThenPush(context, const HistoryPage());
+                } else {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (_) => const HistoryPage()),
+                  );
+                }
+              },
             ),
 
             ListTile(
@@ -311,18 +308,29 @@ class MiraMenuPage extends ConsumerWidget {
                 isGhost ? Colors.redAccent : Colors.greenAccent),
 
             ListTile(
-              title: Text("New Ghost Tab",
-                  style: TextStyle(color: appTextColor)),
-              subtitle: Text("Start a private session",
-                  style: TextStyle(
-                      color: appTextColor.withAlpha(128), fontSize: 12)),
+              title: Text(
+                isDesktop ? "New private window" : "New Ghost Tab",
+                style: TextStyle(color: appTextColor),
+              ),
+              subtitle: Text(
+                isDesktop
+                    ? "Opens a separate private window (like Chrome)"
+                    : "Start a private session",
+                style: TextStyle(
+                    color: appTextColor.withAlpha(128), fontSize: 12),
+              ),
               leading: Icon(Icons.privacy_tip_outlined,
                   color: appTextColor.withAlpha(179)),
               onTap: () {
-                HapticFeedback.mediumImpact();
-                ref.read(isGhostModeProvider.notifier).state = true;
-                ref.read(ghostTabsProvider.notifier).addTab();
-                Navigator.pop(context);
+                if (isDesktop) {
+                  openMiraPrivateBrowserWindow();
+                  Navigator.pop(context);
+                } else {
+                  HapticFeedback.mediumImpact();
+                  ref.read(ghostTabsProvider.notifier).addTab();
+                  ref.read(isGhostModeProvider.notifier).state = true;
+                  Navigator.pop(context);
+                }
               },
             ),
 
@@ -387,24 +395,16 @@ class MiraMenuPage extends ConsumerWidget {
                   ref.read(browserChromeProvider.notifier).resetSessionChrome();
                   ref.read(tabsProvider.notifier).nuke();
                   ref.read(ghostTabsProvider.notifier).nuke();
+                  ref.read(isGhostModeProvider.notifier).state = false;
                   ref.read(browserChromeProvider.notifier).setLoadingProgress(100);
 
                   // Ensure the new blank tab is woken in LRU (listener may miss
-                  // index-only-unchanged edge case). Only wake the active session.
-                  if (ref.read(isGhostModeProvider)) {
-                    final gs = ref.read(ghostTabsProvider);
-                    if (gs.tabs.isNotEmpty) {
-                      ref
-                          .read(hibernationProvider.notifier)
-                          .wakeTab(gs.tabs[gs.activeIndex].id);
-                    }
-                  } else {
-                    final s = ref.read(tabsProvider);
-                    if (s.tabs.isNotEmpty) {
-                      ref
-                          .read(hibernationProvider.notifier)
-                          .wakeTab(s.tabs[s.activeIndex].id);
-                    }
+                  // index-only-unchanged edge case).
+                  final s = ref.read(tabsProvider);
+                  if (s.tabs.isNotEmpty) {
+                    ref
+                        .read(hibernationProvider.notifier)
+                        .wakeTab(s.tabs[s.activeIndex].id);
                   }
 
                   if (context.mounted) {
@@ -667,7 +667,8 @@ class MiraMenuPage extends ConsumerWidget {
                 padding: const EdgeInsets.all(16.0),
                 child: Center(
                   child: Text(
-                    "Ghost Mode Active — History Disabled",
+                    "Ghost mode — new visits are not saved to history",
+                    textAlign: TextAlign.center,
                     style: TextStyle(
                         color: Colors.redAccent.withAlpha(128),
                         fontSize: 12),

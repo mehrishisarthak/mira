@@ -117,7 +117,11 @@ void main() {
         ],
         child: MyApp(
           httpClient: mockClient,
-          targetScreen: const Scaffold(body: Center(child: Text('Target Screen'))),
+          home: SplashScreen(
+            httpClient: mockClient,
+            nextScreen:
+                const Scaffold(body: Center(child: Text('Target Screen'))),
+          ),
         ),
       ),
     );

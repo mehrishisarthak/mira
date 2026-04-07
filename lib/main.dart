@@ -1,5 +1,9 @@
+import 'package:desktop_multi_window/desktop_multi_window.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mira/core/desktop/mira_window_args.dart';
+import 'package:mira/core/desktop/private_standalone_window_provider.dart';
 import 'package:mira/core/services/download_manager.dart';
 import 'package:mira/shell/desktop/desktop_windowing.dart';
 import 'package:mira/core/notifiers/theme_notifier.dart';
@@ -9,44 +13,67 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mira/core/services/preferences_service.dart';
 import 'package:mira/core/observers/provider_observer.dart';
 import 'package:http/http.dart' as http;
- 
-import 'package:mira/pages/mainscreen.dart'; // Ensure filename matches (mainscreen vs main_screen)
 
-void main() async {
-  // 1. Ensure Flutter bindings are ready for async code
+import 'package:mira/pages/mainscreen.dart';
+
+Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
-  await desktopWindowManagerInit();
 
-  // 2. Initialize SharedPreferences & Service
+  var isPrivateDesktopWindow = false;
+  if (!kIsWeb) {
+    try {
+      final wc = await WindowController.fromCurrentEngine();
+      isPrivateDesktopWindow = wc.arguments == kMiraPrivateWindowArgs;
+    } catch (_) {
+      // Tests, mobile, or engine not ready for multi-window.
+    }
+  }
+
+  if (!kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.windows ||
+          defaultTargetPlatform == TargetPlatform.macOS ||
+          defaultTargetPlatform == TargetPlatform.linux)) {
+    await desktopWindowManagerInit();
+  }
+
   final prefs = await SharedPreferences.getInstance();
-  final preferencesService = PreferencesService(prefs);
-  
-  // 3. Check Onboarding Status
-  final isFirstRun = preferencesService.getFirstRun();
+  final PreferencesService preferencesService = isPrivateDesktopWindow
+      ? EphemeralTabPersistencePreferences(prefs)
+      : PreferencesService(prefs);
 
-  // 4. Download Manager
+  final isFirstRun =
+      isPrivateDesktopWindow ? false : preferencesService.getFirstRun();
+
   await DownloadManager.init();
+
+  final Widget home = isPrivateDesktopWindow
+      ? const Mainscreen(isPrivateBrowserWindow: true)
+      : SplashScreen(
+          nextScreen:
+              isFirstRun ? const OnboardingScreen() : const Mainscreen(),
+        );
 
   runApp(
     ProviderScope(
       observers: [const MiraProviderObserver()],
       overrides: [
         preferencesServiceProvider.overrideWithValue(preferencesService),
+        if (isPrivateDesktopWindow)
+          privateStandaloneWindowProvider.overrideWith((ref) => true),
       ],
       child: MyApp(
-        // Pass the TARGET screen, not the starting screen.
-        // We will pass this to the SplashScreen.
-        targetScreen: isFirstRun ? const OnboardingScreen() : const Mainscreen(),
+        home: home,
+        httpClient: null,
       ),
     ),
   );
 }
 
 class MyApp extends ConsumerWidget {
-  final Widget targetScreen; 
+  final Widget home;
   final http.Client? httpClient;
 
-  const MyApp({super.key, required this.targetScreen, this.httpClient});
+  const MyApp({super.key, required this.home, this.httpClient});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -88,9 +115,7 @@ class MyApp extends ConsumerWidget {
       theme: lightTheme,
       darkTheme: darkTheme,
       themeMode: appTheme.mode,
-      // ALWAYS start with Splash, pass the target destination
-      home: SplashScreen(nextScreen: targetScreen, httpClient: httpClient),
+      home: home,
     );
   }
 }
-

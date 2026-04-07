@@ -109,6 +109,21 @@ class PreferencesService {
   Future<void> setFirstRun(bool value) async => await _prefs.setBool(_keyFirstRun, value);
 }
 
+/// Second desktop engine for private windows: keep theme/settings on disk but never
+/// clobber the main window’s saved tab restore.
+class EphemeralTabPersistencePreferences extends PreferencesService {
+  EphemeralTabPersistencePreferences(super._prefs);
+
+  @override
+  List<String> getSavedTabs() => [];
+
+  @override
+  int getActiveTabIndex() => 0;
+
+  @override
+  Future<void> saveTabs(List<String> tabsJson, int activeIndex) async {}
+}
+
 final preferencesServiceProvider = Provider<PreferencesService>((ref) {
   assert(
     false,

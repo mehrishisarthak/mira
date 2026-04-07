@@ -11,6 +11,12 @@ import 'package:mira/pages/browser_chrome_providers.dart';
 import 'package:mira/pages/mira_drawer.dart';
 import 'package:mira/pages/main_screen/main_screen_security.dart';
 
+/// Desktop tab strip: main window shows normal tabs only; private OS window shows ghost tabs only.
+enum DesktopTabStripLayout {
+  mainBrowser,
+  privateWindow,
+}
+
 Future<void> showDesktopMiraMenuPopup(BuildContext context) async {
   await showDialog<void>(
     context: context,
@@ -138,6 +144,7 @@ Widget buildDesktopMainChrome({
   required List<BrowserTab> ghostTabs,
   required BrowserTab activeTab,
   required bool isGhost,
+  required DesktopTabStripLayout tabStripLayout,
   required Color themePrimary,
   required IconData securityIcon,
   required Color securityColor,
@@ -184,7 +191,8 @@ Widget buildDesktopMainChrome({
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (normalTabs.isNotEmpty)
+                        if (tabStripLayout == DesktopTabStripLayout.mainBrowser &&
+                            normalTabs.isNotEmpty)
                           ReorderableListView.builder(
                             scrollDirection: Axis.horizontal,
                             shrinkWrap: true,
@@ -205,7 +213,7 @@ Widget buildDesktopMainChrome({
                                   stackIndex: i,
                                   tabIsGhost: false,
                                   tabAccent: themePrimary,
-                                  showClose: normalTabs.length > 1,
+                                  showClose: true,
                                   activeTab: activeTab,
                                   sessionIsGhost: isGhost,
                                   contentColor: contentColor,
@@ -213,14 +221,8 @@ Widget buildDesktopMainChrome({
                               );
                             },
                           ),
-                        if (normalTabs.isNotEmpty && ghostTabs.isNotEmpty)
-                          Container(
-                            margin: const EdgeInsets.symmetric(horizontal: 6),
-                            width: 1,
-                            height: 22,
-                            color: contentColor.withValues(alpha: 0.2),
-                          ),
-                        if (ghostTabs.isNotEmpty)
+                        if (tabStripLayout == DesktopTabStripLayout.privateWindow &&
+                            ghostTabs.isNotEmpty)
                           ReorderableListView.builder(
                             scrollDirection: Axis.horizontal,
                             shrinkWrap: true,
@@ -241,7 +243,7 @@ Widget buildDesktopMainChrome({
                                   stackIndex: i,
                                   tabIsGhost: true,
                                   tabAccent: Colors.redAccent,
-                                  showClose: ghostTabs.length > 1,
+                                  showClose: true,
                                   activeTab: activeTab,
                                   sessionIsGhost: isGhost,
                                   contentColor: contentColor,
@@ -258,8 +260,13 @@ Widget buildDesktopMainChrome({
                 tooltip: 'New tab',
                 icon: Icon(Icons.add, color: contentColor, size: 20),
                 onPressed: () {
-                  ref.read(tabsProvider.notifier).addTab();
-                  ref.read(isGhostModeProvider.notifier).state = false;
+                  if (tabStripLayout == DesktopTabStripLayout.privateWindow) {
+                    ref.read(ghostTabsProvider.notifier).addTab();
+                    ref.read(isGhostModeProvider.notifier).state = true;
+                  } else {
+                    ref.read(tabsProvider.notifier).addTab();
+                    ref.read(isGhostModeProvider.notifier).state = false;
+                  }
                 },
               ),
             ],
@@ -334,7 +341,9 @@ Widget buildDesktopMainChrome({
                           cursorColor: accentColor,
                           decoration: InputDecoration(
                             hintText: isGhost
-                                ? 'Ghost Mode Active'
+                                ? (tabStripLayout == DesktopTabStripLayout.privateWindow
+                                    ? 'Private browsing'
+                                    : 'Ghost Mode Active')
                                 : 'Search or enter address',
                             border: InputBorder.none,
                             isDense: true,

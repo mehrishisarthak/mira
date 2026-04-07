@@ -3,6 +3,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mira/core/entities/theme_entity.dart';
 import 'package:mira/core/notifiers/search_notifier.dart';
+import 'package:mira/core/notifiers/ghost_notifier.dart';
 import 'package:mira/core/notifiers/history_notifier.dart';
 import 'package:mira/core/notifiers/tab_notifier.dart';
 import 'package:mira/core/notifiers/theme_notifier.dart';
@@ -118,7 +119,14 @@ class HistoryPage extends ConsumerWidget {
                                 .read(formattedSearchUrlProvider(item.text));
                           }
 
-                          ref.read(tabsProvider.notifier).updateUrl(finalUrl);
+                          final inGhost = ref.read(isGhostModeProvider);
+                          if (inGhost) {
+                            ref
+                                .read(ghostTabsProvider.notifier)
+                                .updateUrl(finalUrl);
+                          } else {
+                            ref.read(tabsProvider.notifier).updateUrl(finalUrl);
+                          }
 
                           ref.read(browserChromeProvider).controller?.loadUrl(
                                 urlRequest:

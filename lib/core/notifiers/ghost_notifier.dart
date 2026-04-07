@@ -2,21 +2,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mira/core/notifiers/tab_notifier.dart';
 import 'package:mira/core/entities/tab_entity.dart';
 
+/// Private / ghost tabs: **empty until** the user opens a private session from the menu
+/// or a shortcut. Nothing is shown in the desktop tab strip until then.
 class GhostTabsNotifier extends StateNotifier<TabsState> {
-  GhostTabsNotifier() : super(TabsState(tabs: [BrowserTab(title: "Ghost Tab")], activeIndex: 0));
+  GhostTabsNotifier() : super(TabsState(tabs: [], activeIndex: 0));
 
   void addTab({String url = ''}) {
-    final newTab = BrowserTab(url: url);
+    final newTab = BrowserTab(url: url, title: url.isEmpty ? 'New Tab' : 'Ghost Tab');
     final newTabs = [...state.tabs, newTab];
     state = TabsState(tabs: newTabs, activeIndex: newTabs.length - 1);
   }
 
   void closeTab(String id) {
+    if (state.tabs.isEmpty) return;
     if (state.tabs.length <= 1) {
-      updateUrl(''); 
+      state = TabsState(tabs: [], activeIndex: 0);
       return;
     }
-    
+
     final currentIndex = state.activeIndex;
     final indexToRemove = state.tabs.indexWhere((t) => t.id == id);
     if (indexToRemove == -1) return;
@@ -34,12 +37,14 @@ class GhostTabsNotifier extends StateNotifier<TabsState> {
   }
 
   void switchTab(int index) {
+    if (state.tabs.isEmpty) return;
     if (index >= 0 && index < state.tabs.length) {
       state = TabsState(tabs: state.tabs, activeIndex: index);
     }
   }
 
   void reorderTab(int oldIndex, int newIndex) {
+    if (state.tabs.isEmpty) return;
     if (oldIndex < 0 ||
         oldIndex >= state.tabs.length ||
         newIndex < 0 ||
@@ -70,6 +75,7 @@ class GhostTabsNotifier extends StateNotifier<TabsState> {
   }
 
   void updateUrl(String url) {
+    if (state.tabs.isEmpty) return;
     _updateActiveTab((tab) => tab.copyWith(url: url));
   }
 
@@ -79,8 +85,9 @@ class GhostTabsNotifier extends StateNotifier<TabsState> {
       (tab) => tab.copyWith(url: url),
     );
   }
-  
+
   void updateTitle(String title) {
+    if (state.tabs.isEmpty) return;
     _updateActiveTab((tab) => tab.copyWith(title: title));
   }
 
@@ -92,10 +99,12 @@ class GhostTabsNotifier extends StateNotifier<TabsState> {
   }
 
   void _updateActiveTab(BrowserTab Function(BrowserTab) updater) {
+    if (state.tabs.isEmpty) return;
     final currentTabs = [...state.tabs];
-    final activeTab = currentTabs[state.activeIndex];
-    currentTabs[state.activeIndex] = updater(activeTab);
-    state = TabsState(tabs: currentTabs, activeIndex: state.activeIndex);
+    final i = state.activeIndex.clamp(0, currentTabs.length - 1);
+    final activeTab = currentTabs[i];
+    currentTabs[i] = updater(activeTab);
+    state = TabsState(tabs: currentTabs, activeIndex: i);
   }
 
   void _updateTabById(
@@ -111,8 +120,7 @@ class GhostTabsNotifier extends StateNotifier<TabsState> {
   }
 
   void nuke() {
-    final newTabs = [BrowserTab(title: "Ghost Tab")];
-    state = TabsState(tabs: newTabs, activeIndex: 0);
+    state = TabsState(tabs: [], activeIndex: 0);
   }
 }
 
@@ -128,6 +136,11 @@ final currentTabListProvider = Provider<List<BrowserTab>>((ref) {
 });
 
 final currentActiveTabProvider = Provider<BrowserTab>((ref) {
+  final normal = ref.watch(tabsProvider);
   final isGhost = ref.watch(isGhostModeProvider);
-  return isGhost ? ref.watch(ghostTabsProvider).activeTab : ref.watch(tabsProvider).activeTab;
+  if (!isGhost) return normal.activeTab;
+  final ghost = ref.watch(ghostTabsProvider);
+  final g = ghost.safeActiveTab;
+  if (g != null) return g;
+  return normal.activeTab;
 });
