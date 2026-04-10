@@ -14,10 +14,12 @@ import 'package:mira/core/services/preferences_service.dart';
 import 'package:mira/core/observers/provider_observer.dart';
 import 'package:http/http.dart' as http;
 
+import 'package:mira/core/config/desktop_user_agent.dart';
 import 'package:mira/pages/mainscreen.dart';
 
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+  await initDesktopUserAgent();
 
   var isPrivateDesktopWindow = false;
   if (!kIsWeb) {

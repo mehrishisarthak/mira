@@ -193,63 +193,31 @@ Widget buildDesktopMainChrome({
                       children: [
                         if (tabStripLayout == DesktopTabStripLayout.mainBrowser &&
                             normalTabs.isNotEmpty)
-                          ReorderableListView.builder(
-                            scrollDirection: Axis.horizontal,
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            buildDefaultDragHandles: true,
-                            itemExtent: 212,
-                            itemCount: normalTabs.length,
+                          ..._buildDraggableTabChips(
+                            ref: ref,
+                            tabs: normalTabs,
+                            isGhost: false,
+                            tabAccent: themePrimary,
+                            activeTab: activeTab,
+                            sessionIsGhost: isGhost,
+                            contentColor: contentColor,
                             onReorder: (oldIndex, newIndex) => ref
                                 .read(tabsProvider.notifier)
                                 .reorderTab(oldIndex, newIndex),
-                            itemBuilder: (context, i) {
-                              final tab = normalTabs[i];
-                              return KeyedSubtree(
-                                key: ValueKey<String>('n-${tab.id}'),
-                                child: buildDesktopMainTabChip(
-                                  ref: ref,
-                                  tab: tab,
-                                  stackIndex: i,
-                                  tabIsGhost: false,
-                                  tabAccent: themePrimary,
-                                  showClose: true,
-                                  activeTab: activeTab,
-                                  sessionIsGhost: isGhost,
-                                  contentColor: contentColor,
-                                ),
-                              );
-                            },
                           ),
                         if (tabStripLayout == DesktopTabStripLayout.privateWindow &&
                             ghostTabs.isNotEmpty)
-                          ReorderableListView.builder(
-                            scrollDirection: Axis.horizontal,
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            buildDefaultDragHandles: true,
-                            itemExtent: 212,
-                            itemCount: ghostTabs.length,
+                          ..._buildDraggableTabChips(
+                            ref: ref,
+                            tabs: ghostTabs,
+                            isGhost: true,
+                            tabAccent: Colors.redAccent,
+                            activeTab: activeTab,
+                            sessionIsGhost: isGhost,
+                            contentColor: contentColor,
                             onReorder: (oldIndex, newIndex) => ref
                                 .read(ghostTabsProvider.notifier)
                                 .reorderTab(oldIndex, newIndex),
-                            itemBuilder: (context, i) {
-                              final tab = ghostTabs[i];
-                              return KeyedSubtree(
-                                key: ValueKey<String>('g-${tab.id}'),
-                                child: buildDesktopMainTabChip(
-                                  ref: ref,
-                                  tab: tab,
-                                  stackIndex: i,
-                                  tabIsGhost: true,
-                                  tabAccent: Colors.redAccent,
-                                  showClose: true,
-                                  activeTab: activeTab,
-                                  sessionIsGhost: isGhost,
-                                  contentColor: contentColor,
-                                ),
-                              );
-                            },
                           ),
                       ],
                     ),
@@ -387,4 +355,55 @@ Widget buildDesktopMainChrome({
       ],
     ),
   );
+}
+
+/// Desktop-friendly drag-to-reorder tab chips that work inside a
+/// [SingleChildScrollView] (unlike [ReorderableListView] which fights
+/// for the drag gesture with the parent scroll).
+List<Widget> _buildDraggableTabChips({
+  required WidgetRef ref,
+  required List<BrowserTab> tabs,
+  required bool isGhost,
+  required Color tabAccent,
+  required BrowserTab activeTab,
+  required bool sessionIsGhost,
+  required Color contentColor,
+  required void Function(int oldIndex, int newIndex) onReorder,
+}) {
+  return List.generate(tabs.length, (i) {
+    final tab = tabs[i];
+    final key = isGhost ? 'g-${tab.id}' : 'n-${tab.id}';
+    final chip = SizedBox(
+      width: 212,
+      child: buildDesktopMainTabChip(
+        ref: ref,
+        tab: tab,
+        stackIndex: i,
+        tabIsGhost: isGhost,
+        tabAccent: tabAccent,
+        showClose: true,
+        activeTab: activeTab,
+        sessionIsGhost: sessionIsGhost,
+        contentColor: contentColor,
+      ),
+    );
+
+    return DragTarget<int>(
+      key: ValueKey<String>(key),
+      onWillAcceptWithDetails: (details) => details.data != i,
+      onAcceptWithDetails: (details) => onReorder(details.data, i),
+      builder: (context, candidateData, rejectedData) {
+        return Draggable<int>(
+          data: i,
+          axis: Axis.horizontal,
+          feedback: Material(
+            color: Colors.transparent,
+            child: Opacity(opacity: 0.75, child: chip),
+          ),
+          childWhenDragging: Opacity(opacity: 0.3, child: chip),
+          child: chip,
+        );
+      },
+    );
+  });
 }

@@ -1,9 +1,10 @@
 import 'package:flutter/foundation.dart'
-    show kIsWeb, defaultTargetPlatform, TargetPlatform;
+    show kIsWeb, defaultTargetPlatform, TargetPlatform, debugPrint;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:mira/pages/main_screen/main_screen_haptics.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:mira/core/notifiers/history_notifier.dart';
@@ -326,7 +327,7 @@ class MiraMenuPage extends ConsumerWidget {
                   openMiraPrivateBrowserWindow();
                   Navigator.pop(context);
                 } else {
-                  HapticFeedback.mediumImpact();
+                  miraHaptic(MainScreenHapticKind.medium);
                   ref.read(ghostTabsProvider.notifier).addTab();
                   ref.read(isGhostModeProvider.notifier).state = true;
                   Navigator.pop(context);
@@ -341,7 +342,7 @@ class MiraMenuPage extends ConsumerWidget {
               leading:
                   const Icon(Icons.delete_forever, color: Colors.redAccent),
               onTap: () async {
-                HapticFeedback.selectionClick();
+                miraHaptic(MainScreenHapticKind.selection);
                 final confirm = await showDialog<bool>(
                   context: context,
                   builder: (ctx) => AlertDialog(
@@ -360,7 +361,7 @@ class MiraMenuPage extends ConsumerWidget {
                                   color: appTextColor.withAlpha(128)))),
                       TextButton(
                           onPressed: () {
-                            HapticFeedback.heavyImpact();
+                            miraHaptic(MainScreenHapticKind.medium);
                             Navigator.pop(ctx, true);
                           },
                           child: const Text("NUKE IT",

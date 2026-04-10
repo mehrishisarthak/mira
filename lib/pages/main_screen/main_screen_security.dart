@@ -8,7 +8,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mira/core/notifiers/ghost_notifier.dart';
 import 'package:mira/core/notifiers/security_notifier.dart';
 import 'package:mira/core/notifiers/theme_notifier.dart';
+import 'package:mira/core/config/desktop_user_agent.dart';
 import 'package:mira/shell/ad_block/ad_block_service_webview.dart';
+import 'package:mira/pages/browser/webview_session.dart' show effectiveDesktopMode;
 import 'package:mira/pages/browser_chrome_providers.dart';
 
 void showSecurityDialogForUrl(
@@ -59,9 +61,10 @@ Future<void> applyMainScreenWebViewSettings(
       ? ForceDark.OFF
       : (theme.mode == ThemeMode.dark ? ForceDark.ON : ForceDark.AUTO);
 
+  final desktopMode = effectiveDesktopMode(securityState.isDesktopMode);
   final settings = InAppWebViewSettings(
     incognito: isGhost || securityState.isIncognito,
-    clearCache: isGhost || securityState.isIncognito,
+    clearCache: false,
     useOnDownloadStart: true,
     contentBlockers: securityState.isAdBlockEnabled
         ? AdBlockServiceWebview.contentBlockers
@@ -69,10 +72,12 @@ Future<void> applyMainScreenWebViewSettings(
     forceDark: forceDarkSetting,
     algorithmicDarkeningAllowed: (theme.mode == ThemeMode.dark),
     useHybridComposition: !kIsWeb && Platform.isAndroid,
-    userAgent: securityState.isDesktopMode
-        ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        : null,
-    preferredContentMode: securityState.isDesktopMode
+    userAgent: desktopModeUserAgent(
+      isDesktop: !kIsWeb &&
+          (Platform.isWindows || Platform.isMacOS || Platform.isLinux),
+      desktopModeOn: desktopMode,
+    ),
+    preferredContentMode: desktopMode
         ? UserPreferredContentMode.DESKTOP
         : UserPreferredContentMode.MOBILE,
   );

@@ -1,11 +1,12 @@
 import 'dart:io';
 
-/// Desktop: keep many WebViews warm (Chrome-like). Mobile: small LRU to save RAM.
+/// Desktop: keep several WebViews warm (Chrome-like). Mobile: small LRU to save RAM.
 int maxAliveWebViewTabs() {
   if (Platform.isWindows) {
-    // WebView2 can lose paint/input stability when multiple native surfaces
-    // stay mounted in the same Flutter tree. Keep one live view on Windows.
-    return 1;
+    // WebView2 on Flutter can hit paint glitches with many simultaneous native
+    // surfaces. 4 is a safe middle-ground: covers a typical working set without
+    // full-reloading on every tab switch, while avoiding surface exhaustion.
+    return 4;
   }
   if (Platform.isMacOS || Platform.isLinux) {
     return 64;

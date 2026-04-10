@@ -34,8 +34,7 @@ class AdBlockScripts {
     }
   """;
 
-  /// JavaScript for blocking popups, alerts, and mocking ad-variables 
-  /// to bypass basic anti-adblocker checks.
+  /// JavaScript for blocking ad popups while allowing CAPTCHA / auth flows.
   static const String popupBlockerJs = """
     (function() {
       // 1. Mock Ad-Variables (Fool basic Anti-Adblock scripts)
@@ -50,18 +49,83 @@ class AdBlockScripts {
       style.innerHTML = adHidingCssPlaceholder;
       (document.head || document.documentElement).appendChild(style);
 
-      // 3. Popup & Alert Blocking
       const log = (msg) => console.log("MIRA_SHIELD: " + msg);
-      
-      window.alert = function(m) { log("Blocked Alert: " + m); };
-      window.confirm = function(m) { log("Blocked Confirm: " + m); return true; };
-      window.prompt = function(m) { log("Blocked Prompt: " + m); return null; };
-      
-      // 4. Prevent aggressive window.open popups
-      const originalOpen = window.open;
+
+      // 3. Allowlisted domains whose popups / dialogs must not be blocked
+      //    (CAPTCHA providers, OAuth, payment gateways).
+      const _allowedOrigins = [
+        'recaptcha', 'google.com/recaptcha', 'gstatic.com/recaptcha',
+        'hcaptcha.com', 'newassets.hcaptcha.com',
+        'challenges.cloudflare.com', 'turnstile',
+        'accounts.google.com', 'appleid.apple.com',
+        'login.microsoftonline.com', 'login.live.com',
+        'github.com/login', 'id.apple.com',
+        'checkout.stripe.com', 'js.stripe.com',
+        'paypal.com', 'pay.google.com',
+      ];
+
+      function _isAllowedCaller() {
+        try {
+          const stack = new Error().stack || '';
+          for (const origin of _allowedOrigins) {
+            if (stack.includes(origin)) return true;
+          }
+          const active = document.activeElement;
+          if (active) {
+            const src = (active.src || '') + ' ' + (active.baseURI || '');
+            for (const origin of _allowedOrigins) {
+              if (src.includes(origin)) return true;
+            }
+          }
+          const frames = document.querySelectorAll('iframe');
+          for (const f of frames) {
+            const fsrc = f.src || '';
+            for (const origin of _allowedOrigins) {
+              if (fsrc.includes(origin)) return true;
+            }
+          }
+        } catch (_) {}
+        return false;
+      }
+
+      // 3b. Keep native references so allowed callers pass through.
+      const _nativeAlert   = window.alert.bind(window);
+      const _nativeConfirm = window.confirm.bind(window);
+      const _nativePrompt  = window.prompt.bind(window);
+      const _nativeOpen    = window.open.bind(window);
+
+      window.alert = function(m) {
+        if (_isAllowedCaller()) return _nativeAlert(m);
+        log("Blocked Alert: " + m);
+      };
+      window.confirm = function(m) {
+        if (_isAllowedCaller()) return _nativeConfirm(m);
+        log("Blocked Confirm: " + m);
+        return true;
+      };
+      window.prompt = function(m, d) {
+        if (_isAllowedCaller()) return _nativePrompt(m, d);
+        log("Blocked Prompt: " + m);
+        return null;
+      };
+
+      // 4. window.open — allow CAPTCHA / auth, block ad popups.
+      function _isAllowedUrl(url) {
+        if (!url) return false;
+        const s = String(url).toLowerCase();
+        for (const origin of _allowedOrigins) {
+          if (s.includes(origin)) return true;
+        }
+        return false;
+      }
+
       window.open = function(url, name, specs, replace) {
-        log("Intercepted window.open: " + url);
-        return null; 
+        if (_isAllowedUrl(url) || _isAllowedCaller()) {
+          log("Allowed window.open: " + url);
+          return _nativeOpen(url, name, specs, replace);
+        }
+        log("Blocked window.open: " + url);
+        return null;
       };
 
       // 5. Cleanup observer to handle dynamically loaded ads

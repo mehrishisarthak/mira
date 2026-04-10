@@ -2,10 +2,10 @@ import 'dart:io';
 
 import 'package:flutter/gestures.dart' show PointerScrollEvent;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:mira/pages/main_screen/main_screen_haptics.dart';
 
 import 'package:mira/core/notifiers/ghost_notifier.dart';
 import 'package:mira/core/notifiers/security_notifier.dart';
@@ -117,7 +117,7 @@ class _BrowserViewState extends ConsumerState<BrowserView>
         error: errorMessage,
         url: tabs[activeIndex].url,
         onRetry: () {
-          HapticFeedback.mediumImpact();
+          miraHaptic(MainScreenHapticKind.medium);
           ref.read(browserChromeProvider.notifier).clearWebError();
           final retryController = ref.read(browserChromeProvider).controller;
           if (retryController != null) {
@@ -145,11 +145,13 @@ class _BrowserViewState extends ConsumerState<BrowserView>
         if (!isDesktop) return;
         final dx = signal.scrollDelta.dx;
         final dy = signal.scrollDelta.dy;
-        if (dx.abs() <= dy.abs() * 2 || dx.abs() < 40) return;
+        // Only fire on strongly horizontal events: ignore if any meaningful
+        // vertical component is present (trackpad wobble) or delta is small.
+        if (dy.abs() > 5 || dx.abs() < 120) return;
         final now = DateTime.now();
         if (_session.lastHorizontalWheelNavAt != null &&
             now.difference(_session.lastHorizontalWheelNavAt!) <
-                const Duration(milliseconds: 550)) {
+                const Duration(milliseconds: 800)) {
           return;
         }
         _session.lastHorizontalWheelNavAt = now;
@@ -184,12 +186,10 @@ class _BrowserViewState extends ConsumerState<BrowserView>
 
             return Positioned.fill(
               key: ValueKey('vis_${tab.id}'),
-              child: IgnorePointer(
-                ignoring: !isShowing,
-                child: Opacity(
-                  opacity: isShowing ? 1.0 : 0.0,
-                  child: content,
-                ),
+              child: Visibility(
+                visible: isShowing,
+                maintainState: true,
+                child: content,
               ),
             );
           }),

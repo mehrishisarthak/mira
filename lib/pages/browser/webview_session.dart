@@ -16,7 +16,22 @@ import 'package:mira/core/notifiers/hibernation_notifier.dart';
 import 'package:mira/pages/browser_chrome_providers.dart';
 import 'package:mira/shell/ad_block/ad_block_service_webview.dart';
 
+import 'package:mira/core/config/desktop_user_agent.dart';
+
 import 'webview_constants.dart';
+
+/// On desktop platforms the WebView should always request desktop content;
+/// the toggle only exists on mobile.
+bool effectiveDesktopMode(bool userPref) {
+  if (kIsWeb) return userPref;
+  if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) return true;
+  return userPref;
+}
+
+bool _isDesktopPlatform() {
+  if (kIsWeb) return false;
+  return Platform.isWindows || Platform.isMacOS || Platform.isLinux;
+}
 
 /// Owns per-tab WebView controllers, memoized requests/settings, and timers.
 /// Keeps [BrowserView] state small and mirrors the previous single-file behavior.
@@ -30,11 +45,6 @@ class WebViewSession {
   String? cachedWebSettingsSignature;
   InAppWebViewSettings? cachedWebSettings;
   ContextMenu? cachedDesktopContextMenu;
-
-  Future<WebResourceResponse?> Function(
-    InAppWebViewController controller,
-    WebResourceRequest request,
-  )? stableShouldInterceptRequest;
 
   Timer? skeletonDismissTimer;
   String? webviewJustCreatedForTabId;
@@ -90,16 +100,17 @@ class WebViewSession {
     required MiraTheme theme,
     required ForceDark forceDarkSetting,
   }) {
+    final desktopMode = effectiveDesktopMode(securityState.isDesktopMode);
     final sig =
         '$isGhost|${securityState.isIncognito}|${securityState.isAdBlockEnabled}|'
-        '${securityState.isDesktopMode}|${theme.mode}|$forceDarkSetting';
+        '$desktopMode|${theme.mode}|$forceDarkSetting';
     if (cachedWebSettingsSignature == sig && cachedWebSettings != null) {
       return cachedWebSettings!;
     }
     cachedWebSettingsSignature = sig;
     cachedWebSettings = InAppWebViewSettings(
       incognito: isGhost || securityState.isIncognito,
-      clearCache: isGhost || securityState.isIncognito,
+      clearCache: false,
       cacheMode: CacheMode.LOAD_DEFAULT,
       useOnDownloadStart: true,
       contentBlockers: securityState.isAdBlockEnabled
@@ -110,10 +121,11 @@ class WebViewSession {
       useHybridComposition: !kIsWeb && Platform.isAndroid,
       hardwareAcceleration: true,
       transparentBackground: false,
-      userAgent: securityState.isDesktopMode
-          ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-          : null,
-      preferredContentMode: securityState.isDesktopMode
+      userAgent: desktopModeUserAgent(
+        isDesktop: _isDesktopPlatform(),
+        desktopModeOn: desktopMode,
+      ),
+      preferredContentMode: desktopMode
           ? UserPreferredContentMode.DESKTOP
           : UserPreferredContentMode.MOBILE,
     );
@@ -170,9 +182,10 @@ class WebViewSession {
         ? ForceDark.OFF
         : (theme.mode == ThemeMode.dark ? ForceDark.ON : ForceDark.AUTO);
 
+    final desktopMode = effectiveDesktopMode(securityState.isDesktopMode);
     final settings = InAppWebViewSettings(
       incognito: isGhost || securityState.isIncognito,
-      clearCache: isGhost || securityState.isIncognito,
+      clearCache: false,
       cacheMode: CacheMode.LOAD_DEFAULT,
       useOnDownloadStart: true,
       contentBlockers: securityState.isAdBlockEnabled
@@ -183,10 +196,11 @@ class WebViewSession {
       useHybridComposition: !kIsWeb && Platform.isAndroid,
       hardwareAcceleration: true,
       transparentBackground: false,
-      userAgent: securityState.isDesktopMode
-          ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-          : null,
-      preferredContentMode: securityState.isDesktopMode
+      userAgent: desktopModeUserAgent(
+        isDesktop: _isDesktopPlatform(),
+        desktopModeOn: desktopMode,
+      ),
+      preferredContentMode: desktopMode
           ? UserPreferredContentMode.DESKTOP
           : UserPreferredContentMode.MOBILE,
     );

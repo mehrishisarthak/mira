@@ -77,12 +77,11 @@ Widget buildBrowserTabContent({
       theme: theme,
       forceDarkSetting: forceDarkSetting,
     ),
-    shouldInterceptRequest: session.stableShouldInterceptRequest ??=
-        (controller, request) async {
+    shouldInterceptRequest: (controller, request) async {
       if (!ref.read(securityProvider).isAdBlockEnabled) return null;
       final host = request.url.host;
       if (AdBlockServiceWebview.blockedDomains
-          .any((domain) => host.contains(domain))) {
+          .any((domain) => host == domain || host.endsWith('.$domain'))) {
         return WebResourceResponse(
           contentType: 'text/plain',
           data: Uint8List(0),
@@ -115,6 +114,22 @@ Widget buildBrowserTabContent({
       if (url == null ||
           url.toString().isEmpty ||
           url.toString() == 'about:blank') {
+        return true;
+      }
+      final urlStr = url.toString().toLowerCase();
+      // OAuth / payment flows need a real child window so window.opener
+      // and postMessage still work.
+      if (_isAuthOrPaymentUrl(urlStr)) {
+        final browser = InAppBrowser();
+        await browser.openUrlRequest(
+          urlRequest: createWindowAction.request,
+          settings: InAppBrowserClassSettings(
+            browserSettings: InAppBrowserSettings(
+              hideUrlBar: false,
+              toolbarTopBackgroundColor: Colors.black87,
+            ),
+          ),
+        );
         return true;
       }
       if (isGhost) {
@@ -226,4 +241,28 @@ Widget buildBrowserTabContent({
       }
     },
   );
+}
+
+const _authPaymentDomains = [
+  'accounts.google.com',
+  'appleid.apple.com',
+  'id.apple.com',
+  'login.microsoftonline.com',
+  'login.live.com',
+  'github.com/login',
+  'github.com/sessions',
+  'checkout.stripe.com',
+  'js.stripe.com',
+  'paypal.com',
+  'pay.google.com',
+  'recaptcha',
+  'hcaptcha.com',
+  'challenges.cloudflare.com',
+];
+
+bool _isAuthOrPaymentUrl(String lowercaseUrl) {
+  for (final domain in _authPaymentDomains) {
+    if (lowercaseUrl.contains(domain)) return true;
+  }
+  return false;
 }

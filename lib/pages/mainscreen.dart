@@ -42,6 +42,7 @@ class Mainscreen extends ConsumerStatefulWidget {
 
 class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObserver {
   DateTime? _lastExitTime;
+  DateTime? _lastAutoHealAt;
 
   late final TextEditingController _urlController;
   late final FocusNode _urlFocusNode;
@@ -134,10 +135,18 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       if (ref.read(browserChromeProvider).webError != null) {
-         debugPrint("System: App Resumed. Healing broken connection...");
-         ref.read(browserChromeProvider.notifier).clearWebError();
-         final controller = ref.read(browserChromeProvider).controller;
-         controller?.reload();
+        // On desktop, "resumed" fires on every window-focus gain. Debounce
+        // so a persistent error doesn't trigger an infinite reload loop.
+        final now = DateTime.now();
+        if (_lastAutoHealAt != null &&
+            now.difference(_lastAutoHealAt!) < const Duration(seconds: 30)) {
+          return;
+        }
+        _lastAutoHealAt = now;
+        debugPrint("System: App Resumed. Healing broken connection...");
+        ref.read(browserChromeProvider.notifier).clearWebError();
+        final controller = ref.read(browserChromeProvider).controller;
+        controller?.reload();
       }
     }
   }
