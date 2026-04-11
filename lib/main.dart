@@ -19,6 +19,9 @@ import 'package:mira/pages/mainscreen.dart';
 
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Set a custom user agent for desktop platforms to ensure websites render the desktop version.
+  //checks if the app is runnig on desktop and if so, initializes the user agent string accordingly.
+  //returned in form of UA string that mimics a common desktop browser, which can help ensure that websites render the desktop version of their content when accessed from the app.
   await initDesktopUserAgent();
 
   var isPrivateDesktopWindow = false;

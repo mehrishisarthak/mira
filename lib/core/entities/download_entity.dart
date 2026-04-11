@@ -3,7 +3,7 @@ import 'package:path/path.dart' as p;
 
 // ── UNIFIED MODEL ─────────────────────────────────────────────────────────────
 
-enum MiraDownloadStatus { pending, running, completed, failed, paused }
+enum MiraDownloadStatus { pending, running, completed, failed, paused, canceled }
 
 class MiraDownloadTask {
   final String id;
@@ -41,14 +41,14 @@ class MiraDownloadTask {
     );
   }
 
-  /// Converts a flutter_downloader DownloadTask to MiraDownloadTask.
-  /// Only called on Android/iOS where flutter_downloader is active.
   static MiraDownloadTask fromFlutterTask(DownloadTask task) {
     final MiraDownloadStatus status;
+    
     if (task.status == DownloadTaskStatus.complete) {
       status = MiraDownloadStatus.completed;
-    } else if (task.status == DownloadTaskStatus.failed ||
-        task.status == DownloadTaskStatus.canceled) {
+    } else if (task.status == DownloadTaskStatus.canceled) {
+      status = MiraDownloadStatus.canceled;
+    } else if (task.status == DownloadTaskStatus.failed) {
       status = MiraDownloadStatus.failed;
     } else if (task.status == DownloadTaskStatus.running ||
         task.status == DownloadTaskStatus.enqueued) {
@@ -59,17 +59,19 @@ class MiraDownloadTask {
       status = MiraDownloadStatus.pending;
     }
 
+    // 3. FIXED THE NULL FILENAME TRAP
+    final safeFilename = task.filename ?? 'download';
+
     return MiraDownloadTask(
       id: task.taskId,
       url: task.url,
-      filename: task.filename ?? 'download',
-      savePath: p.join(task.savedDir, task.filename ?? ''),
+      filename: safeFilename,
+      savePath: p.join(task.savedDir, safeFilename), // Now safely uses the fallback
       status: status,
       progress: task.progress,
     );
   }
 
-  /// Desktop JSON persistence (see [DownloadsNotifier]).
   Map<String, dynamic> toJson() => {
         'id': id,
         'url': url,
@@ -81,9 +83,15 @@ class MiraDownloadTask {
       };
 
   static MiraDownloadTask fromJson(Map<String, dynamic> m) {
+    // 4. FIXED ZOMBIE TASKS: Throw an error if the URL is completely missing so the Notifier can self-heal
+    final String? parsedUrl = m['url'] as String?;
+    if (parsedUrl == null || parsedUrl.isEmpty) {
+      throw const FormatException('Missing URL in downloaded task JSON');
+    }
+
     return MiraDownloadTask(
       id: m['id'] as String,
-      url: m['url'] as String? ?? '',
+      url: parsedUrl,
       filename: m['filename'] as String? ?? 'download',
       savePath: m['savePath'] as String? ?? '',
       status: MiraDownloadStatus.values.byName(m['status'] as String? ?? 'pending'),

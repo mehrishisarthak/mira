@@ -83,22 +83,33 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
         statusIcon = Icons.check_circle;
         statusColor = Colors.greenAccent;
         statusText = "Completed";
+        break; // Ensure you break in pre-Dart 3, though it works without in newer Dart
       case MiraDownloadStatus.failed:
         statusIcon = Icons.error;
         statusColor = Colors.redAccent;
-        statusText = task.error != null ? "Failed" : "Failed";
+        statusText = "Failed"; // Cleaned up the redundant ternary operator
+        break;
+      // FIXED: Added the canceled state to prevent compile errors
+      case MiraDownloadStatus.canceled:
+        statusIcon = Icons.cancel;
+        statusColor = contentColor.withAlpha(128); // Greyed out, not red/error
+        statusText = "Canceled";
+        break;
       case MiraDownloadStatus.running:
         statusIcon = Icons.downloading;
         statusColor = appTheme.accentColor;
         statusText = "${task.progress}%";
+        break;
       case MiraDownloadStatus.pending:
         statusIcon = Icons.hourglass_empty;
         statusColor = contentColor.withAlpha(128);
         statusText = "Pending";
+        break;
       case MiraDownloadStatus.paused:
         statusIcon = Icons.pause_circle_outline;
         statusColor = Colors.orangeAccent;
         statusText = "${task.progress}% · Paused";
+        break;
     }
 
     return ListTile(
@@ -179,7 +190,8 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
       onTap: () {
         if (task.status == MiraDownloadStatus.completed) {
           ref.read(downloadsProvider.notifier).openTask(task);
-        } else if (task.status == MiraDownloadStatus.failed) {
+        } else if (task.status == MiraDownloadStatus.failed || task.status == MiraDownloadStatus.canceled) {
+          // FIXED: Allow users to retry canceled downloads just like failed ones
           ref.read(downloadsProvider.notifier).retryTask(task);
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Retrying...")),
@@ -194,4 +206,3 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
     );
   }
 }
-

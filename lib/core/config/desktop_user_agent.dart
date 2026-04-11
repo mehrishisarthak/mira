@@ -10,6 +10,8 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 String? _cachedEngineUa;
 
 /// Call once during app bootstrap (after `WidgetsFlutterBinding.ensureInitialized`).
+/// this way we can easily use the real engine's UA string for desktop mode on mobile
+/// UA Strings is used by websites to determine which version of the site to serve (desktop or mobile).
 Future<void> initDesktopUserAgent() async {
   if (kIsWeb) return;
   try {

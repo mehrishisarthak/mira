@@ -3,7 +3,8 @@ import 'package:mira/core/services/download_service.dart';
 
 class StubDownloadService implements DownloadService {
   @override
-  Future<void> startDownload(String url, String filename) {
+  // FIXED: Added the headers parameter to match the new interface
+  Future<void> startDownload(String url, String filename, {Map<String, String>? headers}) {
     throw UnimplementedError(
         'DownloadService is not supported on this platform.');
   }
@@ -45,12 +46,11 @@ class StubDownloadService implements DownloadService {
   }
 
   @override
+  // FIXED: Removed the redundant onUpdate parameter to match the new interface
   Future<void> retryTask(
     String taskId,
     String url,
     String savePath,
-    void Function(String id, MiraDownloadTask Function(MiraDownloadTask) fn)
-        onUpdate,
   ) {
     throw UnimplementedError(
         'DownloadService is not supported on this platform.');

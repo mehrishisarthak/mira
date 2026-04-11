@@ -15,6 +15,7 @@ import 'package:mira/shell/download/download_service_stub.dart';
 /// invoked after the notifier is fully constructed and assigned.
 final downloadsProvider =
     StateNotifierProvider<DownloadsNotifier, List<MiraDownloadTask>>((ref) {
+  
   if (kIsWeb) {
     return DownloadsNotifier(StubDownloadService());
   }
@@ -24,6 +25,8 @@ final downloadsProvider =
   if (Platform.isAndroid || Platform.isIOS) {
     final service = MobileDownloadService(
       onTasksReloaded: (tasks) => notifier.setTasks(tasks),
+      // The Isolate Bridge remains intact so mobile progress bars work!
+      onTaskUpdated: (id, updater) => notifier.updateTask(id, updater),
     );
     notifier = DownloadsNotifier(service);
   } else {

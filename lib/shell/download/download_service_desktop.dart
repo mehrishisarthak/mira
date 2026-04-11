@@ -9,9 +9,10 @@ import 'package:mira/core/entities/download_entity.dart';
 import 'package:mira/core/services/download_service.dart';
 
 class _DesktopTransfer {
-  _DesktopTransfer({required this.url, required this.savePath});
+  _DesktopTransfer({required this.url, required this.savePath, this.headers});
   final String url;
   final String savePath;
+  final Map<String, String>? headers; // Holds cookies/auth for this specific chunk stream
   bool pauseRequested = false;
   bool cancelRequested = false;
   HttpClient? client;
@@ -33,6 +34,7 @@ class DesktopDownloadService implements DownloadService {
   final Map<String, _DesktopTransfer> _active = {};
   final Map<String, String> _urlByTaskId = {};
   final Map<String, String> _pathByTaskId = {};
+  final Map<String, Map<String, String>?> _headersByTaskId = {}; // Remembers auth for retries/resumes
 
   void _removeActive(String taskId) {
     _active.remove(taskId);
@@ -62,7 +64,7 @@ class DesktopDownloadService implements DownloadService {
   }
 
   @override
-  Future<void> startDownload(String url, String filename) async {
+  Future<void> startDownload(String url, String filename, {Map<String, String>? headers}) async {
     final directory =
         await getDownloadsDirectory() ?? await getApplicationDocumentsDirectory();
     final savePath = p.join(directory.path, filename);
@@ -70,6 +72,7 @@ class DesktopDownloadService implements DownloadService {
 
     _urlByTaskId[taskId] = url;
     _pathByTaskId[taskId] = savePath;
+    _headersByTaskId[taskId] = headers; // Store auth headers for future resumes
 
     onTaskAdded(MiraDownloadTask(
       id: taskId,
@@ -79,7 +82,7 @@ class DesktopDownloadService implements DownloadService {
       status: MiraDownloadStatus.pending,
     ));
 
-    _active[taskId] = _DesktopTransfer(url: url, savePath: savePath);
+    _active[taskId] = _DesktopTransfer(url: url, savePath: savePath, headers: headers);
     unawaited(_runDownload(taskId));
   }
 
@@ -98,14 +101,16 @@ class DesktopDownloadService implements DownloadService {
       t.cancelRequested = true;
       return;
     }
+    
+    // FIXED: Maps to the new canceled state instead of failed
     onTaskUpdated(
       taskId,
       (x) {
         if (x.status == MiraDownloadStatus.completed) return x;
         return x.copyWith(
-          status: MiraDownloadStatus.failed,
+          status: MiraDownloadStatus.canceled,
           progress: 0,
-          error: 'Cancelled',
+          clearError: true,
         );
       },
     );
@@ -115,6 +120,8 @@ class DesktopDownloadService implements DownloadService {
   Future<void> resumeDownload(String taskId) async {
     final url = _urlByTaskId[taskId];
     final path = _pathByTaskId[taskId];
+    final headers = _headersByTaskId[taskId];
+    
     if (url == null || path == null) return;
 
     try {
@@ -131,7 +138,7 @@ class DesktopDownloadService implements DownloadService {
       ),
     );
 
-    _active[taskId] = _DesktopTransfer(url: url, savePath: path);
+    _active[taskId] = _DesktopTransfer(url: url, savePath: path, headers: headers);
     unawaited(_runDownload(taskId));
   }
 
@@ -160,6 +167,7 @@ class DesktopDownloadService implements DownloadService {
     }
     _urlByTaskId.remove(taskId);
     _pathByTaskId.remove(taskId);
+    _headersByTaskId.remove(taskId); // Clean up memory
   }
 
   @override
@@ -167,12 +175,13 @@ class DesktopDownloadService implements DownloadService {
     String taskId,
     String url,
     String savePath,
-    void Function(String id, MiraDownloadTask Function(MiraDownloadTask) fn)
-        onUpdate,
   ) async {
     _urlByTaskId[taskId] = url;
     _pathByTaskId[taskId] = savePath;
-    onUpdate(
+    final headers = _headersByTaskId[taskId]; // Fetch old auth headers
+
+    // FIXED: Uses the class-level onTaskUpdated instead of a redundant parameter
+    onTaskUpdated(
       taskId,
       (t) => t.copyWith(
         status: MiraDownloadStatus.pending,
@@ -180,7 +189,7 @@ class DesktopDownloadService implements DownloadService {
         clearError: true,
       ),
     );
-    _active[taskId] = _DesktopTransfer(url: url, savePath: savePath);
+    _active[taskId] = _DesktopTransfer(url: url, savePath: savePath, headers: headers);
     unawaited(_runDownload(taskId));
   }
 
@@ -198,9 +207,9 @@ class DesktopDownloadService implements DownloadService {
         onTaskUpdated(
           taskId,
           (x) => x.copyWith(
-            status: MiraDownloadStatus.failed,
+            status: MiraDownloadStatus.canceled,
             progress: 0,
-            error: 'Cancelled',
+            clearError: true,
           ),
         );
         return;
@@ -221,6 +230,13 @@ class DesktopDownloadService implements DownloadService {
         'Mozilla/5.0 (compatible; MIRABrowser/1.0)',
       );
 
+      // FIXED: Inject the authentication headers if they exist
+      if (t.headers != null) {
+        t.headers!.forEach((key, value) {
+          request.headers.set(key, value);
+        });
+      }
+
       final response = await request.close();
 
       if (t.cancelRequested) {
@@ -228,9 +244,9 @@ class DesktopDownloadService implements DownloadService {
         onTaskUpdated(
           taskId,
           (x) => x.copyWith(
-            status: MiraDownloadStatus.failed,
+            status: MiraDownloadStatus.canceled,
             progress: 0,
-            error: 'Cancelled',
+            clearError: true,
           ),
         );
         return;
@@ -243,7 +259,7 @@ class DesktopDownloadService implements DownloadService {
         if (location != null) {
           _urlByTaskId[taskId] = location;
           _active[taskId] =
-              _DesktopTransfer(url: location, savePath: t.savePath);
+              _DesktopTransfer(url: location, savePath: t.savePath, headers: t.headers);
           unawaited(_runDownload(taskId, redirectCount: redirectCount + 1));
         }
         return;
@@ -263,9 +279,9 @@ class DesktopDownloadService implements DownloadService {
           onTaskUpdated(
             taskId,
             (x) => x.copyWith(
-              status: MiraDownloadStatus.failed,
+              status: MiraDownloadStatus.canceled,
               progress: 0,
-              error: 'Cancelled',
+              clearError: true,
             ),
           );
           return;

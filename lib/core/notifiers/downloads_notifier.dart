@@ -63,10 +63,11 @@ class DownloadsNotifier extends StateNotifier<List<MiraDownloadTask>> {
     if (tasks.isNotEmpty && mounted) state = tasks;
   }
 
-  Future<void> startDownload(String url, {String? filename}) async {
+  // FIXED: Added headers parameter to support authenticated downloads
+  Future<void> startDownload(String url, {String? filename, Map<String, String>? headers}) async {
     final name = _resolveFilename(url, filename);
     debugPrint('MIRA_DOWNLOAD: Starting -> $name');
-    await _service.startDownload(url, name);
+    await _service.startDownload(url, name, headers: headers);
   }
 
   Future<void> openTask(MiraDownloadTask task) async {
@@ -80,7 +81,8 @@ class DownloadsNotifier extends StateNotifier<List<MiraDownloadTask>> {
   }
 
   Future<void> retryTask(MiraDownloadTask task) async {
-    await _service.retryTask(task.id, task.url, task.savePath, updateTask);
+    // FIXED: Removed the redundant updateTask callback to match the new interface
+    await _service.retryTask(task.id, task.url, task.savePath);
   }
 
   Future<void> pauseTask(MiraDownloadTask task) async {
@@ -164,6 +166,14 @@ class DownloadsNotifier extends StateNotifier<List<MiraDownloadTask>> {
           .map((e) => MiraDownloadTask.fromJson(e as Map<String, dynamic>))
           .toList();
       if (tasks.isNotEmpty && mounted) state = tasks;
+    } on FormatException catch (e) {
+      // The self-healing fix: deletes corrupted JSON to prevent permanent app failure
+      debugPrint('MIRA_DOWNLOAD: JSON Corrupted -> $e. Wiping catalog.');
+      try {
+        final dir = await getApplicationSupportDirectory();
+        final f = File(p.join(dir.path, 'mira_desktop_downloads.json'));
+        if (await f.exists()) await f.delete();
+      } catch (_) {}
     } catch (e) {
       debugPrint('MIRA_DOWNLOAD: restore desktop -> $e');
     }

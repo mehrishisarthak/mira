@@ -1,4 +1,7 @@
 import 'dart:io';
+import 'dart:isolate'; // Added for ReceivePort
+import 'dart:ui'; // Added for IsolateNameServer
+
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_downloader/flutter_downloader.dart';
@@ -8,17 +11,66 @@ import 'package:mira/core/entities/download_entity.dart';
 import 'package:mira/core/services/download_service.dart';
 
 class MobileDownloadService implements DownloadService {
-  /// Called after every operation that refreshes the task list
-  /// (startDownload, resumeDownload).  The owning notifier should
-  /// replace its state with the supplied list.
+  /// Reloads the entire list (useful when adding/deleting tasks)
   final void Function(List<MiraDownloadTask> tasks) onTasksReloaded;
+  
+  /// Granular update for a single task (perfect for progress bars)
+  final void Function(String id, MiraDownloadTask Function(MiraDownloadTask) updater) onTaskUpdated;
 
-  MobileDownloadService({required this.onTasksReloaded});
+  final ReceivePort _port = ReceivePort();
+
+  MobileDownloadService({
+    required this.onTasksReloaded,
+    required this.onTaskUpdated,
+  }) {
+    _bindBackgroundIsolate();
+  }
+
+  // ── Isolate Communication Bridge ──────────────────────────────────────────
+
+  void _bindBackgroundIsolate() {
+    // 1. Clean up any zombie ports from hot restarts
+    IsolateNameServer.removePortNameMapping('mira_download_port');
+
+    // 2. Register the UI's mailbox
+    IsolateNameServer.registerPortWithName(_port.sendPort, 'mira_download_port');
+
+    // 3. Listen for background chunks
+    _port.listen((dynamic data) {
+      final String id = data[0];
+      final int statusInt = data[1];
+      final int progress = data[2];
+
+      final fdStatus = DownloadTaskStatus.fromInt(statusInt);
+      final miraStatus = _mapStatus(fdStatus);
+
+      // Tell Riverpod to update JUST this specific task
+      onTaskUpdated(id, (oldTask) => oldTask.copyWith(
+            status: miraStatus,
+            progress: progress,
+          ));
+    });
+  }
+
+  MiraDownloadStatus _mapStatus(DownloadTaskStatus status) {
+    if (status == DownloadTaskStatus.complete) return MiraDownloadStatus.completed;
+    // FIXED: Canceled now has its own distinct UI state
+    if (status == DownloadTaskStatus.canceled) return MiraDownloadStatus.canceled;
+    if (status == DownloadTaskStatus.failed) return MiraDownloadStatus.failed;
+    if (status == DownloadTaskStatus.running || status == DownloadTaskStatus.enqueued) return MiraDownloadStatus.running;
+    if (status == DownloadTaskStatus.paused) return MiraDownloadStatus.paused;
+    return MiraDownloadStatus.pending;
+  }
+
+  void dispose() {
+    IsolateNameServer.removePortNameMapping('mira_download_port');
+    _port.close();
+  }
 
   // ── DownloadService interface ──────────────────────────────────────────────
 
   @override
-  Future<void> startDownload(String url, String filename) async {
+  Future<void> startDownload(String url, String filename, {Map<String, String>? headers}) async {
     final hasPermission = await _checkPermission();
     if (!hasPermission) {
       debugPrint('MIRA_DOWNLOAD: Permission denied');
@@ -31,12 +83,15 @@ class MobileDownloadService implements DownloadService {
       url: url,
       savedDir: directory,
       fileName: filename,
+      // FIXED: Pass the headers to the platform engine for authenticated downloads
+      headers: headers ?? {}, 
       showNotification: true,
       openFileFromNotification: true,
       saveInPublicStorage: true,
     );
 
-    // Reload so the new task appears immediately in the Downloads screen.
+    // We do a full reload here so the brand new task is added to the UI list.
+    // After it's in the list, the _port.listen() will handle all the progress updates.
     onTasksReloaded(await loadExistingTasks());
   }
 
@@ -47,7 +102,6 @@ class MobileDownloadService implements DownloadService {
     } catch (e) {
       debugPrint('MIRA_DOWNLOAD: pause failed -> $e');
     }
-    onTasksReloaded(await loadExistingTasks());
   }
 
   @override
@@ -57,7 +111,6 @@ class MobileDownloadService implements DownloadService {
     } catch (e) {
       debugPrint('MIRA_DOWNLOAD: cancel failed -> $e');
     }
-    onTasksReloaded(await loadExistingTasks());
   }
 
   @override
@@ -67,7 +120,6 @@ class MobileDownloadService implements DownloadService {
     } catch (e) {
       debugPrint('MIRA_DOWNLOAD: resume failed -> $e');
     }
-    onTasksReloaded(await loadExistingTasks());
   }
 
   @override
@@ -85,6 +137,7 @@ class MobileDownloadService implements DownloadService {
   @override
   Future<void> deleteTask(String taskId, String savePath) async {
     await FlutterDownloader.remove(taskId: taskId, shouldDeleteContent: true);
+    // Reload UI to remove the task from the screen
     onTasksReloaded(await loadExistingTasks());
   }
 
@@ -93,10 +146,10 @@ class MobileDownloadService implements DownloadService {
     String taskId,
     String url,
     String savePath,
-    void Function(String id, MiraDownloadTask Function(MiraDownloadTask) fn)
-        onUpdate,
   ) async {
+    // FIXED: Removed the redundant onUpdate parameter to match the interface
     await FlutterDownloader.retry(taskId: taskId);
+    // Just like startDownload, we reload to ensure the new ID/Task is in the Riverpod list
     onTasksReloaded(await loadExistingTasks());
   }
 

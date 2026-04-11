@@ -18,7 +18,7 @@ class Bookmark {
       'dateAdded': dateAdded.toIso8601String(),
     };
   }
-
+  // Factory constructor to create a Bookmark instance from a Map.
   factory Bookmark.fromMap(Map<String, dynamic> map) {
     return Bookmark(
       url: map['url'] ?? '',
