@@ -78,7 +78,7 @@ List<PlatformMenu> buildDesktopMainPlatformMenus({
         PlatformMenuItem(
           label: 'Reload',
           onSelected: () =>
-              ref.read(browserChromeProvider).controller?.reload(),
+              ref.read(browserChromeProvider).engine?.reload(),
         ),
       ],
     ),

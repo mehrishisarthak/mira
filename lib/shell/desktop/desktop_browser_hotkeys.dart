@@ -33,7 +33,7 @@ bool handleDesktopBrowserHotkey({
 
   if (!mod) {
     if (key == LogicalKeyboardKey.f5) {
-      ref.read(browserChromeProvider).controller?.reload();
+      ref.read(browserChromeProvider).engine?.reload();
       return true;
     }
     if (key == LogicalKeyboardKey.f6) {
@@ -47,7 +47,7 @@ bool handleDesktopBrowserHotkey({
     return false;
   }
 
-  final web = ref.read(browserChromeProvider).controller;
+  final engine = ref.read(browserChromeProvider).engine;
 
   if (mod &&
       HardwareKeyboard.instance.isShiftPressed &&
@@ -78,7 +78,7 @@ bool handleDesktopBrowserHotkey({
   }
 
   if (key == LogicalKeyboardKey.keyR) {
-    web?.reload();
+    engine?.reload();
     return true;
   }
 
@@ -98,18 +98,18 @@ bool handleDesktopBrowserHotkey({
 
   if (key == LogicalKeyboardKey.equal ||
       key == LogicalKeyboardKey.numpadAdd) {
-    web?.zoomIn();
+    engine?.zoomIn();
     return true;
   }
 
   if (key == LogicalKeyboardKey.minus ||
       key == LogicalKeyboardKey.numpadSubtract) {
-    web?.zoomOut();
+    engine?.zoomOut();
     return true;
   }
 
   if (key == LogicalKeyboardKey.digit0 || key == LogicalKeyboardKey.numpad0) {
-    web?.zoomBy(zoomFactor: 1.0);
+    engine?.resetZoom();
     return true;
   }
 
@@ -125,11 +125,11 @@ bool handleDesktopBrowserHotkey({
 
   if (HardwareKeyboard.instance.isAltPressed) {
     if (key == LogicalKeyboardKey.arrowLeft) {
-      web?.goBack();
+      engine?.goBack();
       return true;
     }
     if (key == LogicalKeyboardKey.arrowRight) {
-      web?.goForward();
+      engine?.goForward();
       return true;
     }
   }

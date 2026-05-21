@@ -189,7 +189,9 @@ class TabsNotifier extends StateNotifier<TabsState> {
   void nuke() {
     final newTabs = [BrowserTab()];
     state = TabsState(tabs: newTabs, activeIndex: 0);
-    _saveToPrefs();
+    if (!_prefsService.getIncognito()) {
+      _saveToPrefs();
+    }
   }
 
   void _updateActiveTab(BrowserTab Function(BrowserTab) updater) {

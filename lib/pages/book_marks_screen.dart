@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:mira/core/entities/theme_entity.dart';
 import 'package:mira/core/notifiers/bookmarks_notifier.dart';
 import 'package:mira/core/notifiers/tab_notifier.dart';
@@ -55,11 +54,9 @@ class BookmarksPage extends ConsumerWidget {
                     },
                   ),
                   onTap: () {
-                    // Load URL and close screen
+                    // Load URL via abstract engine and close screen
                     ref.read(tabsProvider.notifier).updateUrl(bookmark.url);
-                    ref.read(browserChromeProvider).controller?.loadUrl(
-                      urlRequest: URLRequest(url: WebUri(bookmark.url))
-                    );
+                    ref.read(activeBrowserEngineProvider)?.loadUrl(bookmark.url);
                     Navigator.pop(context);
                   },
                 );

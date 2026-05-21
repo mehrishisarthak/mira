@@ -8,7 +8,6 @@ class PreferencesService {
 
   // --- KEYS ---
   static const _keySearchEngine = 'selected_search_engine';
-  static const _keySearchHistory = 'search_history'; 
   static const _keySavedTabs = 'saved_tabs';     
   static const _keyActiveTabIndex = 'active_tab_index';
   
@@ -21,9 +20,6 @@ class PreferencesService {
   static const _keyProxyEnabled = 'mode_proxy_enabled';
   static const _keyProxyUrl = 'mode_proxy_url';
   static const _keyProxyAllowInsecureTls = 'mode_proxy_allow_insecure_tls';
-  
-  // Bookmarks Key
-  static const _keyBookmarks = 'saved_bookmarks';
 
   // Theme Keys
   static const _keyTheme = 'app_theme_style'; // For Color Accent
@@ -35,15 +31,6 @@ class PreferencesService {
   // --- SEARCH ENGINE ---
   String? getSearchEngine() => _prefs.getString(_keySearchEngine);
   Future<void> setSearchEngine(String engineKey) async => await _prefs.setString(_keySearchEngine, engineKey);
-
-  // --- HISTORY ---
-  List<String> getHistory() => _prefs.getStringList(_keySearchHistory) ?? [];
-  Future<void> setHistory(List<String> history) async => await _prefs.setStringList(_keySearchHistory, history);
-  Future<void> clearHistory() async => await _prefs.remove(_keySearchHistory);
-
-  // --- BOOKMARKS ---
-  List<String> getBookmarks() => _prefs.getStringList(_keyBookmarks) ?? [];
-  Future<void> setBookmarks(List<String> bookmarks) async => await _prefs.setStringList(_keyBookmarks, bookmarks);
 
   // --- TABS PERSISTENCE ---
   List<String> getSavedTabs() {

@@ -248,7 +248,7 @@ Widget buildDesktopMainChrome({
                 icon: Icon(Icons.arrow_back, color: contentColor, size: 20),
                 tooltip: 'Back',
                 onPressed: hasWebView
-                    ? () => ref.read(browserChromeProvider).controller?.goBack()
+                    ? () => ref.read(browserChromeProvider).engine?.goBack()
                     : null,
               ),
               IconButton(
@@ -256,14 +256,14 @@ Widget buildDesktopMainChrome({
                 tooltip: 'Forward',
                 onPressed: hasWebView
                     ? () =>
-                        ref.read(browserChromeProvider).controller?.goForward()
+                        ref.read(browserChromeProvider).engine?.goForward()
                     : null,
               ),
               IconButton(
                 icon: Icon(Icons.refresh, color: contentColor, size: 20),
                 tooltip: 'Reload',
                 onPressed: hasWebView
-                    ? () => ref.read(browserChromeProvider).controller?.reload()
+                    ? () => ref.read(browserChromeProvider).engine?.reload()
                     : null,
               ),
               const SizedBox(width: 8),

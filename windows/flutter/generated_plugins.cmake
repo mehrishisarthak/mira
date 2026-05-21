@@ -5,6 +5,7 @@
 list(APPEND FLUTTER_PLUGIN_LIST
   desktop_multi_window
   flutter_inappwebview_windows
+  isar_flutter_libs
   permission_handler_windows
   screen_retriever_windows
   url_launcher_windows

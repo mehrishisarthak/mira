@@ -3,7 +3,6 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mira/core/entities/theme_entity.dart';
 import 'package:mira/core/notifiers/theme_notifier.dart';
@@ -191,15 +190,11 @@ class _DesktopFindBarState extends ConsumerState<DesktopFindBar> {
     super.dispose();
   }
 
-  Future<InAppWebViewController?> _activeWebController() async {
-    return ref.read(browserChromeProvider).controller;
-  }
-
   Future<void> _runDesktopFindCommand(String expression) async {
-    final controller = await _activeWebController();
-    if (controller == null) return;
-    await controller.evaluateJavascript(source: _desktopFindScript);
-    await controller.evaluateJavascript(source: expression);
+    final engine = ref.read(browserChromeProvider).engine;
+    if (engine == null) return;
+    await engine.injectScript(_desktopFindScript);
+    await engine.injectScript(expression);
   }
 
   Future<void> _clearDesktopMatches() async {
@@ -220,19 +215,14 @@ class _DesktopFindBarState extends ConsumerState<DesktopFindBar> {
   void _close() {
     ref.read(desktopFindBarVisibleProvider.notifier).state = false;
     _query.clear();
-    final find = ref.read(activeFindInteractionProvider);
-    if (find != null) {
-      unawaited(find.clearMatches());
-    }
     unawaited(_clearDesktopMatches());
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
-    final find = ref.watch(activeFindInteractionProvider);
-    final web = ref.watch(browserChromeProvider).controller;
-    final canSearch = find != null || web != null;
+    final engine = ref.watch(browserChromeProvider).engine;
+    final canSearch = engine != null;
     final isLight = theme.mode == ThemeMode.light;
     final bg = theme.surfaceColor;
     final fg = isLight ? kMiraInkPrimary : Colors.white;
@@ -274,17 +264,10 @@ class _DesktopFindBarState extends ConsumerState<DesktopFindBar> {
                   onChanged: (t) async {
                     if (!canSearch) return;
                     if (t.isEmpty) {
-                      if (find != null) {
-                        await find.clearMatches();
-                      }
                       await _clearDesktopMatches();
                       return;
                     }
-                    if (find != null) {
-                      await find.findAll(find: t);
-                    } else {
-                      await _searchDesktop(t);
-                    }
+                    await _searchDesktop(t);
                   },
                 ),
               ),
@@ -293,11 +276,7 @@ class _DesktopFindBarState extends ConsumerState<DesktopFindBar> {
                 onPressed: !canSearch
                     ? null
                     : () async {
-                        if (find != null) {
-                          await find.findNext(forward: false);
-                        } else {
-                          await _stepDesktop(forward: false);
-                        }
+                        await _stepDesktop(forward: false);
                       },
                 icon: Icon(Icons.keyboard_arrow_up, color: fg, size: 22),
               ),
@@ -306,11 +285,7 @@ class _DesktopFindBarState extends ConsumerState<DesktopFindBar> {
                 onPressed: !canSearch
                     ? null
                     : () async {
-                        if (find != null) {
-                          await find.findNext(forward: true);
-                        } else {
-                          await _stepDesktop(forward: true);
-                        }
+                        await _stepDesktop(forward: true);
                       },
                 icon: Icon(Icons.keyboard_arrow_down, color: fg, size: 22),
               ),

@@ -1,60 +1,57 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mira/core/entities/bookmark_entity.dart';
-import 'package:mira/core/services/preferences_service.dart';
+import 'package:mira/core/services/isar_database_repository.dart';
+import 'package:mira/core/services/isar_schemas.dart';
+import 'package:mira/core/services/database_providers.dart';
 
-class BookmarksNotifier extends StateNotifier<List<Bookmark>> {
-  final PreferencesService _prefs;
+class BookmarksNotifier extends StateNotifier<List<BookmarkSchema>> {
+  final IsarBookmarkRepository _repository;
 
-  BookmarksNotifier(this._prefs) : super([]) {
-    _loadBookmarks();
+  BookmarksNotifier(this._repository) : super([]) {
+    _init();
   }
 
-  void _loadBookmarks() {
-    final List<String> saved = _prefs.getBookmarks();
+  Future<void> _init() async {
     try {
-      state = saved.map((e) => Bookmark.fromJson(e)).toList();
+      await _repository.init();
+      _repository.watchAll().listen((items) {
+        state = items;
+      });
     } catch (e, stack) {
-      debugPrint('[MIRA] BookmarksNotifier corrupted data: $e\n$stack');
-      state = [];
+      debugPrint('[MIRA] BookmarksNotifier init failed: $e\n$stack');
     }
   }
 
-  void toggleBookmark(String url, String title) {
+  Future<void> toggleBookmark(String url, String title) async {
     if (isBookmarked(url)) {
-      removeBookmark(url);
+      await removeBookmark(url);
     } else {
-      addBookmark(url, title);
+      await addBookmark(url, title);
     }
   }
 
-  void addBookmark(String url, String title) {
-    final newBookmark = Bookmark(
-      url: url,
-      title: title.isEmpty ? url : title,
-      dateAdded: DateTime.now(),
-    );
-    // Add to top of list
-    state = [newBookmark, ...state];
-    _saveToPrefs();
+  Future<void> addBookmark(String url, String title) async {
+    final newBookmark = BookmarkSchema()
+      ..url = url
+      ..title = title.isEmpty ? url : title
+      ..dateAdded = DateTime.now();
+    
+    await _repository.put(newBookmark);
   }
 
-  void removeBookmark(String url) {
-    state = state.where((b) => b.url != url).toList();
-    _saveToPrefs();
+  Future<void> removeBookmark(String url) async {
+    final item = state.cast<BookmarkSchema?>().firstWhere((b) => b?.url == url, orElse: () => null);
+    if (item != null) {
+      await _repository.delete(item.id);
+    }
   }
 
   bool isBookmarked(String url) {
     return state.any((b) => b.url == url);
   }
-
-  void _saveToPrefs() {
-    final List<String> encoded = state.map((b) => b.toJson()).toList();
-    _prefs.setBookmarks(encoded);
-  }
 }
 
-final bookmarksProvider = StateNotifierProvider<BookmarksNotifier, List<Bookmark>>((ref) {
-  final prefs = ref.read(preferencesServiceProvider);
-  return BookmarksNotifier(prefs);
+final bookmarksProvider = StateNotifierProvider<BookmarksNotifier, List<BookmarkSchema>>((ref) {
+  final repository = ref.read(bookmarksRepositoryProvider);
+  return BookmarksNotifier(repository);
 });

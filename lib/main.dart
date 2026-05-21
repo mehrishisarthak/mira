@@ -2,9 +2,11 @@ import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mira/core/config/desktop_user_agent.dart';
 import 'package:mira/core/desktop/mira_window_args.dart';
 import 'package:mira/core/desktop/private_standalone_window_provider.dart';
 import 'package:mira/core/services/download_manager.dart';
+import 'package:mira/pages/mainscreen.dart';
 import 'package:mira/shell/desktop/desktop_windowing.dart';
 import 'package:mira/core/notifiers/theme_notifier.dart';
 import 'package:mira/pages/onboarding_screen.dart';
@@ -14,15 +16,13 @@ import 'package:mira/core/services/preferences_service.dart';
 import 'package:mira/core/observers/provider_observer.dart';
 import 'package:http/http.dart' as http;
 
-import 'package:mira/core/config/desktop_user_agent.dart';
-import 'package:mira/pages/mainscreen.dart';
+import 'package:mira/shell/browser/in_app_webview_engine.dart';
 
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Set a custom user agent for desktop platforms to ensure websites render the desktop version.
-  //checks if the app is runnig on desktop and if so, initializes the user agent string accordingly.
-  //returned in form of UA string that mimics a common desktop browser, which can help ensure that websites render the desktop version of their content when accessed from the app.
-  await initDesktopUserAgent();
+  
+  final ua = await InAppWebViewEngine.fetchDefaultUserAgent();
+  setCachedDesktopUserAgent(ua);
 
   var isPrivateDesktopWindow = false;
   if (!kIsWeb) {

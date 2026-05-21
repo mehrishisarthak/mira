@@ -3,7 +3,6 @@ import 'package:mira/shell/desktop/desktop_windowing.dart';
 import 'package:flutter/services.dart'; 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'dart:io';
 import 'package:mira/core/notifiers/bookmarks_notifier.dart';
 import 'package:mira/core/notifiers/theme_notifier.dart';
@@ -118,9 +117,8 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
 
   void _openDesktopFindBar() {
     if (!mounted) return;
-    final find = ref.read(activeFindInteractionProvider);
-    final web = ref.read(browserChromeProvider).controller;
-    if (find == null && web == null) {
+    final engine = ref.read(browserChromeProvider).engine;
+    if (engine == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Open a web page tab to use find in page.'),
@@ -145,8 +143,8 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
         _lastAutoHealAt = now;
         debugPrint("System: App Resumed. Healing broken connection...");
         ref.read(browserChromeProvider.notifier).clearWebError();
-        final controller = ref.read(browserChromeProvider).controller;
-        controller?.reload();
+        final engine = ref.read(browserChromeProvider).engine;
+        engine?.reload();
       }
     }
   }
@@ -210,16 +208,12 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     if (isGhost) {
       ref.read(ghostTabsProvider.notifier).updateUrl(finalUrl);
     } else {
-      ref.read(historyProvider.notifier).addToHistory(trimmedValue);
+      ref.read(historyProvider.notifier).addToHistory(finalUrl, title: trimmedValue);
       ref.read(tabsProvider.notifier).updateUrl(finalUrl);
     }
 
-    final controller = ref.read(browserChromeProvider).controller;
-    if (controller != null) {
-      controller.loadUrl(
-        urlRequest: URLRequest(url: WebUri(finalUrl))
-      );
-    }
+    final engine = ref.read(activeBrowserEngineProvider);
+    engine?.loadUrl(finalUrl);
 
     if (mounted) {
       _urlController.text = finalUrl;
@@ -230,22 +224,22 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
 
   void _handlePop() async {
     final chrome = ref.read(browserChromeProvider);
-    final controller = chrome.controller;
+    final engine = chrome.engine;
     final errorMessage = chrome.webError;
     final activeUrl = ref.read(currentActiveTabProvider).url;
     final isGhost = ref.read(isGhostModeProvider);
     final appTheme = ref.read(themeProvider);
 
     if (errorMessage != null) {
-      if (await controller?.canGoBack() ?? false) {
+      if (await engine?.canGoBack() ?? false) {
         ref.read(browserChromeProvider.notifier).clearWebError();
-        controller?.goBack();
+        engine?.goBack();
         return;
       }
     }
 
-    if (controller != null && await controller.canGoBack()) {
-      controller.goBack();
+    if (engine != null && await engine.canGoBack()) {
+      engine.goBack();
       return;
     }
 
@@ -313,8 +307,8 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     final contentColor = isLightMode ? kMiraInkPrimary : Colors.white;
     final hintColor = isLightMode ? kMiraInkMuted : Colors.white30;
 
-    final webController = ref.watch(browserChromeProvider).controller;
-    final hasWebView = webController != null;
+    final engine = ref.watch(browserChromeProvider).engine;
+    final hasWebView = engine != null;
 
     IconData securityIcon;
     Color securityColor;
@@ -453,7 +447,3 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     return shell;
   }
 }
-
-
-
-

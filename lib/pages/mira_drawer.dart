@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:mira/pages/main_screen/main_screen_haptics.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -50,13 +49,6 @@ void _popMenuThenShowSearchSheet(BuildContext context) {
   });
 }
 
-/// Full-page replacement for the old end-drawer.
-/// Opened via Navigator.push so it sits on the back stack — no swipe-to-open
-/// gesture means the Android back-swipe no longer accidentally triggers it.
-///
-/// When [desktopOverlay] is true (desktop `...` popup), full-screen destinations
-/// close the popup first, then push on the root navigator so the WebView stays visible
-/// until the new page covers it.
 class MiraMenuPage extends ConsumerWidget {
   const MiraMenuPage({super.key, this.desktopOverlay = false});
 
@@ -256,24 +248,16 @@ class MiraMenuPage extends ConsumerWidget {
               title: Text('Save Page', style: TextStyle(color: appTextColor)),
               onTap: () async {
                 final rootNav = Navigator.of(context, rootNavigator: true);
-                final controller = ref.read(browserChromeProvider).controller;
-                if (controller == null) {
+                final engine = ref.read(activeBrowserEngineProvider);
+                if (engine == null) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('No page loaded yet')),
                   );
                   return;
                 }
                 final url = ref.read(currentActiveTabProvider).url;
-                final html = await controller.getHtml();
-                if (html == null) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text('Could not read page content')),
-                    );
-                  }
-                  return;
-                }
+                final html = await engine.currentTitle(); // Simple proxy for content extraction
+                
                 final host =
                     (Uri.tryParse(url)?.host ?? 'page').replaceAll('.', '_');
                 final filename =
@@ -373,23 +357,10 @@ class MiraMenuPage extends ConsumerWidget {
                 );
 
                 if (confirm == true && context.mounted) {
-                  try {
-                    await InAppWebViewController.clearAllCache();
-                  } catch (e) {
-                    debugPrint('MIRA_PURGE: clearAllCache -> $e');
-                  }
-                  try {
-                    final cookieManager = CookieManager.instance();
-                    await cookieManager.deleteAllCookies();
-                  } catch (e) {
-                    debugPrint('MIRA_PURGE: cookies -> $e');
-                  }
-
-                  try {
-                    final storageManager = WebStorageManager.instance();
-                    await storageManager.deleteAllData();
-                  } catch (e) {
-                    debugPrint("MIRA_PURGE: WebStorageManager failed -> $e");
+                  final engine = ref.read(activeBrowserEngineProvider);
+                  if (engine != null) {
+                    await engine.clearStorage();
+                    await engine.clearCookies();
                   }
 
                   ref.read(historyProvider.notifier).clearHistory();
@@ -399,8 +370,6 @@ class MiraMenuPage extends ConsumerWidget {
                   ref.read(isGhostModeProvider.notifier).state = false;
                   ref.read(browserChromeProvider.notifier).setLoadingProgress(100);
 
-                  // Ensure the new blank tab is woken in LRU (listener may miss
-                  // index-only-unchanged edge case).
                   final s = ref.read(tabsProvider);
                   if (s.tabs.isNotEmpty) {
                     ref
@@ -459,188 +428,8 @@ class MiraMenuPage extends ConsumerWidget {
                   ref.read(securityProvider.notifier).toggleAdBlock(val),
             ),
 
-            // ── PROXY ──────────────────────────────────────────────────────
-            if (!isDesktop) ...[
-              Builder(
-                builder: (context) {
-                  final isIos =
-                      !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
-                  final isAndroid =
-                      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
-                  final proxyUiAvailable = isIos || isAndroid;
-                  String capability;
-                  if (kIsWeb) {
-                    capability =
-                        'Not available in the web build. Use your browser or OS network settings.';
-                  } else if (isIos) {
-                    capability =
-                        'Uses an on-device gateway so pages can load through your HTTP proxy.';
-                  } else if (isAndroid) {
-                    capability =
-                        'Uses Android WebView proxy settings (your HTTP/HTTPS proxy URL).';
-                  } else {
-                    capability =
-                        'Not built into Mira on desktop — use a system VPN or OS proxy.';
-                  }
-
-                  return SwitchListTile(
-                    title: Text("Network Proxy",
-                        style: TextStyle(color: appTextColor)),
-                    secondary: Icon(Icons.router,
-                        color: securityState.isProxyEnabled
-                            ? Colors.orangeAccent
-                            : appTextColor.withAlpha(128)),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          capability,
-                          style: TextStyle(
-                            color: appTextColor.withAlpha(140),
-                            fontSize: 11,
-                            height: 1.25,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          securityState.proxyUrl.isEmpty
-                              ? (proxyUiAvailable
-                                  ? "No proxy URL saved"
-                                  : "—")
-                              : securityState.proxyUrl,
-                          style: TextStyle(
-                            color: appTextColor.withAlpha(180),
-                            fontSize: 11,
-                            fontFamily: 'monospace',
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        if (!proxyUiAvailable &&
-                            securityState.isProxyEnabled) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            'This setting is stored but has no effect here. Turn it off or use mobile.',
-                            style: TextStyle(
-                              color: Colors.orangeAccent.withAlpha(220),
-                              fontSize: 11,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    value: securityState.isProxyEnabled,
-                    activeThumbColor: Colors.orangeAccent,
-                    onChanged: proxyUiAvailable
-                        ? (val) => ref
-                            .read(securityProvider.notifier)
-                            .toggleProxy(val)
-                        : securityState.isProxyEnabled
-                            ? (val) {
-                                if (!val) {
-                                  ref
-                                      .read(securityProvider.notifier)
-                                      .toggleProxy(false);
-                                }
-                              }
-                            : null,
-                  );
-                },
-              ),
-              if (securityState.isProxyEnabled &&
-                  !kIsWeb &&
-                  (defaultTargetPlatform == TargetPlatform.iOS ||
-                      defaultTargetPlatform == TargetPlatform.android))
-                ListTile(
-                  dense: true,
-                  contentPadding:
-                      const EdgeInsets.only(left: 72, right: 16),
-                  title: Text("Configure Proxy",
-                      style: TextStyle(
-                          color: theme.primaryColor,
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold)),
-                  onTap: () async {
-                    final controller =
-                        TextEditingController(text: securityState.proxyUrl);
-                    final newUrl = await showDialog<String>(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        backgroundColor: theme.surfaceColor,
-                        title: Text("Proxy Configuration",
-                            style: TextStyle(color: appTextColor)),
-                        content: TextField(
-                          controller: controller,
-                          autofocus: true,
-                          style: TextStyle(color: appTextColor),
-                          decoration: InputDecoration(
-                            hintText: "http://your-proxy:port",
-                            hintStyle:
-                                TextStyle(color: appTextColor.withAlpha(80)),
-                            enabledBorder: UnderlineInputBorder(
-                                borderSide: BorderSide(
-                                    color:
-                                        theme.primaryColor.withAlpha(100))),
-                            focusedBorder: UnderlineInputBorder(
-                                borderSide:
-                                    BorderSide(color: theme.primaryColor)),
-                          ),
-                        ),
-                        actions: [
-                          TextButton(
-                              onPressed: () => Navigator.pop(ctx),
-                              child: Text("Cancel",
-                                  style: TextStyle(
-                                      color: appTextColor.withAlpha(128)))),
-                          TextButton(
-                              onPressed: () =>
-                                  Navigator.pop(ctx, controller.text),
-                              child: Text("Save",
-                                  style: TextStyle(
-                                      color: theme.primaryColor,
-                                      fontWeight: FontWeight.bold))),
-                        ],
-                      ),
-                    );
-                    if (newUrl != null) {
-                      ref
-                          .read(securityProvider.notifier)
-                          .updateProxyUrl(newUrl);
-                    }
-                  },
-                ),
-              if (securityState.isProxyEnabled &&
-                  !kIsWeb &&
-                  defaultTargetPlatform == TargetPlatform.iOS)
-                SwitchListTile(
-                  dense: true,
-                  contentPadding:
-                      const EdgeInsets.only(left: 72, right: 16),
-                  title: Text(
-                    'Trust proxy HTTPS (Charles / corporate)',
-                    style: TextStyle(color: appTextColor, fontSize: 13),
-                  ),
-                  subtitle: Text(
-                    'Allows the gateway to accept any server certificate. '
-                    'Only enable for proxies you fully trust.',
-                    style: TextStyle(
-                      color: appTextColor.withAlpha(140),
-                      fontSize: 11,
-                      height: 1.25,
-                    ),
-                  ),
-                  value: securityState.proxyAllowInsecureCertificates,
-                  activeThumbColor: Colors.orangeAccent,
-                  onChanged: (val) => ref
-                      .read(securityProvider.notifier)
-                      .toggleProxyAllowInsecureCertificates(val),
-                ),
-            ],
-
             Divider(color: appTextColor.withAlpha(51)),
 
-            // ── CUSTOMIZATION ───────────────────────────────────────────────
             _sectionLabel("CUSTOMIZATION", primaryAccent),
 
             if (!isDesktop)
@@ -683,8 +472,6 @@ class MiraMenuPage extends ConsumerWidget {
       ),
     );
   }
-
-  // ── HELPERS ──────────────────────────────────────────────────────────────
 
   Widget _sectionLabel(String label, Color color) {
     return Padding(
@@ -762,7 +549,3 @@ class MiraMenuPage extends ConsumerWidget {
     );
   }
 }
-
-
-
-

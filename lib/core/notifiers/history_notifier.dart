@@ -1,58 +1,53 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mira/core/entities/history_entity.dart';
-import 'package:mira/core/services/preferences_service.dart';
+import 'package:mira/core/services/isar_database_repository.dart';
+import 'package:mira/core/services/isar_schemas.dart';
+import 'package:mira/core/services/database_providers.dart';
+import 'package:mira/core/notifiers/ghost_notifier.dart';
 
-class HistoryNotifier extends StateNotifier<List<HistoryItem>> {
-  final PreferencesService _prefsService;
+class HistoryNotifier extends StateNotifier<List<HistoryItemSchema>> {
+  final IsarHistoryRepository _repository;
+  final bool _isGhost;
 
-  HistoryNotifier(this._prefsService) : super([]) {
-    _loadHistory();
+  HistoryNotifier(this._repository, this._isGhost) : super([]) {
+    _init();
   }
 
-  void _loadHistory() {
-    final jsonList = _prefsService.getHistory();
+  Future<void> _init() async {
+    if (_isGhost) return;
+    
     try {
-      state = jsonList.map((str) => HistoryItem.fromJson(str)).toList();
+      await _repository.init();
+      _repository.watchAll().listen((items) {
+        state = items;
+      });
     } catch (e, stack) {
-      debugPrint('[MIRA] HistoryNotifier corrupted data: $e\n$stack');
-      state = [];
+      debugPrint('[MIRA] HistoryNotifier init failed: $e\n$stack');
     }
   }
 
-  Future<void> addToHistory(String query) async {
-    if (query.trim().isEmpty) return;
-    final cleanQuery = query.trim();
+  Future<void> addToHistory(String url, {String? title}) async {
+    if (_isGhost || url.trim().isEmpty || url == 'about:blank') return;
     
-    final currentList = [...state];
-    currentList.removeWhere((item) => item.text == cleanQuery);
-    currentList.insert(0, HistoryItem(text: cleanQuery, timestamp: DateTime.now()));
+    final item = HistoryItemSchema()
+      ..url = url.trim()
+      ..title = (title == null || title.isEmpty) ? url : title
+      ..timestamp = DateTime.now();
 
-    if (currentList.length > 50) currentList.removeLast();
-
-    state = currentList;
-    _saveToPrefs();
+    await _repository.put(item);
   }
 
-  Future<void> removeFromHistory(HistoryItem item) async {
-    final currentList = [...state];
-    currentList.remove(item);
-    state = currentList;
-    _saveToPrefs();
+  Future<void> removeFromHistory(int id) async {
+    await _repository.delete(id);
   }
 
   Future<void> clearHistory() async {
-    state = [];
-    await _prefsService.clearHistory();
-  }
-
-  void _saveToPrefs() {
-    final jsonList = state.map((item) => item.toJson()).toList();
-    _prefsService.setHistory(jsonList);
+    await _repository.clear();
   }
 }
 
-final historyProvider = StateNotifierProvider<HistoryNotifier, List<HistoryItem>>((ref) {
-  final prefsService = ref.read(preferencesServiceProvider);
-  return HistoryNotifier(prefsService);
+final historyProvider = StateNotifierProvider<HistoryNotifier, List<HistoryItemSchema>>((ref) {
+  final repository = ref.read(historyRepositoryProvider);
+  final isGhost = ref.watch(isGhostModeProvider);
+  return HistoryNotifier(repository, isGhost);
 });

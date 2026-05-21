@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mira/core/entities/theme_entity.dart';
 import 'package:mira/core/notifiers/search_notifier.dart';
@@ -91,7 +90,7 @@ class HistoryPage extends ConsumerWidget {
                       return ListTile(
                         leading: Icon(Icons.history,
                             color: contentColor.withAlpha(77), size: 20),
-                        title: Text(item.text,
+                        title: Text(item.title,
                             style:
                                 TextStyle(color: contentColor.withAlpha(179))),
                         trailing: IconButton(
@@ -100,7 +99,7 @@ class HistoryPage extends ConsumerWidget {
                           onPressed: () {
                             ref
                                 .read(historyProvider.notifier)
-                                .removeFromHistory(item);
+                                .removeFromHistory(item.id);
                           },
                         ),
                         onTap: () {
@@ -111,12 +110,12 @@ class HistoryPage extends ConsumerWidget {
                           }
 
                           String finalUrl;
-                          if (item.text.contains('.') &&
-                              !item.text.contains(' ')) {
-                            finalUrl = "https://${item.text}";
+                          if (item.url.contains('.') &&
+                              !item.url.contains(' ')) {
+                            finalUrl = "https://${item.url}";
                           } else {
                             finalUrl = ref
-                                .read(formattedSearchUrlProvider(item.text));
+                                .read(formattedSearchUrlProvider(item.url));
                           }
 
                           final inGhost = ref.read(isGhostModeProvider);
@@ -128,10 +127,7 @@ class HistoryPage extends ConsumerWidget {
                             ref.read(tabsProvider.notifier).updateUrl(finalUrl);
                           }
 
-                          ref.read(browserChromeProvider).controller?.loadUrl(
-                                urlRequest:
-                                    URLRequest(url: WebUri(finalUrl)),
-                              );
+                          ref.read(activeBrowserEngineProvider)?.loadUrl(finalUrl);
                         },
                       );
                     },
