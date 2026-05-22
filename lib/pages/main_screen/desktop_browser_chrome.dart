@@ -164,8 +164,30 @@ Widget buildDesktopMainChrome({
         Container(
           height: 40,
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: isGhost ? BoxDecoration(
+            border: Border(bottom: BorderSide(color: Colors.redAccent.withValues(alpha: 0.3), width: 1))
+          ) : null,
           child: Row(
             children: [
+              if (isGhost)
+                Padding(
+                  padding: const EdgeInsets.only(right: 12, left: 4),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.privacy_tip, color: Colors.redAccent, size: 18),
+                      const SizedBox(width: 8),
+                      Text(
+                        "GHOST WORKSPACE",
+                        style: GoogleFonts.jetBrainsMono(
+                          color: Colors.redAccent,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               Expanded(
                 child: Listener(
                   onPointerSignal: (signal) {
@@ -226,14 +248,12 @@ Widget buildDesktopMainChrome({
               ),
               IconButton(
                 tooltip: 'New tab',
-                icon: Icon(Icons.add, color: contentColor, size: 20),
+                icon: Icon(Icons.add, color: isGhost ? Colors.redAccent : contentColor, size: 20),
                 onPressed: () {
-                  if (tabStripLayout == DesktopTabStripLayout.privateWindow) {
+                  if (isGhost) {
                     ref.read(ghostTabsProvider.notifier).addTab();
-                    ref.read(isGhostModeProvider.notifier).state = true;
                   } else {
                     ref.read(tabsProvider.notifier).addTab();
-                    ref.read(isGhostModeProvider.notifier).state = false;
                   }
                 },
               ),
@@ -272,8 +292,9 @@ Widget buildDesktopMainChrome({
                   height: 36,
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   decoration: BoxDecoration(
-                    color: contentColor.withValues(alpha: 0.05),
+                    color: isGhost ? Colors.redAccent.withValues(alpha: 0.08) : contentColor.withValues(alpha: 0.05),
                     borderRadius: BorderRadius.circular(18),
+                    border: isGhost ? Border.all(color: Colors.redAccent.withValues(alpha: 0.2)) : null,
                   ),
                   child: Row(
                     children: [
@@ -309,14 +330,12 @@ Widget buildDesktopMainChrome({
                           cursorColor: accentColor,
                           decoration: InputDecoration(
                             hintText: isGhost
-                                ? (tabStripLayout == DesktopTabStripLayout.privateWindow
-                                    ? 'Private browsing'
-                                    : 'Ghost Mode Active')
+                                ? 'Private browsing'
                                 : 'Search or enter address',
                             border: InputBorder.none,
                             isDense: true,
                             hintStyle: GoogleFonts.jetBrainsMono(
-                                color: hintColor, fontSize: 13),
+                                color: isGhost ? Colors.redAccent.withValues(alpha: 0.5) : hintColor, fontSize: 13),
                           ),
                           onSubmitted: onUrlSubmitted,
                         ),

@@ -18,7 +18,6 @@ bool handleDesktopBrowserHotkey({
   required FocusNode urlFocusNode,
   required TextEditingController urlController,
   required void Function() openFindDialog,
-  bool standalonePrivateWindow = false,
 }) {
   if (kIsWeb || Platform.isAndroid || Platform.isIOS) return false;
   if (!mounted) return false;
@@ -52,24 +51,22 @@ bool handleDesktopBrowserHotkey({
   if (mod &&
       HardwareKeyboard.instance.isShiftPressed &&
       key == LogicalKeyboardKey.keyN) {
-    openMiraPrivateBrowserWindow();
+    openMiraPrivateBrowserWindow(ref);
     return true;
   }
 
   if (key == LogicalKeyboardKey.keyT) {
-    if (standalonePrivateWindow) {
+    if (ref.read(isGhostModeProvider)) {
       ref.read(ghostTabsProvider.notifier).addTab();
-      ref.read(isGhostModeProvider.notifier).state = true;
     } else {
       ref.read(tabsProvider.notifier).addTab();
-      ref.read(isGhostModeProvider.notifier).state = false;
     }
     return true;
   }
 
   if (key == LogicalKeyboardKey.keyW) {
     final active = ref.read(currentActiveTabProvider);
-    if (standalonePrivateWindow || ref.read(isGhostModeProvider)) {
+    if (ref.read(isGhostModeProvider)) {
       ref.read(ghostTabsProvider.notifier).closeTab(active.id);
     } else {
       ref.read(tabsProvider.notifier).closeTab(active.id);
@@ -118,7 +115,6 @@ bool handleDesktopBrowserHotkey({
     _cycleActiveTab(
       ref,
       forward: !back,
-      standalonePrivateWindow: standalonePrivateWindow,
     );
     return true;
   }
@@ -140,19 +136,7 @@ bool handleDesktopBrowserHotkey({
 void _cycleActiveTab(
   WidgetRef ref, {
   required bool forward,
-  required bool standalonePrivateWindow,
 }) {
-  if (standalonePrivateWindow) {
-    final s = ref.read(ghostTabsProvider);
-    if (s.tabs.isEmpty) return;
-    final n = s.tabs.length;
-    final next = forward
-        ? (s.activeIndex + 1) % n
-        : (s.activeIndex - 1 + n) % n;
-    ref.read(ghostTabsProvider.notifier).switchTab(next);
-    return;
-  }
-
   final isGhost = ref.read(isGhostModeProvider);
   if (isGhost) {
     final s = ref.read(ghostTabsProvider);

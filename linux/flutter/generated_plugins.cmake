@@ -3,7 +3,6 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
-  desktop_multi_window
   isar_flutter_libs
   screen_retriever_linux
   url_launcher_linux

@@ -137,6 +137,9 @@ abstract class BrowserEngine {
   /// True if the engine was initialized in an ephemeral/incognito context.
   bool get isPrivate;
 
+  /// Returns the last known loading progress (0-100) of the engine.
+  int get lastProgress;
+
   // --- Storage ---
 
   Future<void> clearStorage();
@@ -165,5 +168,5 @@ abstract class BrowserEngine {
 
   /// Returns a Flutter widget that renders the web content.
   /// This allows the UI to remain agnostic of the underlying native implementation.
-  Widget buildWidget({required String tabId});
+  Widget buildWidget({required String tabId, String? initialUrl});
 }

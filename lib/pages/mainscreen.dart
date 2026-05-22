@@ -27,13 +27,7 @@ import 'package:mira/shell/desktop/desktop_browser_hotkeys.dart';
 import 'package:mira/shell/desktop/desktop_find_bar.dart';
 
 class Mainscreen extends ConsumerStatefulWidget {
-  /// Desktop-only: separate OS window created by [desktop_multi_window].
-  final bool isPrivateBrowserWindow;
-
-  const Mainscreen({
-    super.key,
-    this.isPrivateBrowserWindow = false,
-  });
+  const Mainscreen({super.key});
 
   @override
   ConsumerState<Mainscreen> createState() => _MainscreenState();
@@ -63,15 +57,6 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
         _syncDesktopWindowTitle(ref.read(currentActiveTabProvider));
       });
     }
-    if (widget.isPrivateBrowserWindow) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        ref.read(isGhostModeProvider.notifier).state = true;
-        if (ref.read(ghostTabsProvider).tabs.isEmpty) {
-          ref.read(ghostTabsProvider.notifier).addTab();
-        }
-      });
-    }
   }
 
   Future<void> _syncDesktopWindowTitle(BrowserTab tab) async {
@@ -81,7 +66,8 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     }
     final raw = tab.title.trim();
     final label = raw.isEmpty ? 'Mira' : raw;
-    if (widget.isPrivateBrowserWindow) {
+    final isGhost = ref.read(isGhostModeProvider);
+    if (isGhost) {
       await desktopSetWindowTitle(
         raw.isEmpty ? 'MIRA Private' : '$label — MIRA Private',
       );
@@ -111,7 +97,6 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
       urlFocusNode: _urlFocusNode,
       urlController: _urlController,
       openFindDialog: _openDesktopFindBar,
-      standalonePrivateWindow: widget.isPrivateBrowserWindow,
     );
   }
 
@@ -326,11 +311,9 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
 
     final isDesktop =
         !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
-    final desktopTabStripLayout = !isDesktop
-        ? DesktopTabStripLayout.mainBrowser
-        : (widget.isPrivateBrowserWindow
-            ? DesktopTabStripLayout.privateWindow
-            : DesktopTabStripLayout.mainBrowser);
+    final desktopTabStripLayout = isGhost
+        ? DesktopTabStripLayout.privateWindow
+        : DesktopTabStripLayout.mainBrowser;
 
     ref.listen(currentActiveTabProvider, (previous, next) {
       if (previous?.id != next.id) {
@@ -389,7 +372,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
               buildDesktopMainChrome(
                 context: context,
                 ref: ref,
-                bgColor: appBarColor,
+                bgColor: isGhost ? const Color(0xFF1A1A1A) : appBarColor,
                 contentColor: contentColor,
                 accentColor: primaryAccent,
                 normalTabs: normalTabsList,
@@ -438,7 +421,6 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
           openDesktopFindBar: _openDesktopFindBar,
           urlFocusNode: _urlFocusNode,
           urlController: _urlController,
-          standalonePrivateWindow: widget.isPrivateBrowserWindow,
         ),
         child: shell,
       );

@@ -11,6 +11,8 @@ class HibernationNotifier extends StateNotifier<Set<String>> {
   HibernationNotifier() : super({});
 
   void wakeTab(String tabId) {
+    if (_mruSet.isNotEmpty && _mruSet.last == tabId) return;
+
     _mruSet.remove(tabId);
     _mruSet.add(tabId);
 

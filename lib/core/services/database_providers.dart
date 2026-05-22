@@ -18,8 +18,13 @@ final bookmarksRepositoryProvider = Provider<IsarBookmarkRepository>((ref) {
 /// In a multi-tab environment, we typically have one engine per tab.
 /// This factory provider creates an [InAppWebViewEngine] based on the tab's privacy state.
 final browserEngineProvider = Provider.family<BrowserEngine, String>((ref, tabId) {
-  final isGhost = ref.watch(isGhostModeProvider);
-  final engine = InAppWebViewEngine(isPrivate: isGhost);
+  // Determine if this tab belongs to the ghost/private set
+  // We use select to ensure this provider only rebuilds if the ghost-status of THIS specific tab changes.
+  final isGhostTab = ref.watch(ghostTabsProvider.select(
+    (s) => s.tabs.any((t) => t.id == tabId),
+  ));
+  
+  final engine = InAppWebViewEngine(isPrivate: isGhostTab);
   
   ref.onDispose(() => engine.dispose());
   

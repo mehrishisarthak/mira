@@ -12,7 +12,6 @@ List<PlatformMenu> buildDesktopMainPlatformMenus({
   required VoidCallback openDesktopFindBar,
   required FocusNode urlFocusNode,
   required TextEditingController urlController,
-  required bool standalonePrivateWindow,
 }) {
   return [
     PlatformMenu(
@@ -21,26 +20,24 @@ List<PlatformMenu> buildDesktopMainPlatformMenus({
         PlatformMenuItem(
           label: 'New Tab',
           onSelected: () {
-            if (standalonePrivateWindow) {
+            if (ref.read(isGhostModeProvider)) {
               ref.read(ghostTabsProvider.notifier).addTab();
-              ref.read(isGhostModeProvider.notifier).state = true;
             } else {
               ref.read(tabsProvider.notifier).addTab();
-              ref.read(isGhostModeProvider.notifier).state = false;
             }
           },
         ),
         PlatformMenuItem(
           label: 'New private window',
           onSelected: () {
-            openMiraPrivateBrowserWindow();
+            openMiraPrivateBrowserWindow(ref);
           },
         ),
         PlatformMenuItem(
           label: 'Close Tab',
           onSelected: () {
             final active = ref.read(currentActiveTabProvider);
-            if (standalonePrivateWindow || ref.read(isGhostModeProvider)) {
+            if (ref.read(isGhostModeProvider)) {
               ref.read(ghostTabsProvider.notifier).closeTab(active.id);
             } else {
               ref.read(tabsProvider.notifier).closeTab(active.id);

@@ -308,7 +308,7 @@ class MiraMenuPage extends ConsumerWidget {
                   color: appTextColor.withAlpha(179)),
               onTap: () {
                 if (isDesktop) {
-                  openMiraPrivateBrowserWindow();
+                  openMiraPrivateBrowserWindow(ref);
                   Navigator.pop(context);
                 } else {
                   miraHaptic(MainScreenHapticKind.medium);

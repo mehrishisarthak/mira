@@ -25,11 +25,24 @@ class InAppWebViewEngine implements BrowserEngine {
   ProxyConfig? _proxyConfig;
   final bool _isPrivate;
 
+  String? _pendingUrl;
+  Map<String, String>? _pendingHeaders;
+
+  int _lastProgress = 100;
+
   InAppWebViewEngine({bool isPrivate = false}) : _isPrivate = isPrivate;
+
+  @override
+  int get lastProgress => _lastProgress;
 
   /// Internal method to link the native [InAppWebViewController] once initialized by the view.
   void setController(InAppWebViewController controller) {
     _controller = controller;
+    if (_pendingUrl != null) {
+      loadUrl(_pendingUrl!, headers: _pendingHeaders);
+      _pendingUrl = null;
+      _pendingHeaders = null;
+    }
   }
 
   @override
@@ -69,6 +82,8 @@ class InAppWebViewEngine implements BrowserEngine {
   Future<void> dispose() async {
     await _eventController.close();
     _controller = null;
+    _pendingUrl = null;
+    _pendingHeaders = null;
   }
 
   @override
@@ -85,6 +100,11 @@ class InAppWebViewEngine implements BrowserEngine {
 
   @override
   Future<void> loadUrl(String url, {Map<String, String>? headers}) async {
+    if (_controller == null) {
+      _pendingUrl = url;
+      _pendingHeaders = headers;
+      return;
+    }
     await _controller?.loadUrl(
       urlRequest: URLRequest(
         url: WebUri(url),
@@ -206,9 +226,12 @@ class InAppWebViewEngine implements BrowserEngine {
   }
 
   @override
-  Widget buildWidget({required String tabId}) {
+  Widget buildWidget({required String tabId, String? initialUrl}) {
     return InAppWebView(
       key: ObjectKey(tabId),
+      initialUrlRequest: (initialUrl != null && initialUrl.isNotEmpty)
+          ? URLRequest(url: WebUri(initialUrl))
+          : null,
       initialSettings: InAppWebViewSettings(
         incognito: _isPrivate,
         transparentBackground: true,
@@ -275,6 +298,7 @@ class InAppWebViewEngine implements BrowserEngine {
   // --- Native Callback Mappings ---
 
   void handleLoadStart(WebUri? url) {
+    _lastProgress = 0;
     _eventController.add(BrowserPageEvent(
       type: BrowserPageEventType.loadStart,
       url: url?.toString(),
@@ -282,6 +306,7 @@ class InAppWebViewEngine implements BrowserEngine {
   }
 
   void handleLoadStop(WebUri? url) {
+    _lastProgress = 100;
     _eventController.add(BrowserPageEvent(
       type: BrowserPageEventType.loadStop,
       url: url?.toString(),
@@ -289,6 +314,7 @@ class InAppWebViewEngine implements BrowserEngine {
   }
 
   void handleProgressChanged(int progress) {
+    _lastProgress = progress;
     _eventController.add(BrowserPageEvent(
       type: BrowserPageEventType.progressChanged,
       progress: progress,

@@ -6,6 +6,8 @@ import 'package:mira/core/notifiers/hibernation_notifier.dart';
 import 'package:mira/core/services/database_providers.dart';
 import 'package:mira/pages/browser_chrome_providers.dart';
 
+import '../branding_screen.dart';
+import 'hibernated_tab_placeholder.dart';
 import 'browser_side_effects.dart';
 import 'webview_skeleton_overlay.dart';
 
@@ -23,16 +25,6 @@ class _BrowserViewState extends ConsumerState<BrowserView>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final isGhost = ref.read(isGhostModeProvider);
-      final initialState =
-          isGhost ? ref.read(ghostTabsProvider) : ref.read(tabsProvider);
-      if (initialState.tabs.isNotEmpty) {
-        final activeId = initialState.tabs[initialState.activeIndex].id;
-        ref.read(hibernationProvider.notifier).wakeTab(activeId);
-      }
-    });
   }
 
   @override
@@ -78,12 +70,22 @@ class _BrowserViewState extends ConsumerState<BrowserView>
           final tab = entry.value;
           final isShowing = index == activeIndex;
 
+          if (tab.url.isEmpty) {
+             return Positioned.fill(
+              key: ValueKey('brand_${tab.id}'),
+              child: Visibility(
+                visible: isShowing,
+                child: const BrandingScreen(),
+              ),
+            );
+          }
+
           if (!awakeTabIds.contains(tab.id)) {
             return Positioned.fill(
               key: ValueKey('hib_${tab.id}'),
               child: Visibility(
                 visible: isShowing,
-                child: Center(child: Text("Tab Hibernating: ${tab.url}")),
+                child: HibernatedTabPlaceholder(tab: tab),
               ),
             );
           }
@@ -95,7 +97,7 @@ class _BrowserViewState extends ConsumerState<BrowserView>
             child: Visibility(
               visible: isShowing,
               maintainState: true,
-              child: engine.buildWidget(tabId: tab.id),
+              child: engine.buildWidget(tabId: tab.id, initialUrl: tab.url),
             ),
           );
         }),

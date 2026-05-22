@@ -1,13 +1,13 @@
-import 'package:desktop_multi_window/desktop_multi_window.dart';
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:window_manager/window_manager.dart';
+
 import 'package:mira/core/config/desktop_user_agent.dart';
-import 'package:mira/core/desktop/mira_window_args.dart';
-import 'package:mira/core/desktop/private_standalone_window_provider.dart';
 import 'package:mira/core/services/download_manager.dart';
 import 'package:mira/pages/mainscreen.dart';
-import 'package:mira/shell/desktop/desktop_windowing.dart';
 import 'package:mira/core/notifiers/theme_notifier.dart';
 import 'package:mira/pages/onboarding_screen.dart';
 import 'package:mira/pages/splashscreen.dart';
@@ -21,50 +21,58 @@ import 'package:mira/shell/browser/in_app_webview_engine.dart';
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  final ua = await InAppWebViewEngine.fetchDefaultUserAgent();
-  setCachedDesktopUserAgent(ua);
-
-  var isPrivateDesktopWindow = false;
-  if (!kIsWeb) {
-    try {
-      final wc = await WindowController.fromCurrentEngine();
-      isPrivateDesktopWindow = wc.arguments == kMiraPrivateWindowArgs;
-    } catch (_) {
-      // Tests, mobile, or engine not ready for multi-window.
-    }
+  // 1. Fetch Desktop User Agent for the underlying engine
+  try {
+    final ua = await InAppWebViewEngine.fetchDefaultUserAgent();
+    setCachedDesktopUserAgent(ua);
+  } catch (e) {
+    debugPrint("MIRA: Failed to fetch default user agent: $e");
   }
 
+  // 2. Initialize the Window Manager for PC platforms
   if (!kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.windows ||
           defaultTargetPlatform == TargetPlatform.macOS ||
           defaultTargetPlatform == TargetPlatform.linux)) {
-    await desktopWindowManagerInit();
+    try {
+      await windowManager.ensureInitialized();
+
+      WindowOptions windowOptions = const WindowOptions(
+        size: Size(1200, 800),
+        minimumSize: Size(800, 600),
+        center: true,
+        backgroundColor: Colors.transparent,
+        skipTaskbar: false,
+        titleBarStyle: TitleBarStyle.hidden, 
+      );
+
+      // We don't await this to avoid blocking the main thread if the OS doesn't respond immediately
+      windowManager.waitUntilReadyToShow(windowOptions, () async {
+        await windowManager.show();
+        await windowManager.focus();
+      });
+    } catch (e) {
+      debugPrint("MIRA: Window manager initialization failed: $e");
+    }
   }
 
+  // 3. Initialize Core Services (Prefs & Downloads)
   final prefs = await SharedPreferences.getInstance();
-  final PreferencesService preferencesService = isPrivateDesktopWindow
-      ? EphemeralTabPersistencePreferences(prefs)
-      : PreferencesService(prefs);
-
-  final isFirstRun =
-      isPrivateDesktopWindow ? false : preferencesService.getFirstRun();
+  final PreferencesService preferencesService = PreferencesService(prefs);
+  final isFirstRun = preferencesService.getFirstRun();
 
   await DownloadManager.init();
 
-  final Widget home = isPrivateDesktopWindow
-      ? const Mainscreen(isPrivateBrowserWindow: true)
-      : SplashScreen(
-          nextScreen:
-              isFirstRun ? const OnboardingScreen() : const Mainscreen(),
-        );
+  final Widget home = SplashScreen(
+    nextScreen: isFirstRun ? const OnboardingScreen() : const Mainscreen(),
+  );
 
+  // 4. Launch the App
   runApp(
     ProviderScope(
       observers: [const MiraProviderObserver()],
       overrides: [
         preferencesServiceProvider.overrideWithValue(preferencesService),
-        if (isPrivateDesktopWindow)
-          privateStandaloneWindowProvider.overrideWith((ref) => true),
       ],
       child: MyApp(
         home: home,

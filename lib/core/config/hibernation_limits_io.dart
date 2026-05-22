@@ -11,5 +11,5 @@ int maxAliveWebViewTabs() {
   if (Platform.isMacOS || Platform.isLinux) {
     return 64;
   }
-  return 3;
+  return 10;
 }

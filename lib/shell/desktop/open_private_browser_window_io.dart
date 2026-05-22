@@ -1,22 +1,13 @@
-import 'dart:io';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mira/core/notifiers/ghost_notifier.dart';
 
-import 'package:desktop_multi_window/desktop_multi_window.dart';
-import 'package:flutter/foundation.dart';
-
-import 'package:mira/core/desktop/mira_window_args.dart';
-
-Future<void> openMiraPrivateBrowserWindow() async {
-  if (kIsWeb) return;
-  if (!Platform.isWindows && !Platform.isMacOS && !Platform.isLinux) return;
-  try {
-    final c = await WindowController.create(
-      const WindowConfiguration(
-        arguments: kMiraPrivateWindowArgs,
-        hiddenAtLaunch: false,
-      ),
-    );
-    await c.show();
-  } catch (e, st) {
-    debugPrint('MIRA: failed to open private window: $e\n$st');
+/// Transitions the single-window UI into the Private (Ghost) Workspace.
+void openMiraPrivateBrowserWindow(WidgetRef ref) {
+  // 1. Switch the UI to Ghost Mode
+  ref.read(isGhostModeProvider.notifier).state = true;
+  
+  // 2. If the ghost workspace is empty, spin up a new private tab
+  if (ref.read(ghostTabsProvider).tabs.isEmpty) {
+    ref.read(ghostTabsProvider.notifier).addTab();
   }
 }

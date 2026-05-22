@@ -5,10 +5,11 @@ import 'package:mira/core/services/local_database_repository.dart';
 
 /// Concrete implementation of [LocalDatabaseRepository] using Isar.
 class IsarHistoryRepository implements LocalDatabaseRepository<HistoryItemSchema> {
-  late Isar _isar;
+  Isar? _isar;
 
   @override
   Future<void> init() async {
+    if (_isar != null) return;
     final dir = await getApplicationDocumentsDirectory();
     _isar = await Isar.open(
       [HistoryItemSchemaSchema],
@@ -19,35 +20,40 @@ class IsarHistoryRepository implements LocalDatabaseRepository<HistoryItemSchema
 
   @override
   Future<void> put(HistoryItemSchema item) async {
-    await _isar.writeTxn(() async {
-      await _isar.collection<HistoryItemSchema>().put(item);
+    if (_isar == null) await init();
+    await _isar!.writeTxn(() async {
+      await _isar!.collection<HistoryItemSchema>().put(item);
     });
   }
 
   @override
   Future<void> putAll(List<HistoryItemSchema> items) async {
-    await _isar.writeTxn(() async {
-      await _isar.collection<HistoryItemSchema>().putAll(items);
+    if (_isar == null) await init();
+    await _isar!.writeTxn(() async {
+      await _isar!.collection<HistoryItemSchema>().putAll(items);
     });
   }
 
   @override
   Future<void> delete(int id) async {
-    await _isar.writeTxn(() async {
-      await _isar.collection<HistoryItemSchema>().delete(id);
+    if (_isar == null) await init();
+    await _isar!.writeTxn(() async {
+      await _isar!.collection<HistoryItemSchema>().delete(id);
     });
   }
 
   @override
   Future<void> clear() async {
-    await _isar.writeTxn(() async {
-      await _isar.collection<HistoryItemSchema>().clear();
+    if (_isar == null) await init();
+    await _isar!.writeTxn(() async {
+      await _isar!.collection<HistoryItemSchema>().clear();
     });
   }
 
   @override
   Future<List<HistoryItemSchema>> getAll({bool descending = true, int? limit}) async {
-    var query = _isar.collection<HistoryItemSchema>().where();
+    if (_isar == null) await init();
+    var query = _isar!.collection<HistoryItemSchema>().where();
     
     if (descending) {
       return await query.sortByTimestampDesc().limit(limit ?? 1000).findAll();
@@ -58,7 +64,8 @@ class IsarHistoryRepository implements LocalDatabaseRepository<HistoryItemSchema
 
   @override
   Future<List<HistoryItemSchema>> search(String query) async {
-    return await _isar.collection<HistoryItemSchema>()
+    if (_isar == null) await init();
+    return await _isar!.collection<HistoryItemSchema>()
         .filter()
         .titleContains(query, caseSensitive: false)
         .or()
@@ -69,7 +76,14 @@ class IsarHistoryRepository implements LocalDatabaseRepository<HistoryItemSchema
 
   @override
   Stream<List<HistoryItemSchema>> watchAll() {
-    return _isar.collection<HistoryItemSchema>()
+    if (_isar == null) {
+      // Fallback for watchAll if not initialized yet
+      return Stream.fromFuture(init()).asyncExpand((_) => _isar!.collection<HistoryItemSchema>()
+          .where()
+          .sortByTimestampDesc()
+          .watch(fireImmediately: true));
+    }
+    return _isar!.collection<HistoryItemSchema>()
         .where()
         .sortByTimestampDesc()
         .watch(fireImmediately: true);
@@ -78,10 +92,11 @@ class IsarHistoryRepository implements LocalDatabaseRepository<HistoryItemSchema
 
 /// Concrete implementation of [LocalDatabaseRepository] using Isar.
 class IsarBookmarkRepository implements LocalDatabaseRepository<BookmarkSchema> {
-  late Isar _isar;
+  Isar? _isar;
 
   @override
   Future<void> init() async {
+    if (_isar != null) return;
     final dir = await getApplicationDocumentsDirectory();
     _isar = await Isar.open(
       [BookmarkSchemaSchema],
@@ -92,35 +107,40 @@ class IsarBookmarkRepository implements LocalDatabaseRepository<BookmarkSchema> 
 
   @override
   Future<void> put(BookmarkSchema item) async {
-    await _isar.writeTxn(() async {
-      await _isar.collection<BookmarkSchema>().put(item);
+    if (_isar == null) await init();
+    await _isar!.writeTxn(() async {
+      await _isar!.collection<BookmarkSchema>().put(item);
     });
   }
 
   @override
   Future<void> putAll(List<BookmarkSchema> items) async {
-    await _isar.writeTxn(() async {
-      await _isar.collection<BookmarkSchema>().putAll(items);
+    if (_isar == null) await init();
+    await _isar!.writeTxn(() async {
+      await _isar!.collection<BookmarkSchema>().putAll(items);
     });
   }
 
   @override
   Future<void> delete(int id) async {
-    await _isar.writeTxn(() async {
-      await _isar.collection<BookmarkSchema>().delete(id);
+    if (_isar == null) await init();
+    await _isar!.writeTxn(() async {
+      await _isar!.collection<BookmarkSchema>().delete(id);
     });
   }
 
   @override
   Future<void> clear() async {
-    await _isar.writeTxn(() async {
-      await _isar.collection<BookmarkSchema>().clear();
+    if (_isar == null) await init();
+    await _isar!.writeTxn(() async {
+      await _isar!.collection<BookmarkSchema>().clear();
     });
   }
 
   @override
   Future<List<BookmarkSchema>> getAll({bool descending = true, int? limit}) async {
-    var query = _isar.collection<BookmarkSchema>().where();
+    if (_isar == null) await init();
+    var query = _isar!.collection<BookmarkSchema>().where();
     
     if (descending) {
       return await query.sortByDateAddedDesc().limit(limit ?? 1000).findAll();
@@ -131,7 +151,8 @@ class IsarBookmarkRepository implements LocalDatabaseRepository<BookmarkSchema> 
 
   @override
   Future<List<BookmarkSchema>> search(String query) async {
-    return await _isar.collection<BookmarkSchema>()
+    if (_isar == null) await init();
+    return await _isar!.collection<BookmarkSchema>()
         .filter()
         .titleContains(query, caseSensitive: false)
         .or()
@@ -142,7 +163,13 @@ class IsarBookmarkRepository implements LocalDatabaseRepository<BookmarkSchema> 
 
   @override
   Stream<List<BookmarkSchema>> watchAll() {
-    return _isar.collection<BookmarkSchema>()
+    if (_isar == null) {
+      return Stream.fromFuture(init()).asyncExpand((_) => _isar!.collection<BookmarkSchema>()
+          .where()
+          .sortByDateAddedDesc()
+          .watch(fireImmediately: true));
+    }
+    return _isar!.collection<BookmarkSchema>()
         .where()
         .sortByDateAddedDesc()
         .watch(fireImmediately: true);
