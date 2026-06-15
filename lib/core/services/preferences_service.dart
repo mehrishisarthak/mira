@@ -12,15 +12,9 @@ class PreferencesService {
   static const _keyActiveTabIndex = 'active_tab_index';
   
   // Security Keys
-  static const _keyIncognito = 'mode_incognito';
-  static const _keyLocation = 'mode_location'; 
-  static const _keyCamera = 'mode_camera';     
+  static const _keyLocation = 'mode_location';
+  static const _keyCamera = 'mode_camera';
   static const _keyDesktop = 'mode_desktop';
-  static const _keyAdBlock = 'mode_adblock'; 
-  static const _keyProxyEnabled = 'mode_proxy_enabled';
-  static const _keyProxyUrl = 'mode_proxy_url';
-  static const _keyProxyAllowInsecureTls = 'mode_proxy_allow_insecure_tls';
-
   // Theme Keys
   static const _keyTheme = 'app_theme_style'; // For Color Accent
   static const _keyThemeMode = 'app_theme_mode'; // For Light/Dark/System
@@ -48,10 +42,6 @@ class PreferencesService {
 
   // --- SECURITY MODES ---
 
-  // Incognito (Default: false -> We want logins to work by default)
-  bool getIncognito() => _prefs.getBool(_keyIncognito) ?? false;
-  Future<void> setIncognito(bool value) async => await _prefs.setBool(_keyIncognito, value);
-
   // Location Block (Default: true -> Privacy first)
   bool getLocationBlock() => _prefs.getBool(_keyLocation) ?? true;
   Future<void> setLocationBlock(bool value) async => await _prefs.setBool(_keyLocation, value);
@@ -63,22 +53,6 @@ class PreferencesService {
   // Desktop Mode (Default: false)
   bool getDesktopMode() => _prefs.getBool(_keyDesktop) ?? false;
   Future<void> setDesktopMode(bool value) async => await _prefs.setBool(_keyDesktop, value);
-
-  // AdBlock / The Shield (Default: true -> MIRA protects you out of the box)
-  bool getAdBlock() => _prefs.getBool(_keyAdBlock) ?? true;
-  Future<void> setAdBlock(bool value) async => await _prefs.setBool(_keyAdBlock, value);
-
-  // Proxy Settings
-  bool getProxyEnabled() => _prefs.getBool(_keyProxyEnabled) ?? false;
-  Future<void> setProxyEnabled(bool value) async => await _prefs.setBool(_keyProxyEnabled, value);
-
-  String getProxyUrl() => _prefs.getString(_keyProxyUrl) ?? "";
-  Future<void> setProxyUrl(String value) async => await _prefs.setString(_keyProxyUrl, value);
-
-  bool getProxyAllowInsecureCertificates() =>
-      _prefs.getBool(_keyProxyAllowInsecureTls) ?? false;
-  Future<void> setProxyAllowInsecureCertificates(bool value) async =>
-      await _prefs.setBool(_keyProxyAllowInsecureTls, value);
 
   // --- THEME (COLORS) ---
   // Returns the index of the selected theme (0 = Green, 1 = Yellow, etc.)

@@ -11,9 +11,15 @@ class DownloadManager {
     if (kIsWeb || !(Platform.isAndroid || Platform.isIOS)) return;
     try {
       await FlutterDownloader.initialize(debug: kDebugMode, ignoreSsl: false);
+    } catch (e) {
+      debugPrint('[MIRA] DownloadManager: initialize failed -> $e');
+    }
+    // Register callback even if initialize threw — it may have already been
+    // initialized (hot-restart), and the callback must always be set.
+    try {
       FlutterDownloader.registerCallback(downloadCallback, step: 1);
     } catch (e) {
-      debugPrint('[MIRA] DownloadManager: init failed -> $e');
+      debugPrint('[MIRA] DownloadManager: registerCallback failed -> $e');
     }
   }
 

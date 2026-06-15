@@ -329,4 +329,12 @@ class DesktopDownloadService implements DownloadService {
       debugPrint('MIRA_DOWNLOAD: Error -> $e');
     }
   }
+
+  @override
+  void dispose() {
+    for (final entry in _active.entries) {
+      entry.value.cancelRequested = true;
+    }
+    _active.clear();
+  }
 }

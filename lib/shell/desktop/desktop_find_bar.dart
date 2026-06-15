@@ -176,6 +176,7 @@ class _DesktopFindBarState extends ConsumerState<DesktopFindBar> {
 
   late final TextEditingController _query;
   final FocusNode _focus = FocusNode();
+  bool _libraryInjected = false;
 
   @override
   void initState() {
@@ -193,7 +194,10 @@ class _DesktopFindBarState extends ConsumerState<DesktopFindBar> {
   Future<void> _runDesktopFindCommand(String expression) async {
     final engine = ref.read(browserChromeProvider).engine;
     if (engine == null) return;
-    await engine.injectScript(_desktopFindScript);
+    if (!_libraryInjected) {
+      await engine.injectScript(_desktopFindScript);
+      _libraryInjected = true;
+    }
     await engine.injectScript(expression);
   }
 
@@ -215,6 +219,7 @@ class _DesktopFindBarState extends ConsumerState<DesktopFindBar> {
   void _close() {
     ref.read(desktopFindBarVisibleProvider.notifier).state = false;
     _query.clear();
+    _libraryInjected = false;
     unawaited(_clearDesktopMatches());
   }
 

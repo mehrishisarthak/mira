@@ -256,7 +256,7 @@ class MiraMenuPage extends ConsumerWidget {
                   return;
                 }
                 final url = ref.read(currentActiveTabProvider).url;
-                final html = await engine.currentTitle(); // Simple proxy for content extraction
+                final html = await engine.getPageHtml();
                 
                 final host =
                     (Uri.tryParse(url)?.host ?? 'page').replaceAll('.', '_');
@@ -415,18 +415,6 @@ class MiraMenuPage extends ConsumerWidget {
                   ref.read(securityProvider.notifier).toggleCamera(val),
             ),
 
-            SwitchListTile(
-              title:
-                  Text("The Shield", style: TextStyle(color: appTextColor)),
-              secondary: Icon(Icons.shield,
-                  color: securityState.isAdBlockEnabled
-                      ? Colors.greenAccent
-                      : appTextColor.withAlpha(128)),
-              value: securityState.isAdBlockEnabled,
-              activeThumbColor: Colors.greenAccent,
-              onChanged: (val) =>
-                  ref.read(securityProvider.notifier).toggleAdBlock(val),
-            ),
 
             Divider(color: appTextColor.withAlpha(51)),
 

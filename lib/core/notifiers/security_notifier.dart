@@ -6,34 +6,19 @@ class SecurityNotifier extends StateNotifier<SecurityState> {
   final PreferencesService _prefs;
 
   SecurityNotifier(this._prefs) : super(SecurityState(
-    isIncognito: false,
     isLocationBlocked: true,
     isCameraBlocked: true,
     isDesktopMode: false,
-    isAdBlockEnabled: true,
-    isProxyEnabled: false,
-    proxyUrl: "",
-    proxyAllowInsecureCertificates: false,
   )) {
     _loadSettings();
   }
 
   void _loadSettings() {
     state = SecurityState(
-      isIncognito: _prefs.getIncognito(),
       isLocationBlocked: _prefs.getLocationBlock(),
       isCameraBlocked: _prefs.getCameraBlock(),
       isDesktopMode: _prefs.getDesktopMode(),
-      isAdBlockEnabled: _prefs.getAdBlock(), 
-      isProxyEnabled: _prefs.getProxyEnabled(),
-      proxyUrl: _prefs.getProxyUrl(),
-      proxyAllowInsecureCertificates: _prefs.getProxyAllowInsecureCertificates(),
     );
-  }
-
-  void toggleIncognito(bool value) {
-    state = state.copyWith(isIncognito: value);
-    _prefs.setIncognito(value);
   }
 
   void toggleLocation(bool value) {
@@ -49,26 +34,6 @@ class SecurityNotifier extends StateNotifier<SecurityState> {
   void toggleDesktop(bool value) {
     state = state.copyWith(isDesktopMode: value);
     _prefs.setDesktopMode(value);
-  }
-  
-  void toggleAdBlock(bool value) {
-    state = state.copyWith(isAdBlockEnabled: value);
-    _prefs.setAdBlock(value);
-  }
-
-  void toggleProxy(bool value) {
-    state = state.copyWith(isProxyEnabled: value);
-    _prefs.setProxyEnabled(value);
-  }
-
-  void updateProxyUrl(String value) {
-    state = state.copyWith(proxyUrl: value);
-    _prefs.setProxyUrl(value);
-  }
-
-  void toggleProxyAllowInsecureCertificates(bool value) {
-    state = state.copyWith(proxyAllowInsecureCertificates: value);
-    _prefs.setProxyAllowInsecureCertificates(value);
   }
 }
 

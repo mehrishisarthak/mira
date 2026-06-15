@@ -26,4 +26,6 @@ abstract class DownloadService {
     String url,
     String savePath,
   );
+
+  void dispose();
 }

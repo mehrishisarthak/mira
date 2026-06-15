@@ -55,7 +55,7 @@ class BrowserSheet extends ConsumerWidget {
               ...SearchEngines.urls.keys.map((engineKey) {
                 return RadioListTile<String>(
                   title: Text(
-                    engineKey.toUpperCase(),
+                    SearchEngines.getName(engineKey),
                     style: TextStyle(color: contentColor.withAlpha(179)),
                   ),
                   value: engineKey,

@@ -19,6 +19,7 @@ class DownloadsNotifier extends StateNotifier<List<MiraDownloadTask>> {
   @override
   void dispose() {
     _persistDebounce?.cancel();
+    _service.dispose();
     super.dispose();
   }
 

@@ -53,8 +53,9 @@ Future<void> applyMainScreenWebViewSettings(
 
   final config = BrowserEngineConfig(
     isDesktopMode: securityState.isDesktopMode,
-    isAdBlockEnabled: securityState.isAdBlockEnabled,
     isDarkMode: theme.mode == ThemeMode.dark,
+    isCameraBlocked: securityState.isCameraBlocked,
+    isLocationBlocked: securityState.isLocationBlocked,
   );
 
   try {

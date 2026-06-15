@@ -62,6 +62,7 @@ class MobileDownloadService implements DownloadService {
     return MiraDownloadStatus.pending;
   }
 
+  @override
   void dispose() {
     IsolateNameServer.removePortNameMapping('mira_download_port');
     _port.close();
@@ -71,28 +72,33 @@ class MobileDownloadService implements DownloadService {
 
   @override
   Future<void> startDownload(String url, String filename, {Map<String, String>? headers}) async {
-    final hasPermission = await _checkPermission();
-    if (!hasPermission) {
-      debugPrint('MIRA_DOWNLOAD: Permission denied');
-      return;
+    try {
+      final hasPermission = await _checkPermission();
+      if (!hasPermission) {
+        debugPrint('MIRA_DOWNLOAD: Permission denied');
+        return;
+      }
+
+      final directory = await _findMobilePath();
+      if (directory.isEmpty) {
+        debugPrint('MIRA_DOWNLOAD: Could not resolve a writable download directory');
+        return;
+      }
+
+      await FlutterDownloader.enqueue(
+        url: url,
+        savedDir: directory,
+        fileName: filename,
+        headers: headers ?? {},
+        showNotification: true,
+        openFileFromNotification: true,
+        saveInPublicStorage: true,
+      );
+
+      onTasksReloaded(await loadExistingTasks());
+    } catch (e, st) {
+      debugPrint('MIRA_DOWNLOAD: startDownload failed -> $e\n$st');
     }
-
-    final directory = await _findMobilePath();
-
-    await FlutterDownloader.enqueue(
-      url: url,
-      savedDir: directory,
-      fileName: filename,
-      // FIXED: Pass the headers to the platform engine for authenticated downloads
-      headers: headers ?? {}, 
-      showNotification: true,
-      openFileFromNotification: true,
-      saveInPublicStorage: true,
-    );
-
-    // We do a full reload here so the brand new task is added to the UI list.
-    // After it's in the list, the _port.listen() will handle all the progress updates.
-    onTasksReloaded(await loadExistingTasks());
   }
 
   @override
@@ -178,21 +184,22 @@ class MobileDownloadService implements DownloadService {
   }
 
   static Future<String> _findMobilePath() async {
-    Directory? directory;
     try {
-      if (Platform.isAndroid) {
-        directory = Directory('/storage/emulated/0/Download');
-        if (!await directory.exists()) {
-          directory = await getExternalStorageDirectory();
-        }
-      } else if (Platform.isIOS) {
-        directory = await getApplicationDocumentsDirectory();
+      if (Platform.isIOS) {
+        return (await getApplicationDocumentsDirectory()).path;
       }
+      // Android: getDownloadsDirectory() maps to Environment.DIRECTORY_DOWNLOADS
+      // and is accessible without MANAGE_EXTERNAL_STORAGE on all API levels.
+      final dl = await getDownloadsDirectory();
+      if (dl != null) return dl.path;
+
+      // Fallback: app-private external storage (always accessible)
+      final ext = await getExternalStorageDirectory();
+      if (ext != null) return ext.path;
     } catch (e) {
-      debugPrint('MIRA_DOWNLOAD: Path error -> $e');
-      directory = await getDownloadsDirectory() ??
-          await getApplicationDocumentsDirectory();
+      debugPrint('MIRA_DOWNLOAD: Path resolution error -> $e');
     }
-    return directory?.path ?? '';
+    // Last resort: always-writable internal directory
+    return (await getApplicationDocumentsDirectory()).path;
   }
 }

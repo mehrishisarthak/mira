@@ -12,7 +12,7 @@ class HibernatedTabPlaceholder extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = ref.read(themeProvider);
+    final theme = ref.watch(themeProvider);
     final bg = theme.backgroundColor;
     final isLight = theme.mode == ThemeMode.light;
     final mutedColor = isLight

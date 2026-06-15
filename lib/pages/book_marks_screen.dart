@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mira/core/entities/theme_entity.dart';
 import 'package:mira/core/notifiers/bookmarks_notifier.dart';
+import 'package:mira/core/notifiers/ghost_notifier.dart';
 import 'package:mira/core/notifiers/tab_notifier.dart';
 import 'package:mira/core/notifiers/theme_notifier.dart';
 import 'package:mira/pages/browser_chrome_providers.dart';
@@ -54,8 +55,12 @@ class BookmarksPage extends ConsumerWidget {
                     },
                   ),
                   onTap: () {
-                    // Load URL via abstract engine and close screen
-                    ref.read(tabsProvider.notifier).updateUrl(bookmark.url);
+                    final isGhost = ref.read(isGhostModeProvider);
+                    if (isGhost) {
+                      ref.read(ghostTabsProvider.notifier).updateUrl(bookmark.url);
+                    } else {
+                      ref.read(tabsProvider.notifier).updateUrl(bookmark.url);
+                    }
                     ref.read(activeBrowserEngineProvider)?.loadUrl(bookmark.url);
                     Navigator.pop(context);
                   },

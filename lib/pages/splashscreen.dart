@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // For Haptics
 import 'package:google_fonts/google_fonts.dart';
@@ -55,7 +56,10 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
     // Stage 3: Haptic "Heartbeat" (Optional: Mechanical feel)
     await Future.delayed(const Duration(milliseconds: 800));
-    HapticFeedback.lightImpact();
+    if (!kIsWeb && (defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS)) {
+      HapticFeedback.lightImpact();
+    }
 
     // Stage 4: Network Protocols (Update Check)
     final updateResult = await UpdateService.autoCheck(client: widget.httpClient);
@@ -64,17 +68,21 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     if (mounted) {
       if (updateResult.status == UpdateStatus.forceUpdate) {
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => UpdateScreen(result: updateResult)),
+          MaterialPageRoute(
+            builder: (_) => UpdateScreen(result: updateResult),
+          ),
         );
         return;
       }
 
       if (updateResult.status == UpdateStatus.updateAvailable) {
-        // If optional update, we show it but allow skipping
-        // For now, we go to update screen first. 
-        // The UpdateScreen handles the skip logic.
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => UpdateScreen(result: updateResult)),
+          MaterialPageRoute(
+            builder: (_) => UpdateScreen(
+              result: updateResult,
+              nextScreen: widget.nextScreen,
+            ),
+          ),
         );
         return;
       }

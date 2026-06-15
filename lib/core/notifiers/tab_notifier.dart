@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
@@ -40,9 +41,16 @@ class TabsState {
 // --- 2. THE NOTIFIER ---
 class TabsNotifier extends StateNotifier<TabsState> {
   final PreferencesService _prefsService;
+  Timer? _saveDebounce;
 
   TabsNotifier(this._prefsService) : super(TabsState(tabs: [BrowserTab()], activeIndex: 0)) {
     _loadTabs();
+  }
+
+  @override
+  void dispose() {
+    _saveDebounce?.cancel();
+    super.dispose();
   }
 
   void _loadTabs() {
@@ -88,6 +96,12 @@ class TabsNotifier extends StateNotifier<TabsState> {
   void _saveToPrefs() {
     final jsonList = state.tabs.map((tab) => tab.toJson()).toList();
     _prefsService.saveTabs(jsonList, state.activeIndex);
+  }
+
+  // Debounced save for high-frequency WebView events (URL/title updates).
+  void _scheduleSave() {
+    _saveDebounce?.cancel();
+    _saveDebounce = Timer(const Duration(milliseconds: 500), _saveToPrefs);
   }
 
   // --- ACTIONS ---
@@ -164,55 +178,48 @@ class TabsNotifier extends StateNotifier<TabsState> {
   }
 
   void updateUrl(String newUrl) {
-    _updateActiveTab((tab) => tab.copyWith(url: newUrl));
+    _updateActiveTab((tab) => tab.copyWith(url: newUrl), debounce: true);
   }
 
   void updateUrlForTab(String tabId, String newUrl) {
-    _updateTabById(
-      tabId,
-      (tab) => tab.copyWith(url: newUrl),
-    );
+    _updateTabById(tabId, (tab) => tab.copyWith(url: newUrl), debounce: true);
   }
-  
+
   void updateTitle(String newTitle) {
-     _updateActiveTab((tab) => tab.copyWith(title: newTitle));
+    _updateActiveTab((tab) => tab.copyWith(title: newTitle), debounce: true);
   }
 
   void updateTitleForTab(String tabId, String newTitle) {
-    _updateTabById(
-      tabId,
-      (tab) => tab.copyWith(title: newTitle),
-    );
+    _updateTabById(tabId, (tab) => tab.copyWith(title: newTitle), debounce: true);
   }
 
   // This resets the persistent tabs to a single blank tab
   void nuke() {
     final newTabs = [BrowserTab()];
     state = TabsState(tabs: newTabs, activeIndex: 0);
-    if (!_prefsService.getIncognito()) {
-      _saveToPrefs();
-    }
+    _saveToPrefs();
   }
 
-  void _updateActiveTab(BrowserTab Function(BrowserTab) updater) {
+  void _updateActiveTab(BrowserTab Function(BrowserTab) updater, {bool debounce = false}) {
     final currentTabs = [...state.tabs];
     final activeTab = currentTabs[state.activeIndex];
     currentTabs[state.activeIndex] = updater(activeTab);
     state = TabsState(tabs: currentTabs, activeIndex: state.activeIndex);
-    _saveToPrefs();
+    debounce ? _scheduleSave() : _saveToPrefs();
   }
 
   void _updateTabById(
     String tabId,
-    BrowserTab Function(BrowserTab) updater,
-  ) {
+    BrowserTab Function(BrowserTab) updater, {
+    bool debounce = false,
+  }) {
     final index = state.tabs.indexWhere((tab) => tab.id == tabId);
     if (index == -1) return;
 
     final currentTabs = [...state.tabs];
     currentTabs[index] = updater(currentTabs[index]);
     state = TabsState(tabs: currentTabs, activeIndex: state.activeIndex);
-    _saveToPrefs();
+    debounce ? _scheduleSave() : _saveToPrefs();
   }
 }
 

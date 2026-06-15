@@ -7,6 +7,7 @@ import 'package:mira/core/services/database_providers.dart';
 import 'package:mira/pages/browser_chrome_providers.dart';
 
 import '../branding_screen.dart';
+import '../custom_error_screen.dart';
 import 'hibernated_tab_placeholder.dart';
 import 'browser_side_effects.dart';
 import 'webview_skeleton_overlay.dart';
@@ -25,6 +26,11 @@ class _BrowserViewState extends ConsumerState<BrowserView>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Run the one-time initial sync after the first frame so providers are ready.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      syncInitialEngine(ref);
+    });
   }
 
   @override
@@ -34,34 +40,23 @@ class _BrowserViewState extends ConsumerState<BrowserView>
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Note: Lifecycle management (pause/resume) can be handled via the BrowserEngine instances
-    // managed by the browserEngineProvider family.
-  }
+  void didChangeAppLifecycleState(AppLifecycleState state) {}
 
   @override
   Widget build(BuildContext context) {
     final isGhost = ref.watch(isGhostModeProvider);
-    
-    // Side effects logic updated to use new providers
-    registerBrowserViewSideEffects(
-      ref: ref,
-      isMounted: () => mounted,
-    );
+
+    registerBrowserViewSideEffects(ref: ref);
 
     final tabsState = ref.watch(isGhost ? ghostTabsProvider : tabsProvider);
     final tabs = tabsState.tabs;
     final activeIndex = tabsState.activeIndex;
 
     final awakeTabIds = ref.watch(hibernationProvider);
-
-    final errorMessage =
-        ref.watch(browserChromeProvider.select((s) => s.webError));
-
-    if (errorMessage != null && tabs.isNotEmpty) {
-      // CustomErrorScreen should be updated similarly if it has native imports
-      // For now, assuming it's manageable.
-    }
+    final webError = ref.watch(browserChromeProvider.select((s) => s.webError));
+    final activeUrl = tabsState.tabs.isNotEmpty
+        ? tabsState.tabs[tabsState.activeIndex].url
+        : '';
 
     return Stack(
       children: [
@@ -102,6 +97,17 @@ class _BrowserViewState extends ConsumerState<BrowserView>
           );
         }),
         const WebViewSkeletonOverlay(),
+        if (webError != null && activeUrl.isNotEmpty)
+          Positioned.fill(
+            child: CustomErrorScreen(
+              error: webError,
+              url: activeUrl,
+              onRetry: () {
+                ref.read(browserChromeProvider.notifier).clearWebError();
+                ref.read(activeBrowserEngineProvider)?.reload();
+              },
+            ),
+          ),
       ],
     );
   }

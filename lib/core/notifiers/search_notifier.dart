@@ -1,5 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mira/core/entities/search_entity.dart';
 import 'package:mira/core/services/preferences_service.dart';
 import 'package:mira/constants/search_engines.dart';
 
@@ -37,14 +36,3 @@ final formattedSearchUrlProvider = Provider.family<String, String>((ref, query) 
   return "$baseUrl${Uri.encodeComponent(query)}";
 });
 
-class SearchNotifier extends StateNotifier<Search> {
-  SearchNotifier(super.state);
-
-  void updateUrl(String urlProvided) {
-    state = state.copyWith(url: urlProvided);
-  }
-}
-
-final searchProvider = StateNotifierProvider<SearchNotifier, Search>((ref) {
-  return SearchNotifier(Search(url: ''));
-});

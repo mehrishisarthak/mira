@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:collection';
 import 'dart:typed_data';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -7,7 +6,6 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:mira/core/services/browser_engine_blueprints.dart';
 import 'package:mira/core/config/desktop_user_agent.dart';
-import 'package:mira/core/services/ad_block_service.dart';
 
 /// The concrete implementation of [BrowserEngine] using the flutter_inappwebview plugin.
 class InAppWebViewEngine implements BrowserEngine {
@@ -21,9 +19,11 @@ class InAppWebViewEngine implements BrowserEngine {
       StreamController<BrowserPageEvent>.broadcast();
 
   InAppWebViewController? _controller;
-  ContentFilter? _contentFilter;
-  ProxyConfig? _proxyConfig;
   final bool _isPrivate;
+
+  // Mutable permission flags — updated live via updateSettings()
+  bool _isCameraBlocked = true;
+  bool _isLocationBlocked = true;
 
   String? _pendingUrl;
   Map<String, String>? _pendingHeaders;
@@ -54,14 +54,15 @@ class InAppWebViewEngine implements BrowserEngine {
   // --- Lifecycle ---
 
   @override
-  Future<void> init() async {
-    // Basic initialization if any global plugin state is needed.
-  }
+  Future<void> init() async {}
 
   @override
   Future<void> updateSettings(BrowserEngineConfig config) async {
+    _isCameraBlocked = config.isCameraBlocked;
+    _isLocationBlocked = config.isLocationBlocked;
+
     final forceDarkSetting = config.isDarkMode ? ForceDark.ON : ForceDark.OFF;
-    
+
     final settings = InAppWebViewSettings(
       forceDark: forceDarkSetting,
       algorithmicDarkeningAllowed: config.isDarkMode,
@@ -73,6 +74,7 @@ class InAppWebViewEngine implements BrowserEngine {
       preferredContentMode: config.isDesktopMode
           ? UserPreferredContentMode.DESKTOP
           : UserPreferredContentMode.MOBILE,
+      geolocationEnabled: !config.isLocationBlocked,
     );
 
     await _controller?.setSettings(settings: settings);
@@ -156,6 +158,14 @@ class InAppWebViewEngine implements BrowserEngine {
   }
 
   @override
+  Future<String> getPageHtml() async {
+    final result = await _controller?.evaluateJavascript(
+      source: "document.documentElement.outerHTML",
+    );
+    return result?.toString() ?? "";
+  }
+
+  @override
   Future<Uint8List?> takeSnapshot() async {
     return await _controller?.takeScreenshot();
   }
@@ -198,7 +208,7 @@ class InAppWebViewEngine implements BrowserEngine {
     await _controller?.zoomBy(zoomFactor: 1.0);
   }
 
-  // --- Middleware & Extension Hooks ---
+  // --- Scripting ---
 
   @override
   Future<void> injectScript(String js, {bool atDocumentStart = false}) async {
@@ -215,17 +225,6 @@ class InAppWebViewEngine implements BrowserEngine {
   }
 
   @override
-  Future<void> registerContentFilter(ContentFilter filter) async {
-    _contentFilter = filter;
-  }
-
-  @override
-  Future<bool> registerProxyConfig(ProxyConfig config) async {
-    _proxyConfig = config;
-    return true;
-  }
-
-  @override
   Widget buildWidget({required String tabId, String? initialUrl}) {
     return InAppWebView(
       key: ObjectKey(tabId),
@@ -237,42 +236,29 @@ class InAppWebViewEngine implements BrowserEngine {
         transparentBackground: true,
         useShouldOverrideUrlLoading: true,
         useOnDownloadStart: true,
-        contentBlockers: AdBlockService.adBlockRegexes.map((regex) {
-          return ContentBlocker(
-            trigger: ContentBlockerTrigger(
-              urlFilter: regex,
-              resourceType: [
-                ContentBlockerTriggerResourceType.SCRIPT,
-                ContentBlockerTriggerResourceType.IMAGE,
-                ContentBlockerTriggerResourceType.MEDIA,
-                ContentBlockerTriggerResourceType.FONT,
-              ],
-            ),
-            action: ContentBlockerAction(
-              type: ContentBlockerActionType.BLOCK,
-            ),
-          );
-        }).toList(),
+        geolocationEnabled: !_isLocationBlocked,
       ),
-      initialUserScripts: UnmodifiableListView<UserScript>([
-        UserScript(
-          source: AdBlockService.fullShieldScript,
-          injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
-        ),
-      ]),
-      shouldInterceptRequest: (controller, request) async {
-        final host = request.url.host;
-        if (AdBlockService.blockedDomains.any((domain) => 
-            host == domain || host.endsWith('.$domain'))) {
-          return WebResourceResponse(
-            contentType: 'text/plain',
-            data: Uint8List(0),
-          );
-        }
-        return null;
-      },
       onWebViewCreated: (controller) {
         setController(controller);
+      },
+      onPermissionRequest: (controller, request) async {
+        final sensorRequested = request.resources.where((r) =>
+            r == PermissionResourceType.CAMERA ||
+            r == PermissionResourceType.MICROPHONE).toList();
+        if (sensorRequested.isEmpty) return null;
+        return PermissionResponse(
+          resources: sensorRequested,
+          action: _isCameraBlocked
+              ? PermissionResponseAction.DENY
+              : PermissionResponseAction.GRANT,
+        );
+      },
+      onGeolocationPermissionsShowPrompt: (controller, origin) async {
+        return GeolocationPermissionShowPromptResponse(
+          origin: origin,
+          allow: !_isLocationBlocked,
+          retain: false,
+        );
       },
       onLoadStart: (controller, url) {
         handleLoadStart(url);

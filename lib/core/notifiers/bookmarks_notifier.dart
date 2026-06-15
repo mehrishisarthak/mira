@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mira/core/services/isar_database_repository.dart';
@@ -6,6 +7,7 @@ import 'package:mira/core/services/database_providers.dart';
 
 class BookmarksNotifier extends StateNotifier<List<BookmarkSchema>> {
   final IsarBookmarkRepository _repository;
+  StreamSubscription<List<BookmarkSchema>>? _subscription;
 
   BookmarksNotifier(this._repository) : super([]) {
     _init();
@@ -14,12 +16,18 @@ class BookmarksNotifier extends StateNotifier<List<BookmarkSchema>> {
   Future<void> _init() async {
     try {
       await _repository.init();
-      _repository.watchAll().listen((items) {
-        state = items;
+      _subscription = _repository.watchAll().listen((items) {
+        if (mounted) state = items;
       });
     } catch (e, stack) {
       debugPrint('[MIRA] BookmarksNotifier init failed: $e\n$stack');
     }
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    super.dispose();
   }
 
   Future<void> toggleBookmark(String url, String title) async {
@@ -35,20 +43,17 @@ class BookmarksNotifier extends StateNotifier<List<BookmarkSchema>> {
       ..url = url
       ..title = title.isEmpty ? url : title
       ..dateAdded = DateTime.now();
-    
     await _repository.put(newBookmark);
   }
 
   Future<void> removeBookmark(String url) async {
-    final item = state.cast<BookmarkSchema?>().firstWhere((b) => b?.url == url, orElse: () => null);
+    final item = state.where((b) => b.url == url).firstOrNull;
     if (item != null) {
       await _repository.delete(item.id);
     }
   }
 
-  bool isBookmarked(String url) {
-    return state.any((b) => b.url == url);
-  }
+  bool isBookmarked(String url) => state.any((b) => b.url == url);
 }
 
 final bookmarksProvider = StateNotifierProvider<BookmarksNotifier, List<BookmarkSchema>>((ref) {

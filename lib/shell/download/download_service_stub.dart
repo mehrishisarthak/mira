@@ -46,7 +46,6 @@ class StubDownloadService implements DownloadService {
   }
 
   @override
-  // FIXED: Removed the redundant onUpdate parameter to match the new interface
   Future<void> retryTask(
     String taskId,
     String url,
@@ -55,4 +54,7 @@ class StubDownloadService implements DownloadService {
     throw UnimplementedError(
         'DownloadService is not supported on this platform.');
   }
+
+  @override
+  void dispose() {}
 }

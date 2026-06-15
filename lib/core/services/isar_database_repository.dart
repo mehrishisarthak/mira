@@ -26,6 +26,40 @@ class IsarHistoryRepository implements LocalDatabaseRepository<HistoryItemSchema
     });
   }
 
+  /// Upserts a history entry by URL.
+  /// If an entry for this URL exists within [dedupeWindow], updates its title
+  /// and timestamp instead of inserting a duplicate.
+  Future<void> upsertByUrl(
+    String url,
+    String title, {
+    Duration dedupeWindow = const Duration(minutes: 30),
+  }) async {
+    if (_isar == null) await init();
+    final cutoff = DateTime.now().subtract(dedupeWindow);
+    await _isar!.writeTxn(() async {
+      final existing = await _isar!
+          .collection<HistoryItemSchema>()
+          .filter()
+          .urlEqualTo(url)
+          .timestampGreaterThan(cutoff)
+          .sortByTimestampDesc()
+          .findFirst();
+      if (existing != null) {
+        existing.title = title;
+        existing.timestamp = DateTime.now();
+        existing.visitCount += 1;
+        await _isar!.collection<HistoryItemSchema>().put(existing);
+      } else {
+        final item = HistoryItemSchema()
+          ..url = url
+          ..title = title
+          ..timestamp = DateTime.now()
+          ..visitCount = 1;
+        await _isar!.collection<HistoryItemSchema>().put(item);
+      }
+    });
+  }
+
   @override
   Future<void> putAll(List<HistoryItemSchema> items) async {
     if (_isar == null) await init();

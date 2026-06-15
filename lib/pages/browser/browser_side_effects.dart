@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mira/core/entities/tab_entity.dart';
 
 import 'package:mira/core/notifiers/ghost_notifier.dart';
+import 'package:mira/core/notifiers/history_notifier.dart';
 import 'package:mira/core/notifiers/tab_notifier.dart';
 import 'package:mira/core/notifiers/hibernation_notifier.dart';
 import 'package:mira/core/notifiers/theme_notifier.dart';
@@ -41,6 +43,7 @@ final _engineEventsSubscriptionProvider = Provider.family<void, BrowserEngine>((
       case BrowserPageEventType.titleChanged:
         if (event.title != null) {
           _updateTabTitle(ref, event.title!);
+          _updateHistoryTitle(ref, event.title!);
         }
         break;
       case BrowserPageEventType.error:
@@ -49,11 +52,15 @@ final _engineEventsSubscriptionProvider = Provider.family<void, BrowserEngine>((
       case BrowserPageEventType.downloadRequested:
         if (event.downloadRequest != null) {
           final req = event.downloadRequest!;
-          ref.read(downloadsProvider.notifier).startDownload(
-                req.url,
-                filename: req.filename,
-                headers: _parseHeaders(req.cookies),
-              );
+          unawaited(
+            ref.read(downloadsProvider.notifier).startDownload(
+              req.url,
+              filename: req.filename,
+              headers: _parseHeaders(req.cookies),
+            ).catchError((Object e) {
+              debugPrint('MIRA_DOWNLOAD: event handler error -> $e');
+            }),
+          );
         }
         break;
     }
@@ -69,18 +76,14 @@ Map<String, String>? _parseHeaders(String? cookies) {
   return {'Cookie': cookies};
 }
 
-void registerBrowserViewSideEffects({
-  required WidgetRef ref,
-  required bool Function() isMounted,
-}) {
-  // 0. Initial sync for the current state
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    if (!isMounted()) return;
-    final isGhost = ref.read(isGhostModeProvider);
-    final state = isGhost ? ref.read(ghostTabsProvider) : ref.read(tabsProvider);
-    _syncEngineToChrome(ref, state.tabs, state.activeIndex);
-  });
+/// Called once from [BrowserView.initState] after the first frame.
+void syncInitialEngine(WidgetRef ref) {
+  final isGhost = ref.read(isGhostModeProvider);
+  final state = isGhost ? ref.read(ghostTabsProvider) : ref.read(tabsProvider);
+  _syncEngineToChrome(ref, state.tabs, state.activeIndex);
+}
 
+void registerBrowserViewSideEffects({required WidgetRef ref}) {
   // 1. Sync active engine to BrowserChromeProvider and manage Hibernation
   ref.listen(tabsProvider, (previous, next) {
     if (!ref.read(isGhostModeProvider)) {
@@ -95,10 +98,15 @@ void registerBrowserViewSideEffects({
   });
 
   ref.listen(ghostTabsProvider, (previous, next) {
-    if (ref.read(isGhostModeProvider)) {
+    final isGhost = ref.read(isGhostModeProvider);
+    // Auto-exit ghost mode when all ghost tabs are closed
+    if (isGhost && next.tabs.isEmpty) {
+      ref.read(isGhostModeProvider.notifier).state = false;
+      return;
+    }
+    if (isGhost) {
       _syncEngineToChrome(ref, next.tabs, next.activeIndex);
     }
-    // Sync hibernation for closed tabs
     if (previous != null && previous.tabs.length > next.tabs.length) {
       ref.read(hibernationProvider.notifier).onTabsClosed(
         next.tabs.map((t) => t.id).toSet(),
@@ -127,7 +135,7 @@ void registerBrowserViewSideEffects({
   }
 }
 
-void _syncEngineToChrome(dynamic ref, List tabs, int index) {
+void _syncEngineToChrome(WidgetRef ref, List<BrowserTab> tabs, int index) {
   if (tabs.isEmpty) {
     ref.read(browserChromeProvider.notifier).setEngine(null);
     return;
@@ -141,12 +149,9 @@ void _syncEngineToChrome(dynamic ref, List tabs, int index) {
   final chromeNotifier = ref.read(browserChromeProvider.notifier);
   chromeNotifier.setEngine(engine);
   chromeNotifier.setLoadingProgress(engine.lastProgress);
-
-  // Apply current settings to this engine as it becomes active
-  applyMainScreenWebViewSettings(ref);
 }
 
-void _updateTabUrl(dynamic ref, String url) {
+void _updateTabUrl(Ref ref, String url) {
   final isGhost = ref.read(isGhostModeProvider);
   if (isGhost) {
     ref.read(ghostTabsProvider.notifier).updateUrl(url);
@@ -155,11 +160,19 @@ void _updateTabUrl(dynamic ref, String url) {
   }
 }
 
-void _updateTabTitle(dynamic ref, String title) {
+void _updateTabTitle(Ref ref, String title) {
   final isGhost = ref.read(isGhostModeProvider);
   if (isGhost) {
     ref.read(ghostTabsProvider.notifier).updateTitle(title);
   } else {
     ref.read(tabsProvider.notifier).updateTitle(title);
   }
+}
+
+void _updateHistoryTitle(Ref ref, String title) {
+  // Skip in ghost mode — history is not recorded
+  if (ref.read(isGhostModeProvider)) return;
+  final url = ref.read(tabsProvider).safeActiveTab?.url ?? '';
+  if (url.isEmpty || url == 'about:blank') return;
+  ref.read(historyProvider.notifier).addToHistory(url, title: title);
 }

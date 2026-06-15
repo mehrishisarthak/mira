@@ -1,6 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:mira/shell/desktop/desktop_windowing.dart';
-import 'package:flutter/services.dart'; 
+import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:io';
@@ -8,13 +9,9 @@ import 'package:mira/core/notifiers/bookmarks_notifier.dart';
 import 'package:mira/core/notifiers/theme_notifier.dart';
 import 'package:mira/core/notifiers/ghost_notifier.dart';
 import 'package:mira/core/notifiers/search_notifier.dart';
-import 'package:mira/core/notifiers/history_notifier.dart';
-import 'package:mira/core/notifiers/security_notifier.dart'; 
+import 'package:mira/core/notifiers/security_notifier.dart';
 import 'package:mira/core/notifiers/tab_notifier.dart';
 import 'package:mira/core/entities/tab_entity.dart';
-import 'package:mira/core/notifiers/proxy_notifier.dart';
-import 'package:mira/core/services/proxy_service.dart';
-import 'package:mira/shell/proxy/proxy_provider.dart'; 
 import 'package:mira/core/entities/theme_entity.dart';
 import 'package:mira/pages/browser_chrome_providers.dart';
 import 'package:mira/pages/browser/browser_view.dart';
@@ -36,6 +33,7 @@ class Mainscreen extends ConsumerStatefulWidget {
 class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObserver {
   DateTime? _lastExitTime;
   DateTime? _lastAutoHealAt;
+  Timer? _titleSyncDebounce;
 
   late final TextEditingController _urlController;
   late final FocusNode _urlFocusNode;
@@ -59,25 +57,30 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     }
   }
 
-  Future<void> _syncDesktopWindowTitle(BrowserTab tab) async {
+  void _syncDesktopWindowTitle(BrowserTab tab) {
     if (kIsWeb ||
         !(Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
       return;
     }
-    final raw = tab.title.trim();
-    final label = raw.isEmpty ? 'Mira' : raw;
-    final isGhost = ref.read(isGhostModeProvider);
-    if (isGhost) {
-      await desktopSetWindowTitle(
-        raw.isEmpty ? 'MIRA Private' : '$label — MIRA Private',
-      );
-    } else {
-      await desktopSetWindowTitle('$label — Mira');
-    }
+    _titleSyncDebounce?.cancel();
+    _titleSyncDebounce = Timer(const Duration(milliseconds: 300), () async {
+      if (!mounted) return;
+      final raw = tab.title.trim();
+      final label = raw.isEmpty ? 'Mira' : raw;
+      final isGhost = ref.read(isGhostModeProvider);
+      if (isGhost) {
+        await desktopSetWindowTitle(
+          raw.isEmpty ? 'MIRA Private' : '$label — MIRA Private',
+        );
+      } else {
+        await desktopSetWindowTitle('$label — Mira');
+      }
+    });
   }
 
   @override
   void dispose() {
+    _titleSyncDebounce?.cancel();
     if (!kIsWeb &&
         (Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
       HardwareKeyboard.instance.removeHandler(_handleDesktopHotkey);
@@ -165,7 +168,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
   }
 
   void _performSearch(String value) {
-    if (value.isEmpty) return;
+    if (value.trim().isEmpty) return;
     
     _triggerHaptic(MainScreenHapticKind.light);
     ref.read(browserChromeProvider.notifier).clearWebError();
@@ -179,21 +182,10 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
       finalUrl = ref.read(formattedSearchUrlProvider(trimmedValue));
     }
     
-    final gateway = ref.read(proxyServiceProvider);
-    final isGatewayRunning = ref.read(proxyGatewayStatusProvider);
-    final security = ref.read(securityProvider);
-    if (!kIsWeb &&
-        gateway.runtimeBackend == ProxyRuntimeBackend.iosLocalGateway &&
-        security.isProxyEnabled &&
-        isGatewayRunning) {
-      finalUrl = gateway.getProxiedUrl(finalUrl);
-    }
-    
     final isGhost = ref.read(isGhostModeProvider);
     if (isGhost) {
       ref.read(ghostTabsProvider.notifier).updateUrl(finalUrl);
     } else {
-      ref.read(historyProvider.notifier).addToHistory(finalUrl, title: trimmedValue);
       ref.read(tabsProvider.notifier).updateUrl(finalUrl);
     }
 
@@ -215,15 +207,10 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     final isGhost = ref.read(isGhostModeProvider);
     final appTheme = ref.read(themeProvider);
 
-    if (errorMessage != null) {
-      if (await engine?.canGoBack() ?? false) {
-        ref.read(browserChromeProvider.notifier).clearWebError();
-        engine?.goBack();
-        return;
-      }
-    }
-
     if (engine != null && await engine.canGoBack()) {
+      if (errorMessage != null) {
+        ref.read(browserChromeProvider.notifier).clearWebError();
+      }
       engine.goBack();
       return;
     }
@@ -266,7 +253,6 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
   Widget build(BuildContext context) {
     final isGhost = ref.watch(isGhostModeProvider);
     final activeTab = ref.watch(currentActiveTabProvider);
-    ref.watch(proxyGatewayStatusProvider);
 
     final activeUrl = activeTab.url;
     final normalTabsList = ref.watch(tabsProvider).tabs;
@@ -330,8 +316,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     // Theme → WebView settings sync is handled by BrowserView._applyThemeToAllControllers.
     // Only listen to security for desktop-mode / ad-block toggles that need a page reload.
     ref.listen(securityProvider, (prev, next) {
-      if (prev?.isDesktopMode != next.isDesktopMode ||
-          prev?.isAdBlockEnabled != next.isAdBlockEnabled) {
+      if (prev?.isDesktopMode != next.isDesktopMode) {
         applyMainScreenWebViewSettings(ref, forceReload: true);
       }
     });

@@ -109,10 +109,10 @@ class HistoryPage extends ConsumerWidget {
                             Navigator.pop(context);
                           }
 
-                          String finalUrl;
-                          if (item.url.contains('.') &&
-                              !item.url.contains(' ')) {
-                            finalUrl = "https://${item.url}";
+                          final String finalUrl;
+                          if (item.url.startsWith('http://') ||
+                              item.url.startsWith('https://')) {
+                            finalUrl = item.url;
                           } else {
                             finalUrl = ref
                                 .read(formattedSearchUrlProvider(item.url));

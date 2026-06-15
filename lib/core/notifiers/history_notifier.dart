@@ -1,40 +1,40 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mira/core/services/isar_database_repository.dart';
 import 'package:mira/core/services/isar_schemas.dart';
 import 'package:mira/core/services/database_providers.dart';
-import 'package:mira/core/notifiers/ghost_notifier.dart';
 
 class HistoryNotifier extends StateNotifier<List<HistoryItemSchema>> {
   final IsarHistoryRepository _repository;
-  final bool _isGhost;
+  StreamSubscription<List<HistoryItemSchema>>? _subscription;
 
-  HistoryNotifier(this._repository, this._isGhost) : super([]) {
+  HistoryNotifier(this._repository) : super([]) {
     _init();
   }
 
   Future<void> _init() async {
-    if (_isGhost) return;
-    
     try {
       await _repository.init();
-      _repository.watchAll().listen((items) {
-        state = items;
+      _subscription = _repository.watchAll().listen((items) {
+        if (mounted) state = items;
       });
     } catch (e, stack) {
       debugPrint('[MIRA] HistoryNotifier init failed: $e\n$stack');
     }
   }
 
-  Future<void> addToHistory(String url, {String? title}) async {
-    if (_isGhost || url.trim().isEmpty || url == 'about:blank') return;
-    
-    final item = HistoryItemSchema()
-      ..url = url.trim()
-      ..title = (title == null || title.isEmpty) ? url : title
-      ..timestamp = DateTime.now();
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    super.dispose();
+  }
 
-    await _repository.put(item);
+  // Ghost mode is checked at call site — not watched here to avoid provider recreation.
+  Future<void> addToHistory(String url, {String? title}) async {
+    if (url.trim().isEmpty || url == 'about:blank') return;
+    final resolvedTitle = (title == null || title.isEmpty) ? url : title;
+    await _repository.upsertByUrl(url.trim(), resolvedTitle);
   }
 
   Future<void> removeFromHistory(int id) async {
@@ -48,6 +48,5 @@ class HistoryNotifier extends StateNotifier<List<HistoryItemSchema>> {
 
 final historyProvider = StateNotifierProvider<HistoryNotifier, List<HistoryItemSchema>>((ref) {
   final repository = ref.read(historyRepositoryProvider);
-  final isGhost = ref.watch(isGhostModeProvider);
-  return HistoryNotifier(repository, isGhost);
+  return HistoryNotifier(repository);
 });
