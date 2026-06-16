@@ -14,11 +14,20 @@ import 'package:mira/core/services/preferences_service.dart';
 import 'package:mira/core/observers/provider_observer.dart';
 import 'package:http/http.dart' as http;
 
+import 'package:mira/core/services/adblock_service.dart';
 import 'package:mira/shell/browser/in_app_webview_engine.dart';
 
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
+  // Pre-warm the adblock rule cache before runApp so loadRulesSync() returns
+  // the full list at engine-creation time (avoids FutureProvider race).
+  try {
+    await AdBlockService.loadRules();
+  } catch (e) {
+    debugPrint('MIRA: AdBlock rule pre-warm failed: $e');
+  }
+
   // 1. Fetch Desktop User Agent for the underlying engine
   try {
     final ua = await InAppWebViewEngine.fetchDefaultUserAgent();

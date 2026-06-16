@@ -1,132 +1,147 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mira/core/notifiers/ghost_notifier.dart';
-import 'package:mira/core/notifiers/tab_notifier.dart';
+import 'package:google_fonts/google_fonts.dart';
+
 import 'package:mira/core/entities/tab_entity.dart';
 import 'package:mira/core/entities/theme_entity.dart';
+import 'package:mira/core/notifiers/ghost_notifier.dart';
+import 'package:mira/core/notifiers/tab_notifier.dart';
 import 'package:mira/core/notifiers/theme_notifier.dart';
 
 class TabsSheet extends ConsumerWidget {
   const TabsSheet({super.key});
 
-  static const _gridDelegate = SliverGridDelegateWithFixedCrossAxisCount(
-    crossAxisCount: 2,
-    crossAxisSpacing: 12,
-    mainAxisSpacing: 12,
-    childAspectRatio: 1.3,
-  );
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isGhostModeActive = ref.watch(isGhostModeProvider);
+    final isGhostActive = ref.watch(isGhostModeProvider);
 
-    final normalTabsState = ref.watch(tabsProvider);
-    final normalTabs = normalTabsState.tabs;
-    final activeNormalTab = normalTabsState.activeTab;
+    final normalState = ref.watch(tabsProvider);
+    final ghostState = ref.watch(ghostTabsProvider);
 
-    final ghostTabsState = ref.watch(ghostTabsProvider);
-    final ghostTabs = ghostTabsState.tabs;
-    final activeGhostTab = ghostTabsState.safeActiveTab;
-
-    final appTheme = ref.watch(themeProvider);
-    final backgroundColor = appTheme.surfaceColor;
-    final textColor =
-        appTheme.mode == ThemeMode.light ? kMiraInkPrimary : Colors.white;
+    final theme = ref.watch(themeProvider);
+    final isLight = theme.mode == ThemeMode.light;
+    final surface = isLight ? Colors.white : const Color(0xFF1A1A1A);
+    final textColor = isLight ? kMiraInkPrimary : Colors.white;
+    final accent = isGhostActive ? Colors.redAccent : theme.primaryColor;
+    final bottom = MediaQuery.of(context).padding.bottom;
 
     return Container(
       decoration: BoxDecoration(
-        color: backgroundColor,
+        color: surface,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         border: Border(
-          top: BorderSide(
-            color: isGhostModeActive ? Colors.redAccent : appTheme.primaryColor,
-            width: 3,
-          ),
+          top: BorderSide(color: accent, width: 2),
         ),
-        boxShadow: [
-          BoxShadow(
-              color: kMiraMatteBlack.withAlpha(51),
-              blurRadius: 20,
-              spreadRadius: 5)
-        ],
       ),
       child: Column(
         children: [
-          const SizedBox(height: 12),
-          Container(
-            height: 4,
-            width: 40,
-            decoration: BoxDecoration(
-              color: textColor.withAlpha(51),
-              borderRadius: BorderRadius.circular(10),
+          // Handle
+          Padding(
+            padding: const EdgeInsets.only(top: 12, bottom: 4),
+            child: Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: textColor.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
           ),
+
+          // Content
           Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 20, bottom: 40),
-              child: CustomScrollView(
-                slivers: [
-                if (ghostTabs.isNotEmpty) ...[
-                  SliverToBoxAdapter(
-                    child: _buildSectionHeader(
-                      context,
-                      ref,
-                      title: "GHOST PROTOCOL",
-                      count: ghostTabs.length,
-                      isGhost: true,
-                      color: Colors.redAccent,
-                      onClear: () =>
-                          ref.read(ghostTabsProvider.notifier).nuke(),
-                    ),
+            child: CustomScrollView(
+              slivers: [
+                // ── Ghost tabs ─────────────────────────────────────────────
+                if (ghostState.tabs.isNotEmpty) ...[
+                  _SectionHeader(
+                    label: 'GHOST',
+                    count: ghostState.tabs.length,
+                    accent: Colors.redAccent,
+                    textColor: textColor,
+                    onClear: () {
+                      HapticFeedback.mediumImpact();
+                      ref.read(ghostTabsProvider.notifier).nuke();
+                    },
+                    onAdd: () {
+                      HapticFeedback.lightImpact();
+                      ref.read(ghostTabsProvider.notifier).addTab();
+                      ref.read(isGhostModeProvider.notifier).state = true;
+                      Navigator.pop(context);
+                    },
                   ),
                   SliverPadding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    sliver: SliverGrid(
-                      gridDelegate: _gridDelegate,
+                    sliver: SliverList(
                       delegate: SliverChildBuilderDelegate(
-                        (context, index) => _buildTabCard(
-                          context,
-                          ref,
-                          tab: ghostTabs[index],
-                          activeTabId: isGhostModeActive
-                              ? (activeGhostTab?.id ?? '')
-                              : '',
+                        (_, i) => _TabRow(
+                          tab: ghostState.tabs[i],
+                          isActive: isGhostActive &&
+                              ghostState.tabs[i].id ==
+                                  (ghostState.safeActiveTab?.id ?? ''),
                           isGhost: true,
-                          accentColor: Colors.redAccent,
+                          accent: Colors.redAccent,
                           textColor: textColor,
-                          tabIndex: index,
+                          surface: surface,
+                          onTap: () {
+                            HapticFeedback.selectionClick();
+                            ref.read(isGhostModeProvider.notifier).state = true;
+                            ref.read(ghostTabsProvider.notifier).switchTab(i);
+                            Navigator.pop(context);
+                          },
+                          onClose: () {
+                            HapticFeedback.lightImpact();
+                            ref.read(ghostTabsProvider.notifier).closeTab(
+                                ghostState.tabs[i].id);
+                          },
                         ),
-                        childCount: ghostTabs.length,
+                        childCount: ghostState.tabs.length,
                       ),
                     ),
                   ),
                   SliverToBoxAdapter(
-                    child: Divider(
-                        color: textColor.withAlpha(26), thickness: 1),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                      child: Divider(
+                          color: textColor.withOpacity(0.07), height: 1),
+                    ),
                   ),
-                  const SliverToBoxAdapter(child: SizedBox(height: 16)),
                 ],
-                SliverToBoxAdapter(
-                  child: _buildSectionHeader(
-                    context,
-                    ref,
-                    title: "ACTIVE SESSIONS",
-                    count: normalTabs.length,
-                    isGhost: false,
-                    color: appTheme.primaryColor,
-                    onClear: () => ref.read(tabsProvider.notifier).nuke(),
-                  ),
+
+                // ── Normal tabs ────────────────────────────────────────────
+                _SectionHeader(
+                  label: 'TABS',
+                  count: normalState.tabs.length,
+                  accent: theme.primaryColor,
+                  textColor: textColor,
+                  onClear: normalState.tabs.length > 1
+                      ? () {
+                          HapticFeedback.mediumImpact();
+                          ref.read(tabsProvider.notifier).nuke();
+                        }
+                      : null,
+                  onAdd: () {
+                    HapticFeedback.lightImpact();
+                    ref.read(tabsProvider.notifier).addTab();
+                    ref.read(isGhostModeProvider.notifier).state = false;
+                    Navigator.pop(context);
+                  },
                 ),
-                if (normalTabs.isEmpty)
+
+                if (normalState.tabs.isEmpty ||
+                    (normalState.tabs.length == 1 &&
+                        normalState.tabs.first.url.isEmpty))
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.all(32.0),
+                      padding: const EdgeInsets.all(32),
                       child: Center(
                         child: Text(
-                          "No Active Tabs",
+                          'No open tabs',
                           style: TextStyle(
-                            color: textColor.withAlpha(77),
-                            fontStyle: FontStyle.italic,
+                            color: textColor.withOpacity(0.25),
+                            fontSize: 13,
                           ),
                         ),
                       ),
@@ -135,222 +150,277 @@ class TabsSheet extends ConsumerWidget {
                 else
                   SliverPadding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    sliver: SliverGrid(
-                      gridDelegate: _gridDelegate,
+                    sliver: SliverList(
                       delegate: SliverChildBuilderDelegate(
-                        (context, index) => _buildTabCard(
-                          context,
-                          ref,
-                          tab: normalTabs[index],
-                          activeTabId:
-                              !isGhostModeActive ? activeNormalTab.id : '',
+                        (_, i) => _TabRow(
+                          tab: normalState.tabs[i],
+                          isActive: !isGhostActive &&
+                              normalState.tabs[i].id ==
+                                  normalState.activeTab.id,
                           isGhost: false,
-                          accentColor: appTheme.primaryColor,
+                          accent: theme.primaryColor,
                           textColor: textColor,
-                          tabIndex: index,
+                          surface: surface,
+                          onTap: () {
+                            HapticFeedback.selectionClick();
+                            ref.read(isGhostModeProvider.notifier).state =
+                                false;
+                            ref.read(tabsProvider.notifier).switchTab(i);
+                            Navigator.pop(context);
+                          },
+                          onClose: () {
+                            HapticFeedback.lightImpact();
+                            ref.read(tabsProvider.notifier).closeTab(
+                                normalState.tabs[i].id);
+                          },
                         ),
-                        childCount: normalTabs.length,
+                        childCount: normalState.tabs.length,
                       ),
                     ),
                   ),
+
+                SliverToBoxAdapter(
+                  child: SizedBox(height: bottom + 24),
+                ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Section header ────────────────────────────────────────────────────────────
+
+class _SectionHeader extends StatelessWidget {
+  final String label;
+  final int count;
+  final Color accent;
+  final Color textColor;
+  final VoidCallback? onClear;
+  final VoidCallback onAdd;
+
+  const _SectionHeader({
+    required this.label,
+    required this.count,
+    required this.accent,
+    required this.textColor,
+    required this.onClear,
+    required this.onAdd,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 12, 8),
+        child: Row(
+          children: [
+            Text(
+              label,
+              style: GoogleFonts.jetBrainsMono(
+                fontSize: 10,
+                color: accent,
+                letterSpacing: 2.5,
+                fontWeight: FontWeight.w600,
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSectionHeader(
-    BuildContext context,
-    WidgetRef ref, {
-    required String title,
-    required int count,
-    required bool isGhost,
-    required Color color,
-    required VoidCallback onClear,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-                color: color.withAlpha(26),
-                borderRadius: BorderRadius.circular(8)),
-            child: Icon(
-                isGhost ? Icons.privacy_tip_outlined : Icons.public,
-                size: 18,
-                color: color),
-          ),
-          const SizedBox(width: 12),
-          Text(
-            title,
-            style: TextStyle(
-              color: color,
-              fontWeight: FontWeight.bold,
-              fontSize: 12,
-              letterSpacing: 1.5,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(
-              "$count",
-              style: const TextStyle(
-                  color: Colors.white,
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              decoration: BoxDecoration(
+                color: accent.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                '$count',
+                style: TextStyle(
                   fontSize: 10,
-                  fontWeight: FontWeight.bold),
+                  color: accent,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
-          ),
-          const Spacer(),
-          IconButton(
-            icon: Icon(Icons.delete_sweep_outlined,
-                color: color.withAlpha(153), size: 20),
-            onPressed: onClear,
-            tooltip: "Close All",
-          ),
-          IconButton(
-            tooltip: 'New normal tab',
-            icon: Icon(Icons.add_circle_outline, color: color, size: 24),
-            onPressed: () {
-              ref.read(tabsProvider.notifier).addTab();
-              ref.read(isGhostModeProvider.notifier).state = false;
-              Navigator.pop(context);
-            },
-          ),
-        ],
+            const Spacer(),
+            if (onClear != null)
+              IconButton(
+                icon: Icon(
+                  Icons.delete_sweep_outlined,
+                  size: 18,
+                  color: textColor.withOpacity(0.3),
+                ),
+                tooltip: 'Close all',
+                onPressed: onClear,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              ),
+            IconButton(
+              icon: Icon(Icons.add, size: 20, color: accent),
+              tooltip: 'New tab',
+              onPressed: onAdd,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            ),
+          ],
+        ),
       ),
     );
   }
+}
 
-  Widget _buildTabCard(
-    BuildContext context,
-    WidgetRef ref, {
-    required BrowserTab tab,
-    required String activeTabId,
-    required bool isGhost,
-    required Color accentColor,
-    required Color textColor,
-    required int tabIndex,
-  }) {
-    final isActive = tab.id == activeTabId;
+// ── Tab row ───────────────────────────────────────────────────────────────────
 
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Positioned.fill(
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(16),
-              onTap: () {
-                if (context.mounted) {
-                  ref.read(isGhostModeProvider.notifier).state = isGhost;
-                  if (isGhost) {
-                    ref.read(ghostTabsProvider.notifier).switchTab(tabIndex);
-                  } else {
-                    ref.read(tabsProvider.notifier).switchTab(tabIndex);
-                  }
-                  Navigator.pop(context);
-                }
-              },
-              child: Container(
-                decoration: BoxDecoration(
-                  color: isGhost
-                      ? const Color(0xFF2C2C2C)
-                      : accentColor.withAlpha(13),
-                  border: Border.all(
-                    color: isActive ? accentColor : Colors.transparent,
-                    width: 2,
+class _TabRow extends StatelessWidget {
+  final BrowserTab tab;
+  final bool isActive;
+  final bool isGhost;
+  final Color accent;
+  final Color textColor;
+  final Color surface;
+  final VoidCallback onTap;
+  final VoidCallback onClose;
+
+  const _TabRow({
+    required this.tab,
+    required this.isActive,
+    required this.isGhost,
+    required this.accent,
+    required this.textColor,
+    required this.surface,
+    required this.onTap,
+    required this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final title = tab.title.isEmpty
+        ? (tab.url.isEmpty ? 'New Tab' : tab.url)
+        : tab.title;
+    final subtitle = tab.url.isEmpty ? 'Start page' : _cleanUrl(tab.url);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Material(
+        color: isActive
+            ? accent.withOpacity(0.08)
+            : textColor.withOpacity(0.03),
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: isActive
+                ? BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: accent.withOpacity(0.3),
+                      width: 1,
+                    ),
+                  )
+                : null,
+            child: Row(
+              children: [
+                // Favicon placeholder / ghost icon
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: isGhost
+                        ? Colors.redAccent.withOpacity(0.1)
+                        : accent.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  borderRadius: BorderRadius.circular(16),
+                  child: Icon(
+                    isGhost
+                        ? Icons.visibility_outlined
+                        : (tab.url.isEmpty
+                            ? Icons.add
+                            : Icons.language),
+                    size: 16,
+                    color: isGhost
+                        ? Colors.redAccent.withOpacity(0.7)
+                        : accent.withOpacity(0.6),
+                  ),
                 ),
-                padding: const EdgeInsets.fromLTRB(12, 12, 36, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 8,
-                          backgroundColor: isActive
-                              ? accentColor
-                              : textColor.withAlpha(26),
-                          child: isActive
-                              ? const SizedBox()
-                              : Icon(Icons.web,
-                                  size: 10, color: textColor.withAlpha(128)),
+
+                const SizedBox(width: 12),
+
+                // Title + URL
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight:
+                              isActive ? FontWeight.w600 : FontWeight.w400,
+                          color: isActive
+                              ? textColor
+                              : textColor.withOpacity(0.75),
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            tab.title.isEmpty
-                                ? (isGhost ? "Ghost Tab" : "New Tab")
-                                : tab.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: isGhost ? Colors.white : textColor,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
-                            ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (tab.url.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: textColor.withOpacity(0.35),
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
-                    ),
-                    const Spacer(),
-                    Text(
-                      tab.url.isEmpty ? "Start Page" : tab.url,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: isGhost
-                            ? Colors.white54
-                            : textColor.withAlpha(128),
-                        fontSize: 11,
+                    ],
+                  ),
+                ),
+
+                // Active indicator dot
+                if (isActive)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: accent,
+                        shape: BoxShape.circle,
                       ),
                     ),
-                  ],
+                  ),
+
+                // Close button
+                GestureDetector(
+                  onTap: onClose,
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(
+                      Icons.close,
+                      size: 16,
+                      color: textColor.withOpacity(0.25),
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
         ),
-        Positioned(
-          top: 4,
-          right: 4,
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: () {
-                if (isGhost) {
-                  ref.read(ghostTabsProvider.notifier).closeTab(tab.id);
-                } else {
-                  ref.read(tabsProvider.notifier).closeTab(tab.id);
-                }
-              },
-              customBorder: const CircleBorder(),
-              child: Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: kMiraMatteBlack.withAlpha(26),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(Icons.close,
-                    size: 14, color: textColor.withAlpha(153)),
-              ),
-            ),
-          ),
-        ),
-      ],
+      ),
     );
+  }
+
+  String _cleanUrl(String url) {
+    try {
+      final uri = Uri.parse(url);
+      return uri.host.replaceFirst('www.', '');
+    } catch (_) {
+      return url;
+    }
   }
 }

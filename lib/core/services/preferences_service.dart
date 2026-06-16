@@ -15,6 +15,7 @@ class PreferencesService {
   static const _keyLocation = 'mode_location';
   static const _keyCamera = 'mode_camera';
   static const _keyDesktop = 'mode_desktop';
+  static const _keyAdBlock = 'adblock_enabled';
   // Theme Keys
   static const _keyTheme = 'app_theme_style'; // For Color Accent
   static const _keyThemeMode = 'app_theme_mode'; // For Light/Dark/System
@@ -53,6 +54,10 @@ class PreferencesService {
   // Desktop Mode (Default: false)
   bool getDesktopMode() => _prefs.getBool(_keyDesktop) ?? false;
   Future<void> setDesktopMode(bool value) async => await _prefs.setBool(_keyDesktop, value);
+
+  // Ad Block (Default: true — privacy first)
+  bool getAdBlockEnabled() => _prefs.getBool(_keyAdBlock) ?? true;
+  Future<void> setAdBlockEnabled(bool value) async => await _prefs.setBool(_keyAdBlock, value);
 
   // --- THEME (COLORS) ---
   // Returns the index of the selected theme (0 = Green, 1 = Yellow, etc.)

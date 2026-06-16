@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
-import 'package:mira/core/services/browser_engine_blueprints.dart';
+import 'package:mira/core/services/browser_engine_blueprints.dart'; // BrowserEngine, BrowserEngineConfig, AdBlockRule
 import 'package:mira/core/config/desktop_user_agent.dart';
 
 /// The concrete implementation of [BrowserEngine] using the flutter_inappwebview plugin.
@@ -24,13 +24,34 @@ class InAppWebViewEngine implements BrowserEngine {
   // Mutable permission flags — updated live via updateSettings()
   bool _isCameraBlocked = true;
   bool _isLocationBlocked = true;
+  List<ContentBlocker> _contentBlockers;
 
   String? _pendingUrl;
   Map<String, String>? _pendingHeaders;
 
   int _lastProgress = 100;
 
-  InAppWebViewEngine({bool isPrivate = false}) : _isPrivate = isPrivate;
+  InAppWebViewEngine({
+    bool isPrivate = false,
+    List<AdBlockRule> adBlockRules = const [],
+  })  : _isPrivate = isPrivate,
+        _contentBlockers = _toContentBlockers(adBlockRules);
+
+  static List<ContentBlocker> _toContentBlockers(List<AdBlockRule> rules) {
+    return rules
+        .map((r) => ContentBlocker(
+              trigger: ContentBlockerTrigger(
+                urlFilter: r.urlFilter,
+                loadType: [ContentBlockerTriggerLoadType.THIRD_PARTY],
+              ),
+              action: ContentBlockerAction(
+                type: r.isBlock
+                    ? ContentBlockerActionType.BLOCK
+                    : ContentBlockerActionType.IGNORE_PREVIOUS_RULES,
+              ),
+            ))
+        .toList(growable: false);
+  }
 
   @override
   int get lastProgress => _lastProgress;
@@ -60,11 +81,10 @@ class InAppWebViewEngine implements BrowserEngine {
   Future<void> updateSettings(BrowserEngineConfig config) async {
     _isCameraBlocked = config.isCameraBlocked;
     _isLocationBlocked = config.isLocationBlocked;
-
-    final forceDarkSetting = config.isDarkMode ? ForceDark.ON : ForceDark.OFF;
+    _contentBlockers = _toContentBlockers(config.adBlockRules);
 
     final settings = InAppWebViewSettings(
-      forceDark: forceDarkSetting,
+      forceDark: config.isDarkMode ? ForceDark.ON : ForceDark.OFF,
       algorithmicDarkeningAllowed: config.isDarkMode,
       userAgent: desktopModeUserAgent(
         isDesktop: !kIsWeb &&
@@ -75,6 +95,7 @@ class InAppWebViewEngine implements BrowserEngine {
           ? UserPreferredContentMode.DESKTOP
           : UserPreferredContentMode.MOBILE,
       geolocationEnabled: !config.isLocationBlocked,
+      contentBlockers: _contentBlockers,
     );
 
     await _controller?.setSettings(settings: settings);
@@ -226,6 +247,12 @@ class InAppWebViewEngine implements BrowserEngine {
 
   @override
   Widget buildWidget({required String tabId, String? initialUrl}) {
+    // Prevent double-load: if the pending URL matches what initialUrlRequest will load,
+    // let initialUrlRequest handle it and discard the pending loadUrl call.
+    if (initialUrl != null && initialUrl.isNotEmpty && _pendingUrl == initialUrl) {
+      _pendingUrl = null;
+      _pendingHeaders = null;
+    }
     return InAppWebView(
       key: ObjectKey(tabId),
       initialUrlRequest: (initialUrl != null && initialUrl.isNotEmpty)
@@ -237,7 +264,11 @@ class InAppWebViewEngine implements BrowserEngine {
         useShouldOverrideUrlLoading: true,
         useOnDownloadStart: true,
         geolocationEnabled: !_isLocationBlocked,
+        contentBlockers: _contentBlockers,
       ),
+      shouldOverrideUrlLoading: (controller, navigationAction) async {
+        return NavigationActionPolicy.ALLOW;
+      },
       onWebViewCreated: (controller) {
         setController(controller);
       },

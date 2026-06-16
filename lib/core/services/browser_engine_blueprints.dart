@@ -50,17 +50,25 @@ class DownloadRequest {
   });
 }
 
+class AdBlockRule {
+  final String urlFilter;
+  final bool isBlock; // true = BLOCK, false = IGNORE_PREVIOUS_RULES
+  const AdBlockRule({required this.urlFilter, required this.isBlock});
+}
+
 class BrowserEngineConfig {
   final bool isDesktopMode;
   final bool isDarkMode;
   final bool isCameraBlocked;
   final bool isLocationBlocked;
+  final List<AdBlockRule> adBlockRules;
 
   const BrowserEngineConfig({
     required this.isDesktopMode,
     required this.isDarkMode,
     required this.isCameraBlocked,
     required this.isLocationBlocked,
+    this.adBlockRules = const [],
   });
 }
 

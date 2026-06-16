@@ -18,14 +18,12 @@ dependencies:
   http: ^1.6.0
   isar: ^3.1.0+1
   isar_flutter_libs: ^3.1.0+1
-  lottie: ^3.1.0
   package_info_plus: ^9.0.1
   path: ^1.9.0
   path_provider: ^2.1.5
   permission_handler: ^12.0.1
   shared_preferences: ^2.5.4
   showcaseview: ^3.0.0
-  smooth_page_indicator: ^1.1.0
   url_launcher: ^6.3.2
   uuid: ^4.5.2
   window_manager: ^0.5.1
@@ -44,10 +42,8 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/1.json
-    - assets/2.json
-    - assets/3.json
     - assets/icon.png
+    - assets/adblock/content_blockers.json
 
 flutter_native_splash:
   color: "#282828"

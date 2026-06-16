@@ -18,6 +18,7 @@ class SecurityNotifier extends StateNotifier<SecurityState> {
       isLocationBlocked: _prefs.getLocationBlock(),
       isCameraBlocked: _prefs.getCameraBlock(),
       isDesktopMode: _prefs.getDesktopMode(),
+      isAdBlockEnabled: _prefs.getAdBlockEnabled(),
     );
   }
 
@@ -34,6 +35,11 @@ class SecurityNotifier extends StateNotifier<SecurityState> {
   void toggleDesktop(bool value) {
     state = state.copyWith(isDesktopMode: value);
     _prefs.setDesktopMode(value);
+  }
+
+  void toggleAdBlock(bool value) {
+    state = state.copyWith(isAdBlockEnabled: value);
+    _prefs.setAdBlockEnabled(value);
   }
 }
 

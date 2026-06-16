@@ -92,7 +92,6 @@ class MobileDownloadService implements DownloadService {
         headers: headers ?? {},
         showNotification: true,
         openFileFromNotification: true,
-        saveInPublicStorage: true,
       );
 
       onTasksReloaded(await loadExistingTasks());
@@ -165,7 +164,10 @@ class MobileDownloadService implements DownloadService {
     if (!Platform.isAndroid) return true;
 
     final deviceInfo = await DeviceInfoPlugin().androidInfo;
-    if (deviceInfo.version.sdkInt >= 33) return true;
+    if (deviceInfo.version.sdkInt >= 33) {
+      await Permission.notification.request();
+      return true;
+    }
 
     var status = await Permission.storage.status;
     if (status.isPermanentlyDenied) {

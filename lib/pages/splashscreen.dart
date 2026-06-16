@@ -1,192 +1,312 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // For Haptics
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http;
+
 import 'package:mira/core/entities/theme_entity.dart';
 import 'package:mira/core/services/update_service.dart';
 import 'package:mira/pages/update_screen.dart';
-import 'dart:async';
-
-import 'package:http/http.dart' as http;
 
 class SplashScreen extends StatefulWidget {
-  // 1. Accept the destination screen dynamically
   final Widget nextScreen;
   final http.Client? httpClient;
-  
+
   const SplashScreen({super.key, required this.nextScreen, this.httpClient});
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _opacityAnimation;
-  late Animation<double> _scaleAnimation;
+class _SplashScreenState extends State<SplashScreen>
+    with TickerProviderStateMixin {
+
+  // --- Animation controllers ---
+  late final List<AnimationController> _letterCtrls;
+  late final AnimationController _scanCtrl;
+  late final AnimationController _taglineCtrl;
+  late final AnimationController _exitCtrl;
+
+  // --- Driven animations ---
+  late final List<Animation<double>> _letterFade;
+  late final List<Animation<Offset>> _letterSlide;
+  late final Animation<double> _scanPosition;
+  late final Animation<double> _taglineFade;
+  late final Animation<double> _screenFade;
+
+  // --- Navigation sync ---
+  bool _animDone = false;
+  bool _checkDone = false;
+  Widget? _destination;
+  bool _navigating = false;
+
+  static const List<String> _letters = ['M', 'I', 'R', 'A'];
+  static const Color _accent = Colors.greenAccent;
 
   @override
   void initState() {
     super.initState();
-
-    // 1. Setup the "Breathing" Animation
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    );
-
-    _opacityAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeIn),
-    );
-
-    _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
-    );
-
-    // 2. Start the Boot Sequence
-    _bootSequence();
+    _buildAnimations();
+    _runAnimation();
+    _runUpdateCheck();
   }
 
-  void _bootSequence() async {
-    // Stage 1: Wait for native splash to clear (tiny delay ensures smooth handover)
-    await Future.delayed(const Duration(milliseconds: 200));
-    
-    // Stage 2: Fade In Logo
-    if (mounted) _controller.forward();
+  void _buildAnimations() {
+    _letterCtrls = List.generate(
+      4,
+      (_) => AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: 260),
+      ),
+    );
 
-    // Stage 3: Haptic "Heartbeat" (Optional: Mechanical feel)
-    await Future.delayed(const Duration(milliseconds: 800));
-    if (!kIsWeb && (defaultTargetPlatform == TargetPlatform.android ||
-        defaultTargetPlatform == TargetPlatform.iOS)) {
+    _letterFade = _letterCtrls
+        .map((c) => Tween<double>(begin: 0.0, end: 1.0).animate(
+              CurvedAnimation(parent: c, curve: Curves.easeOut),
+            ))
+        .toList();
+
+    _letterSlide = _letterCtrls
+        .map((c) =>
+            Tween<Offset>(begin: const Offset(0, 0.22), end: Offset.zero)
+                .animate(CurvedAnimation(parent: c, curve: Curves.easeOut)))
+        .toList();
+
+    _scanCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 210),
+    );
+    _scanPosition = Tween<double>(begin: -0.08, end: 1.08).animate(
+      CurvedAnimation(parent: _scanCtrl, curve: Curves.easeInOut),
+    );
+
+    _taglineCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 380),
+    );
+    _taglineFade = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _taglineCtrl, curve: Curves.easeOut),
+    );
+
+    _exitCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 420),
+    );
+    _screenFade = Tween<double>(begin: 1.0, end: 0.0).animate(
+      CurvedAnimation(parent: _exitCtrl, curve: Curves.easeIn),
+    );
+  }
+
+  Future<void> _runAnimation() async {
+    // Brief pause so the native splash hands off cleanly
+    await Future.delayed(const Duration(milliseconds: 100));
+    if (!mounted) return;
+
+    // Staggered letter reveal — each letter slides up and fades in
+    for (int i = 0; i < 4; i++) {
+      unawaited(_letterCtrls[i].forward());
+      await Future.delayed(const Duration(milliseconds: 80));
+    }
+
+    // Wait for the last letter to fully land
+    await _letterCtrls[3].forward(from: _letterCtrls[3].value);
+    await Future.delayed(const Duration(milliseconds: 55));
+    if (!mounted) return;
+
+    // Scan line sweeps left → right across the wordmark
+    await _scanCtrl.forward();
+    await Future.delayed(const Duration(milliseconds: 35));
+    if (!mounted) return;
+
+    // Tagline fades in below
+    await _taglineCtrl.forward();
+
+    _animDone = true;
+    _tryNavigate();
+  }
+
+  Future<void> _runUpdateCheck() async {
+    final result = await UpdateService.autoCheck(client: widget.httpClient);
+    if (!mounted) return;
+
+    if (result.status == UpdateStatus.forceUpdate) {
+      _destination = UpdateScreen(result: result);
+    } else if (result.status == UpdateStatus.updateAvailable) {
+      _destination = UpdateScreen(
+        result: result,
+        nextScreen: widget.nextScreen,
+      );
+    } else {
+      _destination = widget.nextScreen;
+    }
+
+    _checkDone = true;
+    _tryNavigate();
+  }
+
+  Future<void> _tryNavigate() async {
+    if (!_animDone || !_checkDone || _navigating || !mounted) return;
+    _navigating = true;
+
+    // Let the final composed frame breathe for a moment
+    await Future.delayed(const Duration(milliseconds: 260));
+    if (!mounted) return;
+
+    if (!kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS)) {
       HapticFeedback.lightImpact();
     }
 
-    // Stage 4: Network Protocols (Update Check)
-    final updateResult = await UpdateService.autoCheck(client: widget.httpClient);
+    await _exitCtrl.forward();
+    if (!mounted) return;
 
-    // Stage 5: Navigate based on Update Status
-    if (mounted) {
-      if (updateResult.status == UpdateStatus.forceUpdate) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (_) => UpdateScreen(result: updateResult),
-          ),
-        );
-        return;
-      }
-
-      if (updateResult.status == UpdateStatus.updateAvailable) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (_) => UpdateScreen(
-              result: updateResult,
-              nextScreen: widget.nextScreen,
-            ),
-          ),
-        );
-        return;
-      }
-
-      Navigator.of(context).pushReplacement(
-        PageRouteBuilder(
-          // 2. Use the dynamic nextScreen here
-          pageBuilder: (context, animation, secondaryAnimation) => widget.nextScreen,
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            // A subtle fade transition instead of a slide
-            return FadeTransition(opacity: animation, child: child);
-          },
-          transitionDuration: const Duration(milliseconds: 600),
-        ),
-      );
-    }
+    Navigator.of(context).pushReplacement(
+      PageRouteBuilder(
+        pageBuilder: (_, __, ___) => _destination ?? widget.nextScreen,
+        transitionDuration: Duration.zero,
+      ),
+    );
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    for (final c in _letterCtrls) {
+      c.dispose();
+    }
+    _scanCtrl.dispose();
+    _taglineCtrl.dispose();
+    _exitCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Define the Brand Color (Tactical Green or Red)
-    // Hardcoded here for the boot sequence
-    const Color brandColor = Colors.greenAccent; 
-
-    return Scaffold(
-      backgroundColor: kMiraMatteBlack,
-      body: Center(
-        child: AnimatedBuilder(
-          animation: _controller,
-          builder: (context, child) {
-            return Opacity(
-              opacity: _opacityAnimation.value,
-              child: Transform.scale(
-                scale: _scaleAnimation.value,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: Scaffold(
+        backgroundColor: kMiraMatteBlack,
+        body: FadeTransition(
+          opacity: _screenFade,
+          child: SizedBox.expand(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // ── WORDMARK ──────────────────────────────────────────────────
+                Stack(
+                  alignment: Alignment.center,
+                  clipBehavior: Clip.none,
                   children: [
-                    // --- THE LOGO ---
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: brandColor.withValues(alpha: 0.3),
-                          width: 2,
+                    // Letters
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: List.generate(4, _buildLetter),
+                    ),
+                    // Scan line rendered on top via CustomPaint
+                    Positioned.fill(
+                      child: AnimatedBuilder(
+                        animation: _scanPosition,
+                        builder: (_, __) => CustomPaint(
+                          painter: _ScanLinePainter(
+                            position: _scanPosition.value,
+                            color: _accent,
+                          ),
                         ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: brandColor.withValues(alpha: 0.2 * _opacityAnimation.value),
-                            blurRadius: 30,
-                            spreadRadius: 5,
-                          ),
-                        ],
-                      ),
-                      child: Icon(
-                        Icons.privacy_tip_outlined, 
-                        size: 64,
-                        color: brandColor,
-                      ),
-                    ),
-                    
-                    const SizedBox(height: 40),
-
-                    // --- THE TEXT ---
-                    Text(
-                      'M I R A',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        letterSpacing: 8,
-                        shadows: [
-                          Shadow(
-                            color: brandColor.withValues(alpha: 0.6),
-                            blurRadius: 10,
-                          ),
-                        ],
-                      ),
-                    ),
-                    
-                    const SizedBox(height: 10),
-                    
-                    // --- THE SUBTITLE (Loading State) ---
-                    Text(
-                      'INITIALIZING...',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 10,
-                        color: Colors.white38,
-                        letterSpacing: 2,
                       ),
                     ),
                   ],
                 ),
-              ),
-            );
-          },
+
+                const SizedBox(height: 22),
+
+                // ── TAGLINE ───────────────────────────────────────────────────
+                FadeTransition(
+                  opacity: _taglineFade,
+                  child: Text(
+                    'YOUR WEB.  YOUR RULES.',
+                    style: GoogleFonts.jetBrainsMono(
+                      fontSize: 10,
+                      color: Colors.white.withOpacity(0.28),
+                      letterSpacing: 3.2,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
+
+  Widget _buildLetter(int i) {
+    return FadeTransition(
+      opacity: _letterFade[i],
+      child: SlideTransition(
+        position: _letterSlide[i],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2.5),
+          child: Text(
+            _letters[i],
+            style: GoogleFonts.jetBrainsMono(
+              fontSize: 58,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+              height: 1.0,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Scan line effect ─────────────────────────────────────────────────────────
+
+class _ScanLinePainter extends CustomPainter {
+  final double position; // −0.08 → 1.08, mapped to x
+  final Color color;
+
+  const _ScanLinePainter({required this.position, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (position < -0.06 || position > 1.06) return;
+
+    final x = position * size.width;
+    final rect = Rect.fromLTWH(0, 0, size.width, size.height);
+
+    // Soft glow halo
+    canvas.drawRect(
+      Rect.fromCenter(
+          center: Offset(x, size.height / 2), width: 28, height: size.height),
+      Paint()
+        ..color = color.withOpacity(0.07)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 14),
+    );
+
+    // Core line: vertical gradient so it fades at top and bottom edges
+    canvas.drawRect(
+      Rect.fromCenter(
+          center: Offset(x, size.height / 2), width: 1.5, height: size.height),
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            color.withOpacity(0.0),
+            color.withOpacity(0.85),
+            color.withOpacity(0.85),
+            color.withOpacity(0.0),
+          ],
+          stops: const [0.0, 0.18, 0.82, 1.0],
+        ).createShader(rect),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_ScanLinePainter old) => old.position != position;
 }

@@ -13,13 +13,16 @@ import 'package:mira/core/notifiers/security_notifier.dart';
 import 'package:mira/core/notifiers/tab_notifier.dart';
 import 'package:mira/core/entities/tab_entity.dart';
 import 'package:mira/core/entities/theme_entity.dart';
+import 'package:mira/core/providers/adblock_provider.dart';
+import 'package:mira/core/services/browser_engine_blueprints.dart';
+import 'package:mira/core/services/database_providers.dart';
 import 'package:mira/pages/browser_chrome_providers.dart';
 import 'package:mira/pages/browser/browser_view.dart';
 import 'package:mira/pages/main_screen/desktop_browser_chrome.dart';
 import 'package:mira/pages/main_screen/desktop_platform_menus.dart';
 import 'package:mira/pages/main_screen/main_screen_haptics.dart';
 import 'package:mira/pages/main_screen/main_screen_security.dart';
-import 'package:mira/pages/main_screen/mobile_main_app_bar.dart';
+import 'package:mira/pages/main_screen/mobile_main_app_bar.dart' show buildMobileBottomBar;
 import 'package:mira/shell/desktop/desktop_browser_hotkeys.dart';
 import 'package:mira/shell/desktop/desktop_find_bar.dart';
 
@@ -249,6 +252,76 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     }
   }
 
+  void _handleBrowserBack() async {
+    final engine = ref.read(browserChromeProvider).engine;
+    if (engine != null && await engine.canGoBack()) {
+      if (ref.read(browserChromeProvider).webError != null) {
+        ref.read(browserChromeProvider.notifier).clearWebError();
+      }
+      engine.goBack();
+      _triggerHaptic(MainScreenHapticKind.selection);
+      return;
+    }
+    final activeUrl = ref.read(currentActiveTabProvider).url;
+    if (activeUrl.isNotEmpty) {
+      _triggerHaptic(MainScreenHapticKind.light);
+      if (ref.read(isGhostModeProvider)) {
+        ref.read(ghostTabsProvider.notifier).updateUrl('');
+      } else {
+        ref.read(tabsProvider.notifier).updateUrl('');
+      }
+      ref.read(browserChromeProvider.notifier).clearWebError();
+    }
+  }
+
+  Future<void> _applyAdBlockToAllTabs(bool enabled) async {
+    final List<AdBlockRule> adBlockRules = enabled
+        ? await ref.read(adBlockRulesProvider.future)
+        : const <AdBlockRule>[];
+
+    if (!mounted) return;
+
+    final theme = ref.read(themeProvider);
+    final security = ref.read(securityProvider);
+
+    final config = BrowserEngineConfig(
+      isDesktopMode: security.isDesktopMode,
+      isDarkMode: theme.mode == ThemeMode.dark,
+      isCameraBlocked: security.isCameraBlocked,
+      isLocationBlocked: security.isLocationBlocked,
+      adBlockRules: adBlockRules,
+    );
+
+    final allTabs = [
+      ...ref.read(tabsProvider).tabs,
+      ...ref.read(ghostTabsProvider).tabs,
+    ];
+
+    for (final tab in allTabs) {
+      if (!mounted) return;
+      try {
+        final engine = ref.read(browserEngineProvider(tab.id));
+        await engine.updateSettings(config);
+        await engine.reload();
+      } catch (e) {
+        debugPrint('MIRA: AdBlock update failed for tab ${tab.id}: $e');
+      }
+    }
+  }
+
+  void _toggleGhostMode() {
+    final isGhost = ref.read(isGhostModeProvider);
+    if (isGhost) {
+      ref.read(isGhostModeProvider.notifier).state = false;
+    } else {
+      if (ref.read(ghostTabsProvider).tabs.isEmpty) {
+        ref.read(ghostTabsProvider.notifier).addTab();
+      }
+      ref.read(isGhostModeProvider.notifier).state = true;
+    }
+    _triggerHaptic(MainScreenHapticKind.medium);
+  }
+
   @override
   Widget build(BuildContext context) {
     final isGhost = ref.watch(isGhostModeProvider);
@@ -257,7 +330,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     final activeUrl = activeTab.url;
     final normalTabsList = ref.watch(tabsProvider).tabs;
     final ghostTabsList = ref.watch(ghostTabsProvider).tabs;
-    final tabCount = normalTabsList.length + ghostTabsList.length;
+    final tabCount = isGhost ? ghostTabsList.length : normalTabsList.length;
     final double progress = ref.watch(browserChromeProvider).loadingProgress / 100;
 
     if (!kIsWeb &&
@@ -319,6 +392,9 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
       if (prev?.isDesktopMode != next.isDesktopMode) {
         applyMainScreenWebViewSettings(ref, forceReload: true);
       }
+      if (prev?.isAdBlockEnabled != next.isAdBlockEnabled) {
+        unawaited(_applyAdBlockToAllTabs(next.isAdBlockEnabled));
+      }
     });
 
     Widget shell = PopScope(
@@ -329,9 +405,10 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
       },
       child: Scaffold(
         backgroundColor: backgroundColor,
-        appBar: isDesktop
+        appBar: null,
+        bottomNavigationBar: isDesktop
             ? null
-            : buildMobileMainAppBar(
+            : buildMobileBottomBar(
                 context: context,
                 ref: ref,
                 urlController: _urlController,
@@ -350,36 +427,37 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
                 progress: progress,
                 triggerHaptic: _triggerHaptic,
                 onUrlSubmitted: _performSearch,
+                onBackPressed: () => _handleBrowserBack(),
+                onGhostToggle: _toggleGhostMode,
               ),
-        body: Column(
-          children: [
-            if (isDesktop)
-              buildDesktopMainChrome(
-                context: context,
-                ref: ref,
-                bgColor: isGhost ? const Color(0xFF1A1A1A) : appBarColor,
-                contentColor: contentColor,
-                accentColor: primaryAccent,
-                normalTabs: normalTabsList,
-                ghostTabs: ghostTabsList,
-                activeTab: activeTab,
-                isGhost: isGhost,
-                tabStripLayout: desktopTabStripLayout,
-                themePrimary: appTheme.primaryColor,
-                securityIcon: securityIcon,
-                securityColor: securityColor,
-                hintColor: hintColor,
-                isBookmarked: isBookmarked,
-                progress: progress,
-                hasWebView: hasWebView,
-                tabScrollController: _desktopTabScrollController,
-                urlController: _urlController,
-                urlFocusNode: _urlFocusNode,
-                onUrlSubmitted: _performSearch,
-              ),
-            Expanded(
-              child: isDesktop
-                  ? Stack(
+        body: isDesktop
+            ? Column(
+                children: [
+                  buildDesktopMainChrome(
+                    context: context,
+                    ref: ref,
+                    bgColor: isGhost ? const Color(0xFF1A1A1A) : appBarColor,
+                    contentColor: contentColor,
+                    accentColor: primaryAccent,
+                    normalTabs: normalTabsList,
+                    ghostTabs: ghostTabsList,
+                    activeTab: activeTab,
+                    isGhost: isGhost,
+                    tabStripLayout: desktopTabStripLayout,
+                    themePrimary: appTheme.primaryColor,
+                    securityIcon: securityIcon,
+                    securityColor: securityColor,
+                    hintColor: hintColor,
+                    isBookmarked: isBookmarked,
+                    progress: progress,
+                    hasWebView: hasWebView,
+                    tabScrollController: _desktopTabScrollController,
+                    urlController: _urlController,
+                    urlFocusNode: _urlFocusNode,
+                    onUrlSubmitted: _performSearch,
+                  ),
+                  Expanded(
+                    child: Stack(
                       fit: StackFit.expand,
                       children: [
                         const BrowserView(),
@@ -391,11 +469,15 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
                             child: DesktopFindBar(),
                           ),
                       ],
-                    )
-                  : const BrowserView(),
-            ),
-          ],
-        ),
+                    ),
+                  ),
+                ],
+              )
+            : SafeArea(
+                top: true,
+                bottom: false,
+                child: const BrowserView(),
+              ),
       ),
     );
 

@@ -55,9 +55,32 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
       ),
       body: tasks.isEmpty
           ? Center(
-              child: Text(
-                "No downloads yet",
-                style: TextStyle(color: contentColor.withAlpha(128)),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.download_outlined,
+                    size: 52,
+                    color: contentColor.withAlpha(40),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No downloads yet',
+                    style: TextStyle(
+                      color: contentColor.withAlpha(128),
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Files you download appear here.',
+                    style: TextStyle(
+                      color: contentColor.withAlpha(60),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
               ),
             )
           : ListView.separated(
@@ -114,8 +137,39 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      leading:
-          Icon(Icons.insert_drive_file, color: contentColor.withAlpha(77), size: 32),
+      leading: SizedBox(
+        width: 40,
+        height: 40,
+        child: task.status == MiraDownloadStatus.running
+            ? Stack(
+                alignment: Alignment.center,
+                children: [
+                  CircularProgressIndicator(
+                    value: task.progress > 0 ? task.progress / 100 : null,
+                    strokeWidth: 2.5,
+                    color: appTheme.accentColor,
+                    backgroundColor: contentColor.withAlpha(20),
+                  ),
+                  Text(
+                    '${task.progress}',
+                    style: TextStyle(
+                      fontSize: 9,
+                      color: appTheme.accentColor,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              )
+            : Icon(
+                task.status == MiraDownloadStatus.completed
+                    ? Icons.check_circle_outline
+                    : task.status == MiraDownloadStatus.failed
+                        ? Icons.error_outline
+                        : Icons.insert_drive_file_outlined,
+                color: statusColor.withAlpha(180),
+                size: 32,
+              ),
+      ),
       title: Text(
         task.filename,
         style: TextStyle(color: contentColor, fontWeight: FontWeight.bold),
@@ -148,16 +202,6 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
                 ],
               ],
             ),
-            // Progress bar for in-progress downloads
-            if (task.status == MiraDownloadStatus.running) ...[
-              const SizedBox(height: 6),
-              LinearProgressIndicator(
-                value: task.progress > 0 ? task.progress / 100 : null,
-                backgroundColor: contentColor.withAlpha(26),
-                color: appTheme.accentColor,
-                minHeight: 2,
-              ),
-            ],
           ],
         ),
       ),
