@@ -45,12 +45,18 @@ class InAppWebViewEngine implements BrowserEngine {
     if (kIsWeb || !(Platform.isAndroid || Platform.isIOS || Platform.isMacOS)) {
       return const [];
     }
+    // IGNORE_PREVIOUS_RULES is a WebKit-only action: its native value is null
+    // on Android, so merely accessing the enum there throws the same
+    // 'Null is not a subtype of String'. Only emit ignore rules on iOS/macOS.
+    final supportsIgnore = Platform.isIOS || Platform.isMacOS;
+
     // WebKit requires BLOCK rules to appear at a lower index than any
     // IGNORE_PREVIOUS_RULES rule for the same domain. Re-partition here so
     // this invariant holds even if the source JSON was regenerated out of order.
     final blocks = <ContentBlocker>[];
     final ignores = <ContentBlocker>[];
     for (final r in rules) {
+      if (!r.isBlock && !supportsIgnore) continue;
       final cb = ContentBlocker(
         trigger: ContentBlockerTrigger(
           urlFilter: r.urlFilter,

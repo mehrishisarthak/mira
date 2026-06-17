@@ -4,6 +4,7 @@ import 'dart:isolate'; // Added for SendPort
 import 'package:flutter/foundation.dart';
 import 'package:flutter_downloader/flutter_downloader.dart';
 
+@pragma('vm:entry-point')
 class DownloadManager {
   static const String portName = 'mira_download_port'; // Define a constant name
 
