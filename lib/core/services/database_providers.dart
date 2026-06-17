@@ -20,9 +20,11 @@ final bookmarksRepositoryProvider = Provider<IsarBookmarkRepository>((ref) {
 /// In a multi-tab environment, we typically have one engine per tab.
 /// This factory provider creates an [InAppWebViewEngine] based on the tab's privacy state.
 final browserEngineProvider = Provider.family<BrowserEngine, String>((ref, tabId) {
-  final isGhostTab = ref.watch(ghostTabsProvider.select(
-    (s) => s.tabs.any((t) => t.id == tabId),
-  ));
+  // Snapshot privacy at construction time — do NOT watch ghostTabsProvider.
+  // Watching would rebuild the provider (disposing the engine) whenever any
+  // ghost tab is added or removed, creating an orphaned non-private engine
+  // for a tab that no longer exists.
+  final isGhostTab = ref.read(ghostTabsProvider).tabs.any((t) => t.id == tabId);
 
   // Use loadRulesSync() — not adBlockRulesProvider.valueOrNull.
   // The cache is populated by main.dart's pre-warm before runApp(),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -15,13 +16,10 @@ import 'package:mira/core/services/browser_engine_blueprints.dart';
 
 void showSecurityDialogForUrl(
   BuildContext context,
-  WidgetRef ref,
   String activeUrl,
   Color securityColor,
   Color contentColor,
 ) {
-  if (activeUrl.isEmpty) return;
-
   showModalBottomSheet<void>(
     context: context,
     backgroundColor: Colors.transparent,
@@ -29,7 +27,6 @@ void showSecurityDialogForUrl(
     builder: (_) => _SecurityPanel(
       activeUrl: activeUrl,
       securityColor: securityColor,
-      ref: ref,
     ),
   );
 }
@@ -37,16 +34,14 @@ void showSecurityDialogForUrl(
 class _SecurityPanel extends ConsumerWidget {
   final String activeUrl;
   final Color securityColor;
-  final WidgetRef ref;
 
   const _SecurityPanel({
     required this.activeUrl,
     required this.securityColor,
-    required this.ref,
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef _) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeProvider);
     final security = ref.watch(securityProvider);
     final isLight = theme.mode == ThemeMode.light;
@@ -81,50 +76,53 @@ class _SecurityPanel extends ConsumerWidget {
             ),
           ),
 
-          const SizedBox(height: 20),
+          if (activeUrl.isNotEmpty) ...[
+            const SizedBox(height: 20),
 
-          // Domain + connection status
-          Row(
-            children: [
-              Icon(
-                isSecure ? Icons.lock : Icons.lock_open,
-                color: securityColor,
-                size: 18,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      domain,
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: textColor,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      isSecure
-                          ? 'Connection is encrypted'
-                          : 'Connection is not secure',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: securityColor.withOpacity(0.8),
-                      ),
-                    ),
-                  ],
+            // Domain + connection status
+            Row(
+              children: [
+                Icon(
+                  isSecure ? Icons.lock : Icons.lock_open,
+                  color: securityColor,
+                  size: 18,
                 ),
-              ),
-            ],
-          ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        domain,
+                        style: GoogleFonts.jetBrainsMono(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: textColor,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        isSecure
+                            ? 'Connection is encrypted'
+                            : 'Connection is not secure',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: securityColor.withOpacity(0.8),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
 
-          const SizedBox(height: 24),
-          Divider(height: 1, color: textColor.withOpacity(0.08)),
-          const SizedBox(height: 8),
+            const SizedBox(height: 24),
+            Divider(height: 1, color: textColor.withOpacity(0.08)),
+            const SizedBox(height: 8),
+          ] else
+            const SizedBox(height: 12),
 
           // Section label
           Padding(
@@ -148,7 +146,7 @@ class _SecurityPanel extends ConsumerWidget {
             textColor: textColor,
             onToggle: (val) {
               ref.read(securityProvider.notifier).toggleLocation(!val);
-              applyMainScreenWebViewSettings(ref);
+              unawaited(applyMainScreenWebViewSettings(ref));
             },
           ),
 
@@ -161,7 +159,7 @@ class _SecurityPanel extends ConsumerWidget {
             textColor: textColor,
             onToggle: (val) {
               ref.read(securityProvider.notifier).toggleCamera(!val);
-              applyMainScreenWebViewSettings(ref);
+              unawaited(applyMainScreenWebViewSettings(ref));
             },
           ),
 
@@ -181,7 +179,7 @@ class _SecurityPanel extends ConsumerWidget {
             accentColor: theme.primaryColor,
             onToggle: (val) {
               ref.read(securityProvider.notifier).toggleDesktop(val);
-              applyMainScreenWebViewSettings(ref, forceReload: true);
+              unawaited(applyMainScreenWebViewSettings(ref, forceReload: true));
             },
           ),
 
@@ -331,11 +329,13 @@ Future<void> applyMainScreenWebViewSettings(
 
   // Always resolve adblock state — omitting it would clear content blockers
   // on the active tab whenever location/camera/desktop mode is toggled.
-  final List<AdBlockRule> adBlockRules;
+  List<AdBlockRule> adBlockRules = const [];
   if (securityState.isAdBlockEnabled) {
-    adBlockRules = await ref.read(adBlockRulesProvider.future);
-  } else {
-    adBlockRules = const [];
+    try {
+      adBlockRules = await ref.read(adBlockRulesProvider.future);
+    } catch (e) {
+      debugPrint('MIRA: AdBlock rules unavailable, proceeding without block list: $e');
+    }
   }
 
   final config = BrowserEngineConfig(

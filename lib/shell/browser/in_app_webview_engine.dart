@@ -38,19 +38,33 @@ class InAppWebViewEngine implements BrowserEngine {
         _contentBlockers = _toContentBlockers(adBlockRules);
 
   static List<ContentBlocker> _toContentBlockers(List<AdBlockRule> rules) {
-    return rules
-        .map((r) => ContentBlocker(
-              trigger: ContentBlockerTrigger(
-                urlFilter: r.urlFilter,
-                loadType: [ContentBlockerTriggerLoadType.THIRD_PARTY],
-              ),
-              action: ContentBlockerAction(
-                type: r.isBlock
-                    ? ContentBlockerActionType.BLOCK
-                    : ContentBlockerActionType.IGNORE_PREVIOUS_RULES,
-              ),
-            ))
-        .toList(growable: false);
+    // ContentBlocker (WebKit-style) is only supported on Android/iOS/macOS.
+    // On Windows/Linux the plugin's ContentBlockerActionType native value is
+    // null, and accessing e.g. ContentBlockerActionType.BLOCK throws
+    // 'Null is not a subtype of String'. Skip content blockers there.
+    if (kIsWeb || !(Platform.isAndroid || Platform.isIOS || Platform.isMacOS)) {
+      return const [];
+    }
+    // WebKit requires BLOCK rules to appear at a lower index than any
+    // IGNORE_PREVIOUS_RULES rule for the same domain. Re-partition here so
+    // this invariant holds even if the source JSON was regenerated out of order.
+    final blocks = <ContentBlocker>[];
+    final ignores = <ContentBlocker>[];
+    for (final r in rules) {
+      final cb = ContentBlocker(
+        trigger: ContentBlockerTrigger(
+          urlFilter: r.urlFilter,
+          loadType: [ContentBlockerTriggerLoadType.THIRD_PARTY],
+        ),
+        action: ContentBlockerAction(
+          type: r.isBlock
+              ? ContentBlockerActionType.BLOCK
+              : ContentBlockerActionType.IGNORE_PREVIOUS_RULES,
+        ),
+      );
+      (r.isBlock ? blocks : ignores).add(cb);
+    }
+    return [...blocks, ...ignores];
   }
 
   @override

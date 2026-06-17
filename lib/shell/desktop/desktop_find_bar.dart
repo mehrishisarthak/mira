@@ -239,14 +239,14 @@ class _DesktopFindBarState extends ConsumerState<DesktopFindBar> {
         const SingleActivator(LogicalKeyboardKey.escape): _close,
       },
       child: Material(
-        elevation: 6,
+        elevation: 12,
         color: bg,
-        child: Container(
-          decoration: BoxDecoration(
-            border: Border(
-              top: BorderSide(color: accent.withValues(alpha: 0.35)),
-            ),
-          ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: BorderSide(color: accent.withValues(alpha: 0.25)),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           child: Row(
             children: [
@@ -306,3 +306,4 @@ class _DesktopFindBarState extends ConsumerState<DesktopFindBar> {
     );
   }
 }
+

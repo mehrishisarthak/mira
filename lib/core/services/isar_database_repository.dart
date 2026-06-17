@@ -1,5 +1,6 @@
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:mira/core/entities/download_entity.dart';
 import 'package:mira/core/services/isar_schemas.dart';
 import 'package:mira/core/services/local_database_repository.dart';
 
@@ -207,5 +208,57 @@ class IsarBookmarkRepository implements LocalDatabaseRepository<BookmarkSchema> 
         .where()
         .sortByDateAddedDesc()
         .watch(fireImmediately: true);
+  }
+}
+
+class IsarDownloadRepository {
+  Isar? _isar;
+
+  Future<void> init() async {
+    if (_isar != null) return;
+    final dir = await getApplicationSupportDirectory();
+    _isar = await Isar.open(
+      [DownloadRecordSchemaSchema],
+      directory: dir.path,
+      name: 'downloads_db',
+    );
+  }
+
+  Future<void> saveAll(List<MiraDownloadTask> tasks) async {
+    if (_isar == null) await init();
+    await _isar!.writeTxn(() async {
+      await _isar!.collection<DownloadRecordSchema>().clear();
+      await _isar!.collection<DownloadRecordSchema>().putAll(
+        tasks.asMap().entries.map((e) {
+          return DownloadRecordSchema()
+            ..taskId = e.value.id
+            ..url = e.value.url
+            ..filename = e.value.filename
+            ..savePath = e.value.savePath
+            ..statusName = e.value.status.name
+            ..progress = e.value.progress
+            ..error = e.value.error
+            ..sortOrder = e.key;
+        }).toList(),
+      );
+    });
+  }
+
+  Future<List<MiraDownloadTask>> loadAll() async {
+    if (_isar == null) await init();
+    final records = await _isar!.collection<DownloadRecordSchema>().where().findAll();
+    records.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    return records.map((r) => MiraDownloadTask(
+      id: r.taskId,
+      url: r.url,
+      filename: r.filename,
+      savePath: r.savePath,
+      status: MiraDownloadStatus.values.firstWhere(
+        (s) => s.name == r.statusName,
+        orElse: () => MiraDownloadStatus.completed,
+      ),
+      progress: r.progress,
+      error: r.error,
+    )).toList();
   }
 }

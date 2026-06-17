@@ -20,6 +20,7 @@ import 'package:mira/pages/browser_chrome_providers.dart';
 import 'package:mira/pages/browser/browser_view.dart';
 import 'package:mira/pages/main_screen/desktop_browser_chrome.dart';
 import 'package:mira/pages/main_screen/desktop_platform_menus.dart';
+import 'package:mira/pages/main_screen/desktop_sidebar.dart';
 import 'package:mira/pages/main_screen/main_screen_haptics.dart';
 import 'package:mira/pages/main_screen/main_screen_security.dart';
 import 'package:mira/pages/main_screen/mobile_main_app_bar.dart' show buildMobileBottomBar;
@@ -40,7 +41,6 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
 
   late final TextEditingController _urlController;
   late final FocusNode _urlFocusNode;
-  ScrollController? _desktopTabScrollController;
 
   @override
   void initState() {
@@ -51,7 +51,6 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     _urlFocusNode = FocusNode();
     if (!kIsWeb &&
         (Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
-      _desktopTabScrollController = ScrollController();
       HardwareKeyboard.instance.addHandler(_handleDesktopHotkey);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -91,7 +90,6 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     WidgetsBinding.instance.removeObserver(this);
     _urlController.dispose();
     _urlFocusNode.dispose();
-    _desktopTabScrollController?.dispose();
     super.dispose();
   }
 
@@ -196,6 +194,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     engine?.loadUrl(finalUrl);
 
     if (mounted) {
+      _urlFocusNode.unfocus();
       _urlController.text = finalUrl;
       _urlController.selection =
           TextSelection.collapsed(offset: finalUrl.length);
@@ -348,8 +347,8 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     final appBarColor = appTheme.surfaceColor;
     final primaryAccent = isGhost ? Colors.redAccent : appTheme.primaryColor;
     final isLightMode = appTheme.mode == ThemeMode.light;
-    final contentColor = isLightMode ? kMiraInkPrimary : Colors.white;
-    final hintColor = isLightMode ? kMiraInkMuted : Colors.white30;
+    final contentColor = (isLightMode && !isGhost) ? kMiraInkPrimary : Colors.white;
+    final hintColor = (isLightMode && !isGhost) ? kMiraInkMuted : Colors.white30;
 
     final engine = ref.watch(browserChromeProvider).engine;
     final hasWebView = engine != null;
@@ -370,9 +369,6 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
 
     final isDesktop =
         !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
-    final desktopTabStripLayout = isGhost
-        ? DesktopTabStripLayout.privateWindow
-        : DesktopTabStripLayout.mainBrowser;
 
     ref.listen(currentActiveTabProvider, (previous, next) {
       if (previous?.id != next.id) {
@@ -386,11 +382,15 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
       }
     });
 
-    // Theme → WebView settings sync is handled by BrowserView._applyThemeToAllControllers.
-    // Only listen to security for desktop-mode / ad-block toggles that need a page reload.
+    // Single source of truth for security-driven engine sync.
+    // Theme changes are handled by browser_side_effects.dart's themeProvider listener.
     ref.listen(securityProvider, (prev, next) {
       if (prev?.isDesktopMode != next.isDesktopMode) {
-        applyMainScreenWebViewSettings(ref, forceReload: true);
+        unawaited(applyMainScreenWebViewSettings(ref, forceReload: true));
+      }
+      if (prev?.isCameraBlocked != next.isCameraBlocked ||
+          prev?.isLocationBlocked != next.isLocationBlocked) {
+        unawaited(applyMainScreenWebViewSettings(ref));
       }
       if (prev?.isAdBlockEnabled != next.isAdBlockEnabled) {
         unawaited(_applyAdBlockToAllTabs(next.isAdBlockEnabled));
@@ -406,68 +406,51 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
       child: Scaffold(
         backgroundColor: backgroundColor,
         appBar: null,
-        bottomNavigationBar: isDesktop
-            ? null
-            : buildMobileBottomBar(
-                context: context,
-                ref: ref,
-                urlController: _urlController,
-                urlFocusNode: _urlFocusNode,
-                appBarColor: appBarColor,
-                securityIcon: securityIcon,
-                securityColor: securityColor,
-                activeUrl: activeUrl,
-                contentColor: contentColor,
-                primaryAccent: primaryAccent,
-                isGhost: isGhost,
-                hintColor: hintColor,
-                isBookmarked: isBookmarked,
-                activeTab: activeTab,
-                tabCount: tabCount,
-                progress: progress,
-                triggerHaptic: _triggerHaptic,
-                onUrlSubmitted: _performSearch,
-                onBackPressed: () => _handleBrowserBack(),
-                onGhostToggle: _toggleGhostMode,
-              ),
+        bottomNavigationBar: null,
         body: isDesktop
-            ? Column(
+            ? Row(
                 children: [
-                  buildDesktopMainChrome(
-                    context: context,
-                    ref: ref,
-                    bgColor: isGhost ? const Color(0xFF1A1A1A) : appBarColor,
-                    contentColor: contentColor,
-                    accentColor: primaryAccent,
-                    normalTabs: normalTabsList,
-                    ghostTabs: ghostTabsList,
-                    activeTab: activeTab,
-                    isGhost: isGhost,
-                    tabStripLayout: desktopTabStripLayout,
-                    themePrimary: appTheme.primaryColor,
-                    securityIcon: securityIcon,
-                    securityColor: securityColor,
-                    hintColor: hintColor,
-                    isBookmarked: isBookmarked,
-                    progress: progress,
-                    hasWebView: hasWebView,
-                    tabScrollController: _desktopTabScrollController,
-                    urlController: _urlController,
-                    urlFocusNode: _urlFocusNode,
-                    onUrlSubmitted: _performSearch,
-                  ),
+                  const DesktopSidebar(),
                   Expanded(
-                    child: Stack(
-                      fit: StackFit.expand,
+                    child: Column(
                       children: [
-                        const BrowserView(),
-                        if (ref.watch(desktopFindBarVisibleProvider))
-                          const Positioned(
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            child: DesktopFindBar(),
+                        buildDesktopToolbar(
+                          context: context,
+                          ref: ref,
+                          bgColor: isGhost ? const Color(0xFF1A1A1A) : appBarColor,
+                          contentColor: contentColor,
+                          accentColor: primaryAccent,
+                          hintColor: hintColor,
+                          activeTab: activeTab,
+                          isGhost: isGhost,
+                          securityIcon: securityIcon,
+                          securityColor: securityColor,
+                          isBookmarked: isBookmarked,
+                          progress: progress,
+                          hasWebView: hasWebView,
+                          urlController: _urlController,
+                          urlFocusNode: _urlFocusNode,
+                          onUrlSubmitted: _performSearch,
+                          onFindPressed: _openDesktopFindBar,
+                        ),
+                        Expanded(
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              const BrowserView(),
+                              const _GhostModeFlash(),
+                              if (ref.watch(desktopFindBarVisibleProvider))
+                                const Positioned(
+                                  top: 8,
+                                  right: 12,
+                                  child: SizedBox(
+                                    width: 340,
+                                    child: DesktopFindBar(),
+                                  ),
+                                ),
+                            ],
                           ),
+                        ),
                       ],
                     ),
                   ),
@@ -476,7 +459,33 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
             : SafeArea(
                 top: true,
                 bottom: false,
-                child: const BrowserView(),
+                child: Column(
+                  children: [
+                    const Expanded(child: BrowserView()),
+                    buildMobileBottomBar(
+                      context: context,
+                      ref: ref,
+                      urlController: _urlController,
+                      urlFocusNode: _urlFocusNode,
+                      appBarColor: appBarColor,
+                      securityIcon: securityIcon,
+                      securityColor: securityColor,
+                      activeUrl: activeUrl,
+                      contentColor: contentColor,
+                      primaryAccent: primaryAccent,
+                      isGhost: isGhost,
+                      hintColor: hintColor,
+                      isBookmarked: isBookmarked,
+                      activeTab: activeTab,
+                      tabCount: tabCount,
+                      progress: progress,
+                      triggerHaptic: _triggerHaptic,
+                      onUrlSubmitted: _performSearch,
+                      onBackPressed: () => _handleBrowserBack(),
+                      onGhostToggle: _toggleGhostMode,
+                    ),
+                  ],
+                ),
               ),
       ),
     );
@@ -494,5 +503,61 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     }
 
     return shell;
+  }
+}
+
+// ── Ghost mode context-switch flash overlay ────────────────────────────────────
+
+class _GhostModeFlash extends ConsumerStatefulWidget {
+  const _GhostModeFlash();
+
+  @override
+  ConsumerState<_GhostModeFlash> createState() => _GhostModeFlashState();
+}
+
+class _GhostModeFlashState extends ConsumerState<_GhostModeFlash>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _opacity;
+  Color _color = Colors.redAccent;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 550),
+      vsync: this,
+    );
+    // Fade in quickly, hold briefly, fade out slowly.
+    _opacity = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 0.20), weight: 25),
+      TweenSequenceItem(tween: ConstantTween(0.20), weight: 15),
+      TweenSequenceItem(tween: Tween(begin: 0.20, end: 0.0), weight: 60),
+    ]).animate(_controller);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    ref.listen<bool>(isGhostModeProvider, (prev, next) {
+      if (prev == next) return;
+      _color = next ? Colors.redAccent : Colors.black87;
+      _controller.forward(from: 0);
+    });
+
+    return AnimatedBuilder(
+      animation: _opacity,
+      builder: (_, __) => IgnorePointer(
+        child: Opacity(
+          opacity: _opacity.value,
+          child: ColoredBox(color: _color, child: const SizedBox.expand()),
+        ),
+      ),
+    );
   }
 }

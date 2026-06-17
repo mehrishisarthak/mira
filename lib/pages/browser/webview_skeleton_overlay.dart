@@ -26,7 +26,7 @@ class WebViewSkeletonOverlay extends ConsumerWidget {
       ignoring: !isLoading,
       child: AnimatedOpacity(
         opacity: isLoading ? 1.0 : 0.0,
-        duration: const Duration(milliseconds: 500),
+        duration: Duration(milliseconds: isLoading ? 150 : 400),
         curve: Curves.easeInOut,
         child: const WebSkeletonLoader(),
       ),

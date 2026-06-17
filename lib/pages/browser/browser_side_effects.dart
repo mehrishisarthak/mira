@@ -89,17 +89,18 @@ void registerBrowserViewSideEffects({required WidgetRef ref}) {
     if (!ref.read(isGhostModeProvider)) {
       _syncEngineToChrome(ref, next.tabs, next.activeIndex);
     }
-    // Sync hibernation for closed tabs
     if (previous != null && previous.tabs.length > next.tabs.length) {
-      ref.read(hibernationProvider.notifier).onTabsClosed(
-        next.tabs.map((t) => t.id).toSet(),
-      );
+      final currentIds = next.tabs.map((t) => t.id).toSet();
+      final closedIds = previous.tabs.map((t) => t.id).toSet().difference(currentIds);
+      for (final id in closedIds) {
+        ref.invalidate(browserEngineProvider(id));
+      }
+      ref.read(hibernationProvider.notifier).onTabsClosed(currentIds);
     }
   });
 
   ref.listen(ghostTabsProvider, (previous, next) {
     final isGhost = ref.read(isGhostModeProvider);
-    // Auto-exit ghost mode when all ghost tabs are closed
     if (isGhost && next.tabs.isEmpty) {
       ref.read(isGhostModeProvider.notifier).state = false;
       return;
@@ -108,9 +109,12 @@ void registerBrowserViewSideEffects({required WidgetRef ref}) {
       _syncEngineToChrome(ref, next.tabs, next.activeIndex);
     }
     if (previous != null && previous.tabs.length > next.tabs.length) {
-      ref.read(hibernationProvider.notifier).onTabsClosed(
-        next.tabs.map((t) => t.id).toSet(),
-      );
+      final currentIds = next.tabs.map((t) => t.id).toSet();
+      final closedIds = previous.tabs.map((t) => t.id).toSet().difference(currentIds);
+      for (final id in closedIds) {
+        ref.invalidate(browserEngineProvider(id));
+      }
+      ref.read(hibernationProvider.notifier).onTabsClosed(currentIds);
     }
   });
 
@@ -119,13 +123,11 @@ void registerBrowserViewSideEffects({required WidgetRef ref}) {
     _syncEngineToChrome(ref, state.tabs, state.activeIndex);
   });
 
-  // 2. Listen to Theme & Security changes to sync with the ACTIVE engine
+  // 2. Listen to Theme changes to sync dark mode with the ACTIVE engine.
+  // Security changes (desktop mode, camera, location, adblock) are handled
+  // exclusively by mainscreen.dart's scoped listener to avoid double invocation.
   ref.listen(themeProvider, (_, __) {
-    applyMainScreenWebViewSettings(ref);
-  });
-
-  ref.listen(securityProvider, (_, __) {
-    applyMainScreenWebViewSettings(ref);
+    unawaited(applyMainScreenWebViewSettings(ref));
   });
 
   // 3. Subscribe to the active engine's events

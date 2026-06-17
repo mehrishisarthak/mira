@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,11 +7,15 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:mira/core/entities/download_entity.dart';
 import 'package:mira/core/services/download_service.dart';
+import 'package:mira/core/services/isar_database_repository.dart';
 
 class DownloadsNotifier extends StateNotifier<List<MiraDownloadTask>> {
   final DownloadService _service;
+  final IsarDownloadRepository? _isarRepo;
 
-  DownloadsNotifier(this._service) : super([]) {
+  DownloadsNotifier(this._service, {IsarDownloadRepository? isarRepo})
+      : _isarRepo = isarRepo,
+        super([]) {
     loadTasks();
   }
 
@@ -129,7 +132,7 @@ class DownloadsNotifier extends StateNotifier<List<MiraDownloadTask>> {
     }
   }
 
-  // ── Desktop catalog (M06) ─────────────────────────────────────────────────
+  // ── Desktop catalog (Isar) ────────────────────────────────────────────────
 
   Timer? _persistDebounce;
 
@@ -142,39 +145,19 @@ class DownloadsNotifier extends StateNotifier<List<MiraDownloadTask>> {
   }
 
   Future<void> _persistDesktopCatalog() async {
-    if (!_isDesktop || !mounted) return;
+    if (!_isDesktop || !mounted || _isarRepo == null) return;
     try {
-      final dir = await getApplicationSupportDirectory();
-      final f = File(p.join(dir.path, 'mira_desktop_downloads.json'));
-      await f.writeAsString(
-        jsonEncode(state.map((t) => t.toJson()).toList()),
-      );
+      await _isarRepo.saveAll(state);
     } catch (e) {
       debugPrint('MIRA_DOWNLOAD: persist desktop -> $e');
     }
   }
 
   Future<void> _loadDesktopCatalogIfAny() async {
+    if (_isarRepo == null) return;
     try {
-      final dir = await getApplicationSupportDirectory();
-      final f = File(p.join(dir.path, 'mira_desktop_downloads.json'));
-      if (!await f.exists()) return;
-      final raw = await f.readAsString();
-      if (raw.isEmpty) return;
-      final decoded = jsonDecode(raw);
-      if (decoded is! List) return;
-      final tasks = decoded
-          .map((e) => MiraDownloadTask.fromJson(e as Map<String, dynamic>))
-          .toList();
+      final tasks = await _isarRepo.loadAll();
       if (tasks.isNotEmpty && mounted) state = tasks;
-    } on FormatException catch (e) {
-      // The self-healing fix: deletes corrupted JSON to prevent permanent app failure
-      debugPrint('MIRA_DOWNLOAD: JSON Corrupted -> $e. Wiping catalog.');
-      try {
-        final dir = await getApplicationSupportDirectory();
-        final f = File(p.join(dir.path, 'mira_desktop_downloads.json'));
-        if (await f.exists()) await f.delete();
-      } catch (_) {}
     } catch (e) {
       debugPrint('MIRA_DOWNLOAD: restore desktop -> $e');
     }

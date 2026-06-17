@@ -81,7 +81,7 @@ class TabsNotifier extends StateNotifier<TabsState> {
         }
         state = TabsState(tabs: nextTabs, activeIndex: nextIndex);
         if (didPrependFreshDial) {
-          _saveToPrefs();
+          unawaited(_saveToPrefs());
         }
       } catch (e, stack) {
         debugPrint('[MIRA] TabNotifier corrupted data: $e\n$stack');
@@ -93,24 +93,39 @@ class TabsNotifier extends StateNotifier<TabsState> {
     }
   }
 
-  void _saveToPrefs() {
-    final jsonList = state.tabs.map((tab) => tab.toJson()).toList();
-    _prefsService.saveTabs(jsonList, state.activeIndex);
+  Future<void> _saveToPrefs() async {
+    try {
+      final jsonList = state.tabs.map((tab) => tab.toJson()).toList();
+      await _prefsService.saveTabs(jsonList, state.activeIndex);
+    } catch (e) {
+      debugPrint('[MIRA] TabNotifier: failed to persist tab state: $e');
+    }
   }
 
   // Debounced save for high-frequency WebView events (URL/title updates).
   void _scheduleSave() {
     _saveDebounce?.cancel();
-    _saveDebounce = Timer(const Duration(milliseconds: 500), _saveToPrefs);
+    _saveDebounce = Timer(const Duration(milliseconds: 500), () => unawaited(_saveToPrefs()));
   }
 
   // --- ACTIONS ---
 
   void addTab({String url = ''}) {
+    // If the only existing tab is a blank seed tab and no URL is being opened,
+    // reuse it rather than stacking a second blank tab on top. This prevents
+    // the tab sheet's "no tabs" empty-state message from hiding the seed tab
+    // and then revealing it alongside a new blank tab when the user taps "+".
+    if (url.isEmpty && state.tabs.length == 1 && state.tabs.first.url.isEmpty) {
+      if (state.activeIndex != 0) {
+        state = TabsState(tabs: state.tabs, activeIndex: 0);
+        unawaited(_saveToPrefs());
+      }
+      return;
+    }
     final newTab = BrowserTab(url: url);
     final newTabs = [...state.tabs, newTab];
     state = TabsState(tabs: newTabs, activeIndex: newTabs.length - 1);
-    _saveToPrefs();
+    unawaited(_saveToPrefs());
   }
 
   void closeTab(String tabId) {
@@ -135,13 +150,13 @@ class TabsNotifier extends StateNotifier<TabsState> {
     }
 
     state = TabsState(tabs: newTabs, activeIndex: newIndex);
-    _saveToPrefs();
+    unawaited(_saveToPrefs());
   }
 
   void switchTab(int index) {
     if (index >= 0 && index < state.tabs.length) {
       state = TabsState(tabs: state.tabs, activeIndex: index);
-      _saveToPrefs();
+      unawaited(_saveToPrefs());
     }
   }
 
@@ -174,7 +189,7 @@ class TabsNotifier extends StateNotifier<TabsState> {
     }
     active = active.clamp(0, tabs.length - 1);
     state = TabsState(tabs: tabs, activeIndex: active);
-    _saveToPrefs();
+    unawaited(_saveToPrefs());
   }
 
   void updateUrl(String newUrl) {
@@ -197,7 +212,7 @@ class TabsNotifier extends StateNotifier<TabsState> {
   void nuke() {
     final newTabs = [BrowserTab()];
     state = TabsState(tabs: newTabs, activeIndex: 0);
-    _saveToPrefs();
+    unawaited(_saveToPrefs());
   }
 
   void _updateActiveTab(BrowserTab Function(BrowserTab) updater, {bool debounce = false}) {
@@ -205,7 +220,7 @@ class TabsNotifier extends StateNotifier<TabsState> {
     final activeTab = currentTabs[state.activeIndex];
     currentTabs[state.activeIndex] = updater(activeTab);
     state = TabsState(tabs: currentTabs, activeIndex: state.activeIndex);
-    debounce ? _scheduleSave() : _saveToPrefs();
+    debounce ? _scheduleSave() : unawaited(_saveToPrefs());
   }
 
   void _updateTabById(
@@ -219,7 +234,7 @@ class TabsNotifier extends StateNotifier<TabsState> {
     final currentTabs = [...state.tabs];
     currentTabs[index] = updater(currentTabs[index]);
     state = TabsState(tabs: currentTabs, activeIndex: state.activeIndex);
-    debounce ? _scheduleSave() : _saveToPrefs();
+    debounce ? _scheduleSave() : unawaited(_saveToPrefs());
   }
 }
 

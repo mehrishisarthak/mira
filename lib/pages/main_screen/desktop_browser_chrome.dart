@@ -1,21 +1,12 @@
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:mira/core/entities/tab_entity.dart';
 import 'package:mira/core/notifiers/bookmarks_notifier.dart';
-import 'package:mira/core/notifiers/ghost_notifier.dart';
-import 'package:mira/core/notifiers/tab_notifier.dart';
 import 'package:mira/pages/browser_chrome_providers.dart';
 import 'package:mira/pages/mira_drawer.dart';
 import 'package:mira/pages/main_screen/main_screen_security.dart';
-
-/// Desktop tab strip: main window shows normal tabs only; private OS window shows ghost tabs only.
-enum DesktopTabStripLayout {
-  mainBrowser,
-  privateWindow,
-}
 
 Future<void> showDesktopMiraMenuPopup(BuildContext context) async {
   await showDialog<void>(
@@ -26,7 +17,7 @@ Future<void> showDesktopMiraMenuPopup(BuildContext context) async {
       return Align(
         alignment: Alignment.topRight,
         child: Padding(
-          padding: const EdgeInsets.only(top: 72, right: 12),
+          padding: const EdgeInsets.only(top: 56, right: 12),
           child: Material(
             elevation: 18,
             borderRadius: BorderRadius.circular(14),
@@ -43,223 +34,32 @@ Future<void> showDesktopMiraMenuPopup(BuildContext context) async {
   );
 }
 
-Widget buildDesktopMainTabChip({
-  required WidgetRef ref,
-  required BrowserTab tab,
-  required int stackIndex,
-  required bool tabIsGhost,
-  required Color tabAccent,
-  required bool showClose,
-  required BrowserTab activeTab,
-  required bool sessionIsGhost,
-  required Color contentColor,
-}) {
-  final isActive = tab.id == activeTab.id && tabIsGhost == sessionIsGhost;
-  final idleBorder = tabIsGhost
-      ? Border.all(color: Colors.redAccent.withValues(alpha: 0.35))
-      : null;
-
-  return Listener(
-    behavior: HitTestBehavior.deferToChild,
-    onPointerDown: (PointerDownEvent e) {
-      if (e.kind != PointerDeviceKind.mouse) return;
-      if ((e.buttons & kMiddleMouseButton) == 0) return;
-      if (!showClose) return;
-      if (tabIsGhost) {
-        ref.read(ghostTabsProvider.notifier).closeTab(tab.id);
-      } else {
-        ref.read(tabsProvider.notifier).closeTab(tab.id);
-      }
-    },
-    child: GestureDetector(
-      onTap: () {
-        ref.read(isGhostModeProvider.notifier).state = tabIsGhost;
-        if (tabIsGhost) {
-          ref.read(ghostTabsProvider.notifier).switchTab(stackIndex);
-        } else {
-          ref.read(tabsProvider.notifier).switchTab(stackIndex);
-        }
-      },
-      child: Container(
-        width: 180,
-        margin: const EdgeInsets.only(right: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          color: isActive ? tabAccent.withValues(alpha: 0.22) : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
-          border: isActive
-              ? Border.all(color: tabAccent.withValues(alpha: 0.65), width: 1.5)
-              : idleBorder,
-        ),
-        child: Row(
-          children: [
-            if (tabIsGhost)
-              Padding(
-                padding: const EdgeInsets.only(right: 6),
-                child: Icon(
-                  Icons.privacy_tip_outlined,
-                  size: 14,
-                  color: Colors.redAccent.withValues(alpha: isActive ? 1 : 0.65),
-                ),
-              ),
-            Expanded(
-              child: Text(
-                tab.title.isEmpty
-                    ? (tabIsGhost ? "Ghost Tab" : "New Tab")
-                    : tab.title,
-                style: GoogleFonts.jetBrainsMono(
-                  color: contentColor,
-                  fontSize: 12,
-                  fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            if (showClose)
-              GestureDetector(
-                onTap: () {
-                  if (tabIsGhost) {
-                    ref.read(ghostTabsProvider.notifier).closeTab(tab.id);
-                  } else {
-                    ref.read(tabsProvider.notifier).closeTab(tab.id);
-                  }
-                },
-                child: Icon(Icons.close,
-                    size: 14, color: contentColor.withValues(alpha: 0.5)),
-              ),
-          ],
-        ),
-      ),
-    ),
-  );
-}
-
-Widget buildDesktopMainChrome({
+Widget buildDesktopToolbar({
   required BuildContext context,
   required WidgetRef ref,
   required Color bgColor,
   required Color contentColor,
   required Color accentColor,
-  required List<BrowserTab> normalTabs,
-  required List<BrowserTab> ghostTabs,
+  required Color hintColor,
   required BrowserTab activeTab,
   required bool isGhost,
-  required DesktopTabStripLayout tabStripLayout,
-  required Color themePrimary,
   required IconData securityIcon,
   required Color securityColor,
-  required Color hintColor,
   required bool isBookmarked,
   required double progress,
   required bool hasWebView,
-  required ScrollController? tabScrollController,
   required TextEditingController urlController,
   required FocusNode urlFocusNode,
   required void Function(String) onUrlSubmitted,
+  required VoidCallback onFindPressed,
 }) {
-  return Container(
+  return AnimatedContainer(
+    duration: const Duration(milliseconds: 300),
+    curve: Curves.easeInOut,
     color: bgColor,
     child: Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          height: 40,
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: isGhost ? BoxDecoration(
-            border: Border(bottom: BorderSide(color: Colors.redAccent.withValues(alpha: 0.3), width: 1))
-          ) : null,
-          child: Row(
-            children: [
-              if (isGhost)
-                Padding(
-                  padding: const EdgeInsets.only(right: 12, left: 4),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.privacy_tip, color: Colors.redAccent, size: 18),
-                      const SizedBox(width: 8),
-                      Text(
-                        "GHOST WORKSPACE",
-                        style: GoogleFonts.jetBrainsMono(
-                          color: Colors.redAccent,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              Expanded(
-                child: Listener(
-                  onPointerSignal: (signal) {
-                    if (signal is PointerScrollEvent) {
-                      final c = tabScrollController;
-                      if (c != null && c.hasClients) {
-                        final delta = signal.scrollDelta.dx != 0
-                            ? signal.scrollDelta.dx
-                            : signal.scrollDelta.dy;
-                        final next = (c.offset + delta)
-                            .clamp(0.0, c.position.maxScrollExtent);
-                        c.animateTo(
-                          next,
-                          duration: const Duration(milliseconds: 150),
-                          curve: Curves.easeOutCubic,
-                        );
-                      }
-                    }
-                  },
-                  child: SingleChildScrollView(
-                    controller: tabScrollController,
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (tabStripLayout == DesktopTabStripLayout.mainBrowser &&
-                            normalTabs.isNotEmpty)
-                          ..._buildDraggableTabChips(
-                            ref: ref,
-                            tabs: normalTabs,
-                            isGhost: false,
-                            tabAccent: themePrimary,
-                            activeTab: activeTab,
-                            sessionIsGhost: isGhost,
-                            contentColor: contentColor,
-                            onReorder: (oldIndex, newIndex) => ref
-                                .read(tabsProvider.notifier)
-                                .reorderTab(oldIndex, newIndex),
-                          ),
-                        if (tabStripLayout == DesktopTabStripLayout.privateWindow &&
-                            ghostTabs.isNotEmpty)
-                          ..._buildDraggableTabChips(
-                            ref: ref,
-                            tabs: ghostTabs,
-                            isGhost: true,
-                            tabAccent: Colors.redAccent,
-                            activeTab: activeTab,
-                            sessionIsGhost: isGhost,
-                            contentColor: contentColor,
-                            onReorder: (oldIndex, newIndex) => ref
-                                .read(ghostTabsProvider.notifier)
-                                .reorderTab(oldIndex, newIndex),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              IconButton(
-                tooltip: 'New tab',
-                icon: Icon(Icons.add, color: isGhost ? Colors.redAccent : contentColor, size: 20),
-                onPressed: () {
-                  if (isGhost) {
-                    ref.read(ghostTabsProvider.notifier).addTab();
-                  } else {
-                    ref.read(tabsProvider.notifier).addTab();
-                  }
-                },
-              ),
-            ],
-          ),
-        ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           child: Row(
@@ -275,89 +75,33 @@ Widget buildDesktopMainChrome({
                 icon: Icon(Icons.arrow_forward, color: contentColor, size: 20),
                 tooltip: 'Forward',
                 onPressed: hasWebView
-                    ? () =>
-                        ref.read(browserChromeProvider).engine?.goForward()
-                    : null,
-              ),
-              IconButton(
-                icon: Icon(Icons.refresh, color: contentColor, size: 20),
-                tooltip: 'Reload',
-                onPressed: hasWebView
-                    ? () => ref.read(browserChromeProvider).engine?.reload()
+                    ? () => ref.read(browserChromeProvider).engine?.goForward()
                     : null,
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: Container(
-                  height: 36,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: isGhost ? Colors.redAccent.withValues(alpha: 0.08) : contentColor.withValues(alpha: 0.05),
-                    borderRadius: BorderRadius.circular(18),
-                    border: isGhost ? Border.all(color: Colors.redAccent.withValues(alpha: 0.2)) : null,
-                  ),
-                  child: Row(
-                    children: [
-                      Tooltip(
-                        message: activeTab.url.isEmpty
-                            ? 'Site info'
-                            : 'Connection & site info',
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(6),
-                          onTap: activeTab.url.isEmpty
-                              ? null
-                              : () => showSecurityDialogForUrl(
-                                    context,
-                                    ref,
-                                    activeTab.url,
-                                    securityColor,
-                                    contentColor,
-                                  ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(4),
-                            child: Icon(securityIcon,
-                                color: securityColor, size: 16),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: TextField(
-                          controller: urlController,
-                          focusNode: urlFocusNode,
-                          style: GoogleFonts.jetBrainsMono(
-                              color: contentColor, fontSize: 13),
-                          cursorColor: accentColor,
-                          decoration: InputDecoration(
-                            hintText: isGhost
-                                ? 'Private browsing'
-                                : 'Search or enter address',
-                            border: InputBorder.none,
-                            isDense: true,
-                            hintStyle: GoogleFonts.jetBrainsMono(
-                                color: isGhost ? Colors.redAccent.withValues(alpha: 0.5) : hintColor, fontSize: 13),
-                          ),
-                          onSubmitted: onUrlSubmitted,
-                        ),
-                      ),
-                      if (activeTab.url.isNotEmpty && !isGhost)
-                        IconButton(
-                          padding: EdgeInsets.zero,
-                          icon: Icon(
-                              isBookmarked ? Icons.star : Icons.star_border,
-                              color: isBookmarked
-                                  ? Colors.yellowAccent
-                                  : hintColor,
-                              size: 18),
-                          onPressed: () => ref
-                              .read(bookmarksProvider.notifier)
-                              .toggleBookmark(activeTab.url, activeTab.title),
-                        ),
-                    ],
-                  ),
+                child: _DesktopAddressBar(
+                  urlController: urlController,
+                  urlFocusNode: urlFocusNode,
+                  activeTab: activeTab,
+                  isGhost: isGhost,
+                  isBookmarked: isBookmarked,
+                  contentColor: contentColor,
+                  accentColor: accentColor,
+                  hintColor: hintColor,
+                  securityIcon: securityIcon,
+                  securityColor: securityColor,
+                  onUrlSubmitted: onUrlSubmitted,
+                  context: context,
+                  ref: ref,
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 4),
+              IconButton(
+                icon: Icon(Icons.search, color: contentColor.withValues(alpha: 0.6), size: 20),
+                tooltip: 'Find in page',
+                onPressed: onFindPressed,
+              ),
               IconButton(
                 icon: Icon(Icons.more_vert, color: contentColor, size: 20),
                 onPressed: () => showDesktopMiraMenuPopup(context),
@@ -367,62 +111,195 @@ Widget buildDesktopMainChrome({
         ),
         if (progress < 1.0 && activeTab.url.isNotEmpty)
           LinearProgressIndicator(
-              value: progress,
-              backgroundColor: Colors.transparent,
-              color: accentColor,
-              minHeight: 2),
+            value: progress,
+            backgroundColor: Colors.transparent,
+            color: accentColor,
+            minHeight: 2,
+          ),
       ],
     ),
   );
 }
 
-/// Desktop-friendly drag-to-reorder tab chips that work inside a
-/// [SingleChildScrollView] (unlike [ReorderableListView] which fights
-/// for the drag gesture with the parent scroll).
-List<Widget> _buildDraggableTabChips({
-  required WidgetRef ref,
-  required List<BrowserTab> tabs,
-  required bool isGhost,
-  required Color tabAccent,
-  required BrowserTab activeTab,
-  required bool sessionIsGhost,
-  required Color contentColor,
-  required void Function(int oldIndex, int newIndex) onReorder,
-}) {
-  return List.generate(tabs.length, (i) {
-    final tab = tabs[i];
-    final key = isGhost ? 'g-${tab.id}' : 'n-${tab.id}';
-    final chip = SizedBox(
-      width: 212,
-      child: buildDesktopMainTabChip(
-        ref: ref,
-        tab: tab,
-        stackIndex: i,
-        tabIsGhost: isGhost,
-        tabAccent: tabAccent,
-        showClose: true,
-        activeTab: activeTab,
-        sessionIsGhost: sessionIsGhost,
-        contentColor: contentColor,
+// ── Desktop address bar with domain-only unfocused display ────────────────────
+
+class _DesktopAddressBar extends StatefulWidget {
+  final TextEditingController urlController;
+  final FocusNode urlFocusNode;
+  final BrowserTab activeTab;
+  final bool isGhost;
+  final bool isBookmarked;
+  final Color contentColor;
+  final Color accentColor;
+  final Color hintColor;
+  final IconData securityIcon;
+  final Color securityColor;
+  final void Function(String) onUrlSubmitted;
+  final BuildContext context;
+  final WidgetRef ref;
+
+  const _DesktopAddressBar({
+    required this.urlController,
+    required this.urlFocusNode,
+    required this.activeTab,
+    required this.isGhost,
+    required this.isBookmarked,
+    required this.contentColor,
+    required this.accentColor,
+    required this.hintColor,
+    required this.securityIcon,
+    required this.securityColor,
+    required this.onUrlSubmitted,
+    required this.context,
+    required this.ref,
+  });
+
+  @override
+  State<_DesktopAddressBar> createState() => _DesktopAddressBarState();
+}
+
+class _DesktopAddressBarState extends State<_DesktopAddressBar> {
+  bool _hasFocus = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.urlFocusNode.addListener(_onFocusChange);
+    widget.urlController.addListener(_onControllerChange);
+  }
+
+  @override
+  void dispose() {
+    widget.urlFocusNode.removeListener(_onFocusChange);
+    widget.urlController.removeListener(_onControllerChange);
+    super.dispose();
+  }
+
+  void _onFocusChange() {
+    if (mounted) setState(() => _hasFocus = widget.urlFocusNode.hasFocus);
+  }
+
+  void _onControllerChange() {
+    // Rebuild domain text when URL changes while unfocused.
+    if (mounted && !_hasFocus) setState(() {});
+  }
+
+  String get _domain {
+    final url = widget.urlController.text;
+    if (url.isEmpty) return '';
+    try {
+      final host = Uri.parse(url).host;
+      return host.replaceFirst(RegExp(r'^www\.'), '');
+    } catch (_) {
+      return url;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isGhost = widget.isGhost;
+    final showDomain = !_hasFocus && widget.urlController.text.isNotEmpty;
+
+    return Container(
+      height: 36,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: isGhost
+            ? Colors.redAccent.withValues(alpha: 0.08)
+            : widget.contentColor.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(18),
+        border: isGhost
+            ? Border.all(color: Colors.redAccent.withValues(alpha: 0.2))
+            : null,
+      ),
+      child: Row(
+        children: [
+          Tooltip(
+            message: widget.activeTab.url.isEmpty
+                ? 'Site info'
+                : 'Connection & site info',
+            child: InkWell(
+              borderRadius: BorderRadius.circular(6),
+              onTap: widget.activeTab.url.isEmpty
+                  ? null
+                  : () => showSecurityDialogForUrl(
+                        widget.context,
+                        widget.activeTab.url,
+                        widget.securityColor,
+                        widget.contentColor,
+                      ),
+              child: Padding(
+                padding: const EdgeInsets.all(4),
+                child: Icon(widget.securityIcon,
+                    color: widget.securityColor, size: 16),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: showDomain
+                ? GestureDetector(
+                    onTap: () {
+                      widget.urlFocusNode.requestFocus();
+                      widget.urlController.selection = TextSelection(
+                        baseOffset: 0,
+                        extentOffset: widget.urlController.text.length,
+                      );
+                    },
+                    child: Text(
+                      _domain,
+                      style: GoogleFonts.jetBrainsMono(
+                        color: widget.contentColor,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  )
+                : TextField(
+                    controller: widget.urlController,
+                    focusNode: widget.urlFocusNode,
+                    style: GoogleFonts.jetBrainsMono(
+                        color: widget.contentColor, fontSize: 13),
+                    cursorColor: widget.accentColor,
+                    decoration: InputDecoration(
+                      hintText: isGhost
+                          ? 'Private browsing'
+                          : 'Search or enter address',
+                      border: InputBorder.none,
+                      isDense: true,
+                      hintStyle: GoogleFonts.jetBrainsMono(
+                          color: isGhost
+                              ? Colors.redAccent.withValues(alpha: 0.5)
+                              : widget.hintColor,
+                          fontSize: 13),
+                    ),
+                    onTap: () {
+                      widget.urlController.selection = TextSelection(
+                        baseOffset: 0,
+                        extentOffset: widget.urlController.text.length,
+                      );
+                    },
+                    onSubmitted: widget.onUrlSubmitted,
+                  ),
+          ),
+          if (widget.activeTab.url.isNotEmpty && !isGhost)
+            IconButton(
+              padding: EdgeInsets.zero,
+              icon: Icon(
+                widget.isBookmarked ? Icons.star : Icons.star_border,
+                color: widget.isBookmarked
+                    ? Colors.yellowAccent
+                    : widget.hintColor,
+                size: 18,
+              ),
+              onPressed: () => widget.ref
+                  .read(bookmarksProvider.notifier)
+                  .toggleBookmark(
+                      widget.activeTab.url, widget.activeTab.title),
+            ),
+        ],
       ),
     );
-
-    return DragTarget<int>(
-      key: ValueKey<String>(key),
-      onWillAcceptWithDetails: (details) => details.data != i,
-      onAcceptWithDetails: (details) => onReorder(details.data, i),
-      builder: (context, candidateData, rejectedData) {
-        return Draggable<int>(
-          data: i,
-          axis: Axis.horizontal,
-          feedback: Material(
-            color: Colors.transparent,
-            child: Opacity(opacity: 0.75, child: chip),
-          ),
-          childWhenDragging: Opacity(opacity: 0.3, child: chip),
-          child: chip,
-        );
-      },
-    );
-  });
+  }
 }

@@ -93,7 +93,6 @@ Widget buildMobileBottomBar({
                     GestureDetector(
                       onTap: () => showSecurityDialogForUrl(
                         context,
-                        ref,
                         activeUrl,
                         securityColor,
                         contentColor,
