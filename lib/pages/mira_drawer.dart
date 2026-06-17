@@ -415,6 +415,24 @@ class MiraMenuPage extends ConsumerWidget {
                   ref.read(securityProvider.notifier).toggleCamera(val),
             ),
 
+            SwitchListTile(
+              title: Text("Ad & Tracker Block",
+                  style: TextStyle(color: appTextColor)),
+              subtitle: Text(
+                securityState.isAdBlockEnabled ? "Active" : "Off",
+                style: TextStyle(
+                    color: appTextColor.withAlpha(128), fontSize: 12),
+              ),
+              secondary: Icon(Icons.shield_outlined,
+                  color: securityState.isAdBlockEnabled
+                      ? Colors.greenAccent
+                      : appTextColor.withAlpha(128)),
+              value: securityState.isAdBlockEnabled,
+              activeThumbColor: Colors.greenAccent,
+              onChanged: (val) =>
+                  ref.read(securityProvider.notifier).toggleAdBlock(val),
+            ),
+
 
             Divider(color: appTextColor.withAlpha(51)),
 
