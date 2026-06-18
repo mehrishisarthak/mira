@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/services.dart';
+import 'package:mira/core/services/adblock_ota_service.dart';
 import 'package:mira/core/services/browser_engine_blueprints.dart';
 
 class AdBlockService {
@@ -7,12 +9,33 @@ class AdBlockService {
 
   static Future<List<AdBlockRule>> loadRules() async {
     if (_cache != null) return _cache!;
+    // Prefer the OTA file on disk; fall back to the bundled asset if it is
+    // absent, unreadable, or fails to parse (asset must always work offline).
+    final fromDisk = await _tryLoadFromDisk();
+    if (fromDisk != null) {
+      _cache = fromDisk;
+      return _cache!;
+    }
     final raw = await rootBundle.loadString('assets/adblock/content_blockers.json');
+    _cache = _parse(raw);
+    return _cache!;
+  }
+
+  static Future<List<AdBlockRule>?> _tryLoadFromDisk() async {
+    try {
+      final file = File(await AdBlockOtaService.rulesFilePath());
+      if (!await file.exists()) return null;
+      return _parse(await file.readAsString());
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static List<AdBlockRule> _parse(String raw) {
     final list = jsonDecode(raw) as List<dynamic>;
-    _cache = list
+    return list
         .map((e) => _fromJson(e as Map<String, dynamic>))
         .toList(growable: false);
-    return _cache!;
   }
 
   /// Synchronous read of the pre-warmed cache.

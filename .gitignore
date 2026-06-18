@@ -2,6 +2,9 @@
 *.class
 *.log
 *.pyc
+
+# AdBlock OTA: CI/release artifact, not source
+assets/adblock/manifest.json
 *.swp
 .DS_Store
 .atom/

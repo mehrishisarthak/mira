@@ -23,6 +23,10 @@ class PreferencesService {
   // Onboarding Key (NEW)
   static const _keyFirstRun = 'is_first_run';
 
+  // AdBlock OTA Keys
+  static const _keyAdBlockOtaLastCheck = 'adblock_ota_last_check'; // epoch millis
+  static const _keyAdBlockOtaSha = 'adblock_ota_sha'; // last applied sha256
+
   // --- SEARCH ENGINE ---
   String? getSearchEngine() => _prefs.getString(_keySearchEngine);
   Future<void> setSearchEngine(String engineKey) async => await _prefs.setString(_keySearchEngine, engineKey);
@@ -73,6 +77,13 @@ class PreferencesService {
   // Returns true if key doesn't exist yet (First time user)
   bool getFirstRun() => _prefs.getBool(_keyFirstRun) ?? true;
   Future<void> setFirstRun(bool value) async => await _prefs.setBool(_keyFirstRun, value);
+
+  // --- ADBLOCK OTA ---
+  int getAdBlockOtaLastCheck() => _prefs.getInt(_keyAdBlockOtaLastCheck) ?? 0;
+  Future<void> setAdBlockOtaLastCheck(int epochMillis) async => await _prefs.setInt(_keyAdBlockOtaLastCheck, epochMillis);
+
+  String? getAdBlockOtaSha() => _prefs.getString(_keyAdBlockOtaSha);
+  Future<void> setAdBlockOtaSha(String sha) async => await _prefs.setString(_keyAdBlockOtaSha, sha);
 }
 
 /// Second desktop engine for private windows: keep theme/settings on disk but never
