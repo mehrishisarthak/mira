@@ -10,7 +10,6 @@ import 'package:mira/core/notifiers/history_notifier.dart';
 import 'package:mira/core/notifiers/tab_notifier.dart';
 import 'package:mira/core/notifiers/hibernation_notifier.dart';
 import 'package:mira/core/notifiers/theme_notifier.dart';
-import 'package:mira/core/notifiers/security_notifier.dart';
 import 'package:mira/core/services/database_providers.dart';
 import 'package:mira/core/services/browser_engine_blueprints.dart';
 import 'package:mira/core/services/download_provider.dart';
