@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'package:mira/core/app_globals.dart';
 import 'package:mira/core/config/desktop_user_agent.dart';
 import 'package:mira/core/services/download_manager.dart';
 import 'package:mira/pages/mainscreen.dart';
@@ -139,6 +140,8 @@ class MyApp extends ConsumerWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'MIRA Browser',
+      scaffoldMessengerKey: scaffoldMessengerKey,
+      navigatorKey: rootNavigatorKey,
       theme: lightTheme,
       darkTheme: darkTheme,
       themeMode: appTheme.mode,
