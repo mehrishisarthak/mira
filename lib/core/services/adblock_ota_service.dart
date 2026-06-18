@@ -31,22 +31,26 @@ class AdBlockOtaService {
   }
 
   /// Background check, throttled to once per [_interval]. Never throws.
-  static Future<void> maybeRefresh(PreferencesService prefs) async {
+  ///
+  /// [httpClient] is injected only by tests; production uses a default client.
+  static Future<void> maybeRefresh(PreferencesService prefs,
+      {http.Client? httpClient}) async {
     final now = DateTime.now().millisecondsSinceEpoch;
     if (now - prefs.getAdBlockOtaLastCheck() < _interval.inMilliseconds) return;
     // Record the attempt regardless of outcome so a persistent failure does not
     // re-hit the network every launch.
     await prefs.setAdBlockOtaLastCheck(now);
 
+    final client = httpClient ?? http.Client();
     try {
-      final manifestRes = await http.get(Uri.parse(_manifestUrl));
+      final manifestRes = await client.get(Uri.parse(_manifestUrl));
       if (manifestRes.statusCode != 200) return;
       final manifest = jsonDecode(manifestRes.body) as Map<String, dynamic>;
       final remoteSha = (manifest['sha256'] as String).toLowerCase();
 
       if (remoteSha == prefs.getAdBlockOtaSha()) return; // already applied
 
-      final rulesRes = await http.get(Uri.parse(_rulesUrl));
+      final rulesRes = await client.get(Uri.parse(_rulesUrl));
       if (rulesRes.statusCode != 200) return;
       final bytes = rulesRes.bodyBytes;
 
@@ -65,6 +69,8 @@ class AdBlockOtaService {
     } catch (e) {
       // Network/parse/verify failure: keep last good list.
       debugPrint('MIRA: AdBlock OTA refresh failed: $e');
+    } finally {
+      if (httpClient == null) client.close();
     }
   }
 }
