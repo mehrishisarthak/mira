@@ -165,7 +165,13 @@ class MobileDownloadService implements DownloadService {
 
     final deviceInfo = await DeviceInfoPlugin().androidInfo;
     if (deviceInfo.version.sdkInt >= 33) {
-      await Permission.notification.request();
+      // POST_NOTIFICATIONS gates the progress notification only, not the
+      // download. Request it, but never block the download on the result.
+      final status = await Permission.notification.request();
+      if (!status.isGranted) {
+        debugPrint('MIRA_DOWNLOAD: notification permission not granted — '
+            'download will run without a progress notification');
+      }
       return true;
     }
 

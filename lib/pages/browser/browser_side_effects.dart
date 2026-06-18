@@ -1,14 +1,15 @@
 import 'dart:async';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mira/core/app_globals.dart';
 import 'package:mira/core/entities/tab_entity.dart';
+import 'package:mira/pages/downloads_screen.dart';
 
 import 'package:mira/core/notifiers/ghost_notifier.dart';
 import 'package:mira/core/notifiers/history_notifier.dart';
 import 'package:mira/core/notifiers/tab_notifier.dart';
 import 'package:mira/core/notifiers/hibernation_notifier.dart';
 import 'package:mira/core/notifiers/theme_notifier.dart';
-import 'package:mira/core/notifiers/security_notifier.dart';
 import 'package:mira/core/services/database_providers.dart';
 import 'package:mira/core/services/browser_engine_blueprints.dart';
 import 'package:mira/core/services/download_provider.dart';
@@ -61,6 +62,7 @@ final _engineEventsSubscriptionProvider = Provider.family<void, BrowserEngine>((
               debugPrint('MIRA_DOWNLOAD: event handler error -> $e');
             }),
           );
+          _showDownloadStartedSnackBar(req.filename);
         }
         break;
     }
@@ -74,6 +76,29 @@ final _engineEventsSubscriptionProvider = Provider.family<void, BrowserEngine>((
 Map<String, String>? _parseHeaders(String? cookies) {
   if (cookies == null || cookies.isEmpty) return null;
   return {'Cookie': cookies};
+}
+
+/// Chrome-style "download started" snackbar with a shortcut to the Downloads
+/// screen. Shown from the page-event handler, which has no [BuildContext], so it
+/// drives the UI through the app-global keys.
+void _showDownloadStartedSnackBar(String? filename) {
+  final messenger = scaffoldMessengerKey.currentState;
+  if (messenger == null) return;
+  final hasName = filename != null && filename.isNotEmpty;
+  messenger
+    ..clearSnackBars()
+    ..showSnackBar(
+      SnackBar(
+        content: Text(hasName ? 'Downloading $filename' : 'Download started'),
+        duration: const Duration(seconds: 4),
+        action: SnackBarAction(
+          label: 'VIEW',
+          onPressed: () => rootNavigatorKey.currentState?.push(
+            MaterialPageRoute<void>(builder: (_) => const DownloadsPage()),
+          ),
+        ),
+      ),
+    );
 }
 
 /// Called once from [BrowserView.initState] after the first frame.
