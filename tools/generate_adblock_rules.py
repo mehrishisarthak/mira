@@ -6,10 +6,12 @@ Usage:
   python tools/generate_adblock_rules.py              # fetch from CDN
   python tools/generate_adblock_rules.py --local tds.json  # use local file
 """
+import hashlib
 import json
 import re
 import sys
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 
 TDS_URL = (
@@ -18,6 +20,7 @@ TDS_URL = (
 )
 MIN_PREVALENCE = 0.0001
 OUT_PATH = Path("assets/adblock/content_blockers.json")
+MANIFEST_PATH = Path("assets/adblock/manifest.json")
 
 
 def escape_domain(domain: str) -> str:
@@ -76,10 +79,20 @@ def main():
 
     rules = build_rules(tds)
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    OUT_PATH.write_text(json.dumps(rules, separators=(",", ":")))
+    payload = json.dumps(rules, separators=(",", ":")).encode("utf-8")
+    OUT_PATH.write_bytes(payload)
+
+    manifest = {
+        "schemaVersion": 1,
+        "generatedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "sha256": hashlib.sha256(payload).hexdigest(),
+        "ruleCount": len(rules),
+    }
+    MANIFEST_PATH.write_text(json.dumps(manifest, indent=2) + "\n")
 
     blocked = sum(1 for t in tds["trackers"].values() if t.get("default") == "block")
     print(f"Generated {len(rules)} rules covering {blocked} domains -> {OUT_PATH}")
+    print(f"Wrote manifest -> {MANIFEST_PATH}")
 
 
 if __name__ == "__main__":

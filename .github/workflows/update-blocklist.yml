@@ -1,0 +1,37 @@
+name: Update blocklist
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"  # Mondays 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-blocklist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generate rules + manifest
+        run: python tools/generate_adblock_rules.py
+
+      - name: Validate against golden
+        run: python tools/validate_blocklist.py
+
+      - name: Set release tag
+        run: echo "TAG=blocklist-$(date -u +%F)" >> "$GITHUB_ENV"
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          name: ${{ env.TAG }}
+          files: |
+            assets/adblock/content_blockers.json
+            assets/adblock/manifest.json

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -15,6 +17,7 @@ import 'package:mira/core/observers/provider_observer.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:mira/core/services/adblock_service.dart';
+import 'package:mira/core/services/adblock_ota_service.dart';
 import 'package:mira/shell/browser/in_app_webview_engine.dart';
 
 Future<void> main(List<String> args) async {
@@ -87,6 +90,10 @@ Future<void> main(List<String> args) async {
       ),
     ),
   );
+
+  // Fire-and-forget weekly tracker-list refresh. Lands on disk and applies at
+  // next launch; must not block startup or touch live webviews.
+  unawaited(AdBlockOtaService.maybeRefresh(preferencesService));
 }
 
 class MyApp extends ConsumerWidget {
