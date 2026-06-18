@@ -5,9 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:mira/core/entities/theme_entity.dart';
+import 'package:mira/core/services/preferences_service.dart';
 import 'package:mira/pages/mainscreen.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
@@ -68,8 +68,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen>
 
   Future<void> _finish() async {
     HapticFeedback.mediumImpact();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('is_first_run', false);
+    await ref.read(preferencesServiceProvider).setFirstRun(false);
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
