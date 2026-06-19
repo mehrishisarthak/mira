@@ -2,9 +2,9 @@
 
 _Architect + Validator Mode | 2026-06-19_
 
-> **Supersedes [`MIRA_FIREBASE_SPEEDDIAL_STRATEGY.md`](./MIRA_FIREBASE_SPEEDDIAL_STRATEGY.md).**
-> That doc relied on Firebase Remote Config + Analytics. This plan removes Firebase entirely by
-> reusing the OTA mechanism already shipped for the ad blocklist (see [`ADBLOCK_OTA.md`](./ADBLOCK_OTA.md)).
+> **Supersedes the prior Firebase Remote Config + Analytics strategy (now removed).**
+> This plan removes Firebase entirely by reusing the OTA mechanism already shipped for the ad
+> blocklist (see [`ADBLOCK_OTA.md`](./ADBLOCK_OTA.md)).
 
 ---
 
