@@ -19,6 +19,7 @@ dependencies:
   http: ^1.6.0
   isar: ^3.1.0+1
   isar_flutter_libs: ^3.1.0+1
+  open_filex: ^4.0.0
   package_info_plus: ^9.0.1
   path: ^1.9.0
   path_provider: ^2.1.5
