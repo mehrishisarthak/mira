@@ -3,10 +3,12 @@ import 'dart:isolate'; // Added for ReceivePort
 import 'dart:ui'; // Added for IsolateNameServer
 
 import 'package:device_info_plus/device_info_plus.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_downloader/flutter_downloader.dart';
+import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:mira/core/app_globals.dart';
 import 'package:mira/core/entities/download_entity.dart';
 import 'package:mira/core/services/download_service.dart';
 
@@ -136,7 +138,30 @@ class MobileDownloadService implements DownloadService {
 
   @override
   Future<void> openTask(MiraDownloadTask task) async {
-    await FlutterDownloader.open(taskId: task.id);
+    // Open by file path, not taskId: FlutterDownloader.open silently returns
+    // false on modern Android and can't open saved-page entries (which have no
+    // real download task). open_filex handles the FileProvider + intent + MIME.
+    final result = await OpenFilex.open(task.savePath);
+    if (result.type != ResultType.done) {
+      debugPrint(
+          'MIRA_DOWNLOAD: open failed (${result.type}) -> ${result.message}');
+      scaffoldMessengerKey.currentState?.showSnackBar(
+        SnackBar(content: Text(_openErrorMessage(result.type))),
+      );
+    }
+  }
+
+  static String _openErrorMessage(ResultType type) {
+    switch (type) {
+      case ResultType.noAppToOpen:
+        return 'No app can open this file';
+      case ResultType.fileNotFound:
+        return 'File not found';
+      case ResultType.permissionDenied:
+        return 'Permission denied opening file';
+      default:
+        return "Couldn't open file";
+    }
   }
 
   @override
