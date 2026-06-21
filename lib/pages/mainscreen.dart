@@ -330,7 +330,6 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     final normalTabsList = ref.watch(tabsProvider).tabs;
     final ghostTabsList = ref.watch(ghostTabsProvider).tabs;
     final tabCount = isGhost ? ghostTabsList.length : normalTabsList.length;
-    final double progress = ref.watch(browserChromeProvider).loadingProgress / 100;
 
     if (!kIsWeb &&
         (Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
@@ -350,7 +349,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     final contentColor = (isLightMode && !isGhost) ? kMiraInkPrimary : Colors.white;
     final hintColor = (isLightMode && !isGhost) ? kMiraInkMuted : Colors.white30;
 
-    final engine = ref.watch(browserChromeProvider).engine;
+    final engine = ref.watch(browserChromeProvider.select((s) => s.engine));
     final hasWebView = engine != null;
 
     IconData securityIcon;
@@ -426,7 +425,6 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
                           securityIcon: securityIcon,
                           securityColor: securityColor,
                           isBookmarked: isBookmarked,
-                          progress: progress,
                           hasWebView: hasWebView,
                           urlController: _urlController,
                           urlFocusNode: _urlFocusNode,
@@ -478,7 +476,6 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
                       isBookmarked: isBookmarked,
                       activeTab: activeTab,
                       tabCount: tabCount,
-                      progress: progress,
                       triggerHaptic: _triggerHaptic,
                       onUrlSubmitted: _performSearch,
                       onBackPressed: () => _handleBrowserBack(),

@@ -6,6 +6,7 @@ import 'package:mira/core/entities/tab_entity.dart';
 import 'package:mira/core/notifiers/bookmarks_notifier.dart';
 import 'package:mira/pages/browser_chrome_providers.dart';
 import 'package:mira/pages/mira_drawer.dart';
+import 'package:mira/pages/main_screen/browser_progress_bar.dart';
 import 'package:mira/pages/main_screen/main_screen_security.dart';
 
 Future<void> showDesktopMiraMenuPopup(BuildContext context) async {
@@ -46,7 +47,6 @@ Widget buildDesktopToolbar({
   required IconData securityIcon,
   required Color securityColor,
   required bool isBookmarked,
-  required double progress,
   required bool hasWebView,
   required TextEditingController urlController,
   required FocusNode urlFocusNode,
@@ -109,13 +109,7 @@ Widget buildDesktopToolbar({
             ],
           ),
         ),
-        if (progress < 1.0 && activeTab.url.isNotEmpty)
-          LinearProgressIndicator(
-            value: progress,
-            backgroundColor: Colors.transparent,
-            color: accentColor,
-            minHeight: 2,
-          ),
+        BrowserProgressBar(color: accentColor, minHeight: 2),
       ],
     ),
   );
