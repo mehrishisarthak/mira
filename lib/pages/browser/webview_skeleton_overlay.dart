@@ -28,7 +28,14 @@ class WebViewSkeletonOverlay extends ConsumerWidget {
         opacity: isLoading ? 1.0 : 0.0,
         duration: Duration(milliseconds: isLoading ? 150 : 400),
         curve: Curves.easeInOut,
-        child: const WebSkeletonLoader(),
+        // Pause the shimmer's ticker when not loading. The loader stays mounted
+        // (faded to 0), so without this its controller repaints ~60fps for the
+        // life of the browser view, behind the page — stealing frames from
+        // other app animations.
+        child: TickerMode(
+          enabled: isLoading,
+          child: const WebSkeletonLoader(),
+        ),
       ),
     );
   }
