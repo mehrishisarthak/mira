@@ -5,7 +5,7 @@
 > (`audit_report.md`, `definitive_audit_report.md`, `MIRA_DEFINITIVE_AUDIT.md`,
 > `ISSUES_AUDIT.md`, `FULL_CODEBASE_VALIDATOR_REPORT.md`), all now deleted.
 >
-> **Last updated:** 2026-06-21
+> **Last updated:** 2026-06-22
 > **Legend:** 🔴 high · 🟠 medium · 🟡 low · ⚪ info/cosmetic · ✅ done · ❌ rejected
 
 ---
@@ -51,14 +51,8 @@
 | ID | Sev | Issue | Location | Notes |
 |----|----|-------|----------|-------|
 | O-21 | 🟡 | **Zero tests** for hibernation LRU, ghost tabs, `reorderTab`, `_isValidUrl`, side-effect engine sync, download notifiers, Isar repos. No integration tests. | `test/` | Pure deterministic units (LRU, reorder, url-routing) are cheapest/highest-value first. |
-| O-22 | 🟡 | Magic-string port name `'mira_download_port'` duplicated vs `DownloadManager.portName`. | `download_service_mobile.dart:33-37` | Import and reuse the constant. |
-| O-23 | 🟡 | Unchecked isolate payload `data[0..2]` (no length/type guard). | `download_service_mobile.dart:40-42` | `if (data is List && data.length >= 3)`. |
-| O-24 | 🟡 | Dead code: `searchProvider` / `SearchNotifier` / `Search` entity unused. | `search_notifier.dart`, `search_entity.dart` | Deletable. |
-| O-25 | 🟡 | Orphaned import: `history_notifier` no longer referenced in `mainscreen`. | `mainscreen.dart` | Remove import. |
 | O-26 | 🟡 | Abstract `BrowserEngine.create()` factory imports the concrete `InAppWebViewEngine` (DIP violation). | `browser_engine_blueprints.dart` | Inject via a `shell/` provider instead. |
 | O-27 | 🟡 | `ghost_notifier.dart` is a kitchen sink (7 providers incl. engine lifecycle). | `ghost_notifier.dart` | Split into ghost-state / active-tab / engine-factory files. |
-| O-28 | ⚪ | Dead 37-byte re-export shim `lib/pages/browser_view.dart` (`export 'browser/browser_view.dart';`), imported by nothing. | `lib/pages/browser_view.dart` | Delete. |
-| O-29 | ⚪ | Typo: `skelleton_loader.dart` → `skeleton_loader.dart`. | `lib/pages/skelleton_loader.dart` | Rename. |
 | O-30 | ⚪ | `mocktail` dev-dep declared but unused; `flutter_lints` only, no strict rules. | `pubspec.yaml`, `analysis_options.yaml` | Consider stricter lints (`unawaited_futures`, etc.). |
 | O-31 | ⚪ | Isar 3 is in community maintenance — long-term dependency risk to track. | — | Strategic, not a defect. |
 
@@ -90,7 +84,17 @@ Files carrying too many responsibilities; split for testability and readability 
 | D-10 | Extracted `BrowserProgressBar`; `Mainscreen` no longer full-rebuilds on every progress tick |
 | D-11 | Firebase-free speed-dial plan doc |
 
+### Fixed, PR open — `chore/cleanup-batch`
+| ID | Item |
+|----|------|
+| D-12 | Download port name uses `DownloadManager.portName` constant, not a literal (was O-22) |
+| D-13 | Isolate payload length/type guard before indexing `data[0..2]` (was O-23) |
+| D-14 | Deleted dead `lib/core/entities/search_entity.dart` (`class Search`, unused) (was O-24) |
+| D-15 | Deleted dead re-export shim `lib/pages/browser_view.dart` (was O-28) |
+| D-16 | Renamed `skelleton_loader.dart` → `skeleton_loader.dart` (was O-29) |
+
 ### Verified already-fixed (found resolved during audit triage — no action)
+- O-25: `mainscreen` no longer imports `history_notifier` (orphaned import already gone).
 - `CustomErrorScreen` is rendered on `webError` (`browser_view.dart`).
 - `HistoryNotifier` & `BookmarksNotifier` cancel their stream subscriptions in `dispose()`.
 - `UpdateScreen` "Skip" passes `nextScreen` (no crash/exit).
