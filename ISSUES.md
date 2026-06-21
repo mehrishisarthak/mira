@@ -62,6 +62,15 @@
 | O-30 | ⚪ | `mocktail` dev-dep declared but unused; `flutter_lints` only, no strict rules. | `pubspec.yaml`, `analysis_options.yaml` | Consider stricter lints (`unawaited_futures`, etc.). |
 | O-31 | ⚪ | Isar 3 is in community maintenance — long-term dependency risk to track. | — | Strategic, not a defect. |
 
+### Refactor — large / "god" files
+Files carrying too many responsibilities; split for testability and readability (refactors, not defects).
+
+| ID | Sev | File | Lines | Responsibilities to split out |
+|----|----|------|------:|-------------------------------|
+| O-32 | 🟡 | `lib/pages/mainscreen.dart` | 560 | Lifecycle observer, desktop hotkeys, window-title sync, `_performSearch`/URL parsing, pop handling, and the `isDesktop ? … : …` layout branches. Extract `DesktopMainScaffold` / `MobileMainScaffold` + a `MainScreenController` for search/hotkey logic. (Partially done — heavy helpers already in `main_screen/`.) |
+| O-33 | 🟡 | `lib/pages/mira_drawer.dart` | 557 | Theme picker, search-engine picker, security toggles, ad-block toggle, Nuke, update check, and bookmark/history/download sheet launchers all in one `MiraMenuPage`. Split into per-section widgets. |
+| O-27 | 🟡 | `lib/core/notifiers/ghost_notifier.dart` | 146 | *(see O-27 above)* — kitchen sink of 7 providers incl. engine lifecycle; split into ghost-state / active-tab / engine-factory files. |
+
 ---
 
 ## DONE (this session)
