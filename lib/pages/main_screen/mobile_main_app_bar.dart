@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:mira/core/entities/tab_entity.dart';
 import 'package:mira/core/notifiers/bookmarks_notifier.dart';
 import 'package:mira/pages/mira_drawer.dart';
+import 'package:mira/pages/main_screen/browser_progress_bar.dart';
 import 'package:mira/pages/main_screen/main_screen_haptics.dart';
 import 'package:mira/pages/main_screen/main_screen_security.dart';
 import 'package:mira/pages/tab_screen.dart';
@@ -25,7 +26,6 @@ Widget buildMobileBottomBar({
   required bool isBookmarked,
   required BrowserTab activeTab,
   required int tabCount,
-  required double progress,
   required void Function(MainScreenHapticKind) triggerHaptic,
   required void Function(String) onUrlSubmitted,
   required VoidCallback onBackPressed,
@@ -40,13 +40,7 @@ Widget buildMobileBottomBar({
       // Fixed 3px slot — prevents layout jump when progress bar appears/disappears
       SizedBox(
         height: 3,
-        child: progress < 1.0 && activeUrl.isNotEmpty
-            ? LinearProgressIndicator(
-                value: progress,
-                backgroundColor: Colors.transparent,
-                color: primaryAccent,
-              )
-            : null,
+        child: BrowserProgressBar(color: primaryAccent),
       ),
       Container(
         color: barColor,
