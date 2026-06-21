@@ -37,7 +37,24 @@ class InAppWebViewEngine implements BrowserEngine {
   })  : _isPrivate = isPrivate,
         _contentBlockers = _toContentBlockers(adBlockRules);
 
+  // The rule set is a single shared, immutable instance (the AdBlockService
+  // cache), so rebuilding ~2.5k ContentBlocker objects on every settings change
+  // (theme / permission toggles) is wasted work. Memoize on the rules identity;
+  // this only rebuilds on a genuine adblock on/off transition.
+  static List<AdBlockRule>? _memoRules;
+  static List<ContentBlocker>? _memoBlockers;
+
   static List<ContentBlocker> _toContentBlockers(List<AdBlockRule> rules) {
+    if (identical(rules, _memoRules) && _memoBlockers != null) {
+      return _memoBlockers!;
+    }
+    final built = _buildContentBlockers(rules);
+    _memoRules = rules;
+    _memoBlockers = built;
+    return built;
+  }
+
+  static List<ContentBlocker> _buildContentBlockers(List<AdBlockRule> rules) {
     // ContentBlocker (WebKit-style) is only supported on Android/iOS/macOS.
     // On Windows/Linux the plugin's ContentBlockerActionType native value is
     // null, and accessing e.g. ContentBlockerActionType.BLOCK throws
