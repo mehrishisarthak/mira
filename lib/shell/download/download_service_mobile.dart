@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:mira/core/app_globals.dart';
 import 'package:mira/core/entities/download_entity.dart';
+import 'package:mira/core/services/download_manager.dart';
 import 'package:mira/core/services/download_service.dart';
 
 class MobileDownloadService implements DownloadService {
@@ -32,16 +33,17 @@ class MobileDownloadService implements DownloadService {
 
   void _bindBackgroundIsolate() {
     // 1. Clean up any zombie ports from hot restarts
-    IsolateNameServer.removePortNameMapping('mira_download_port');
+    IsolateNameServer.removePortNameMapping(DownloadManager.portName);
 
     // 2. Register the UI's mailbox
-    IsolateNameServer.registerPortWithName(_port.sendPort, 'mira_download_port');
+    IsolateNameServer.registerPortWithName(_port.sendPort, DownloadManager.portName);
 
     // 3. Listen for background chunks
     _port.listen((dynamic data) {
-      final String id = data[0];
-      final int statusInt = data[1];
-      final int progress = data[2];
+      if (data is! List || data.length < 3) return;
+      final String id = data[0] as String;
+      final int statusInt = data[1] as int;
+      final int progress = data[2] as int;
 
       final fdStatus = DownloadTaskStatus.fromInt(statusInt);
       final miraStatus = _mapStatus(fdStatus);
@@ -66,7 +68,7 @@ class MobileDownloadService implements DownloadService {
 
   @override
   void dispose() {
-    IsolateNameServer.removePortNameMapping('mira_download_port');
+    IsolateNameServer.removePortNameMapping(DownloadManager.portName);
     _port.close();
   }
 

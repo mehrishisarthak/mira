@@ -51,7 +51,7 @@ Widget buildMobileBottomBar({
             IconButton(
               icon: Icon(
                 Icons.arrow_back_ios_new_rounded,
-                color: contentColor.withOpacity(0.7),
+                color: contentColor.withValues(alpha: 0.7),
                 size: 20,
               ),
               onPressed: onBackPressed,
@@ -68,7 +68,7 @@ Widget buildMobileBottomBar({
                   size: 20,
                   color: isGhost
                       ? Colors.redAccent
-                      : contentColor.withOpacity(0.3),
+                      : contentColor.withValues(alpha: 0.3),
                 ),
               ),
             ),
@@ -79,7 +79,7 @@ Widget buildMobileBottomBar({
                 margin: const EdgeInsets.symmetric(vertical: 6),
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 decoration: BoxDecoration(
-                  color: contentColor.withOpacity(0.06),
+                  color: contentColor.withValues(alpha: 0.06),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Row(

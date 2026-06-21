@@ -5,7 +5,7 @@
 > (`audit_report.md`, `definitive_audit_report.md`, `MIRA_DEFINITIVE_AUDIT.md`,
 > `ISSUES_AUDIT.md`, `FULL_CODEBASE_VALIDATOR_REPORT.md`), all now deleted.
 >
-> **Last updated:** 2026-06-21
+> **Last updated:** 2026-06-22
 > **Legend:** 🔴 high · 🟠 medium · 🟡 low · ⚪ info/cosmetic · ✅ done · ❌ rejected
 
 ---
@@ -40,8 +40,6 @@
 | ID | Sev | Issue | Location | Notes |
 |----|----|-------|----------|-------|
 | O-13 | 🟠 | **History recorded only on `titleChanged`**, not `loadStop`; SPAs/error pages with no title change get no history entry, and it keys off active-tab url at event time. | `browser_side_effects.dart:44-49` | Record on `loadStop`; pass url with the event. |
-| O-14 | 🟡 | `activeUrlProvider` returns `tabsState.activeTab.url`, and `activeTab` **throws** on empty tabs. | `tab_notifier.dart:17,249` | Use `safeActiveTab?.url ?? ''`. Narrow (transient empty-tabs window) but real. |
-| O-15 | 🟡 | `isForMainFrame ?? true` → a subframe (blocked-ad) error can trigger the full-screen error page. | `in_app_webview_engine.dart:386` | Default ambiguous case to `false`. Especially with ad-block on. |
 | O-17 | 🟡 | Desktop "resume"/"retry" deletes the partial and restarts from byte 0 (no HTTP `Range`). | `download_service_desktop.dart:127-130` | Rename to "restart" or implement range-resume. Desktop. |
 | O-18 | 🟡 | Desktop download has no timeout — a slow-loris server holds the handle indefinitely. *(unverified)* | `download_service_desktop.dart` | Add `.timeout(...)`. Desktop. |
 | O-19 | 🟡 | `_isNewerVersion` maps non-numeric semver segments to 0 → pre-release tags (`v2.0.0-beta.1`) mis-compared, updates silently skipped. *(unverified)* | `update_service.dart` | Strip prefixes / parse semver properly. |
@@ -51,16 +49,12 @@
 | ID | Sev | Issue | Location | Notes |
 |----|----|-------|----------|-------|
 | O-21 | 🟡 | **Zero tests** for hibernation LRU, ghost tabs, `reorderTab`, `_isValidUrl`, side-effect engine sync, download notifiers, Isar repos. No integration tests. | `test/` | Pure deterministic units (LRU, reorder, url-routing) are cheapest/highest-value first. |
-| O-22 | 🟡 | Magic-string port name `'mira_download_port'` duplicated vs `DownloadManager.portName`. | `download_service_mobile.dart:33-37` | Import and reuse the constant. |
-| O-23 | 🟡 | Unchecked isolate payload `data[0..2]` (no length/type guard). | `download_service_mobile.dart:40-42` | `if (data is List && data.length >= 3)`. |
-| O-24 | 🟡 | Dead code: `searchProvider` / `SearchNotifier` / `Search` entity unused. | `search_notifier.dart`, `search_entity.dart` | Deletable. |
-| O-25 | 🟡 | Orphaned import: `history_notifier` no longer referenced in `mainscreen`. | `mainscreen.dart` | Remove import. |
 | O-26 | 🟡 | Abstract `BrowserEngine.create()` factory imports the concrete `InAppWebViewEngine` (DIP violation). | `browser_engine_blueprints.dart` | Inject via a `shell/` provider instead. |
 | O-27 | 🟡 | `ghost_notifier.dart` is a kitchen sink (7 providers incl. engine lifecycle). | `ghost_notifier.dart` | Split into ghost-state / active-tab / engine-factory files. |
-| O-28 | ⚪ | Dead 37-byte re-export shim `lib/pages/browser_view.dart` (`export 'browser/browser_view.dart';`), imported by nothing. | `lib/pages/browser_view.dart` | Delete. |
-| O-29 | ⚪ | Typo: `skelleton_loader.dart` → `skeleton_loader.dart`. | `lib/pages/skelleton_loader.dart` | Rename. |
 | O-30 | ⚪ | `mocktail` dev-dep declared but unused; `flutter_lints` only, no strict rules. | `pubspec.yaml`, `analysis_options.yaml` | Consider stricter lints (`unawaited_futures`, etc.). |
 | O-31 | ⚪ | Isar 3 is in community maintenance — long-term dependency risk to track. | — | Strategic, not a defect. |
+| O-34 | ⚪ | Deprecated `Radio` API (`groupValue`/`onChanged`) — needs migration to a `RadioGroup` ancestor (behavior-sensitive). | `browser_sheet.dart:62-63` | Real refactor, not a one-liner. |
+| O-35 | ⚪ | Unused local `seedY` — can't just delete (its `rng.nextDouble()` advances the RNG; removing it changes the particle animation). | `onboarding_screen.dart:291` | Reorder so the consumed value is actually used, or accept the warning. |
 
 ### Refactor — large / "god" files
 Files carrying too many responsibilities; split for testability and readability (refactors, not defects).
@@ -90,7 +84,20 @@ Files carrying too many responsibilities; split for testability and readability 
 | D-10 | Extracted `BrowserProgressBar`; `Mainscreen` no longer full-rebuilds on every progress tick |
 | D-11 | Firebase-free speed-dial plan doc |
 
+### Fixed, PR open — `chore/cleanup-batch`
+| ID | Item |
+|----|------|
+| D-12 | Download port name uses `DownloadManager.portName` constant, not a literal (was O-22) |
+| D-13 | Isolate payload length/type guard before indexing `data[0..2]` (was O-23) |
+| D-14 | Deleted dead `lib/core/entities/search_entity.dart` (`class Search`, unused) (was O-24) |
+| D-15 | Deleted dead re-export shim `lib/pages/browser_view.dart` (was O-28) |
+| D-16 | Renamed `skelleton_loader.dart` → `skeleton_loader.dart` (was O-29) |
+| D-17 | `activeUrlProvider` uses `safeActiveTab?.url ?? ''` — no crash on empty tabs (was O-14) |
+| D-18 | `isForMainFrame ?? false` — subframe errors no longer trigger the full-screen error page (was O-15) |
+| D-19 | Migrated all 63 `withOpacity()` → `withValues(alpha:)` (6 files); removed unused imports, dead `_onTap`, `dart:typed_data`; `activeColor` → `activeThumbColor`. Analyzer **74 → 3 issues, 0 errors** (remaining 3 = O-34, O-35). |
+
 ### Verified already-fixed (found resolved during audit triage — no action)
+- O-25: `mainscreen` no longer imports `history_notifier` (orphaned import already gone).
 - `CustomErrorScreen` is rendered on `webError` (`browser_view.dart`).
 - `HistoryNotifier` & `BookmarksNotifier` cancel their stream subscriptions in `dispose()`.
 - `UpdateScreen` "Skip" passes `nextScreen` (no crash/exit).

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
@@ -383,7 +382,9 @@ class InAppWebViewEngine implements BrowserEngine {
   }
 
   void handleReceivedError(WebResourceRequest request, WebResourceError error) {
-    if (request.isForMainFrame ?? true) {
+    // Default ambiguous (null) frame to non-main: a blocked-ad/subframe error
+    // should not trigger the full-screen error page, especially with ad-block on.
+    if (request.isForMainFrame ?? false) {
       _eventController.add(BrowserPageEvent(
         type: BrowserPageEventType.error,
         errorDescription: error.description,

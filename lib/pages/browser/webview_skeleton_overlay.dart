@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:mira/core/notifiers/ghost_notifier.dart';
 import 'package:mira/pages/browser_chrome_providers.dart';
-import 'package:mira/pages/skelleton_loader.dart';
+import 'package:mira/pages/skeleton_loader.dart';
 
 /// Isolated skeleton overlay — watches [browserChromeProvider] loading progress
 /// independently so that onProgressChanged callbacks only rebuild this widget.

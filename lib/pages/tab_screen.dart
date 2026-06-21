@@ -43,7 +43,7 @@ class TabsSheet extends ConsumerWidget {
               width: 36,
               height: 4,
               decoration: BoxDecoration(
-                color: textColor.withOpacity(0.12),
+                color: textColor.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -105,7 +105,7 @@ class TabsSheet extends ConsumerWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 12),
                       child: Divider(
-                          color: textColor.withOpacity(0.07), height: 1),
+                          color: textColor.withValues(alpha: 0.07), height: 1),
                     ),
                   ),
                 ],
@@ -140,7 +140,7 @@ class TabsSheet extends ConsumerWidget {
                         child: Text(
                           'No open tabs',
                           style: TextStyle(
-                            color: textColor.withOpacity(0.25),
+                            color: textColor.withValues(alpha: 0.25),
                             fontSize: 13,
                           ),
                         ),
@@ -230,7 +230,7 @@ class _SectionHeader extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
               decoration: BoxDecoration(
-                color: accent.withOpacity(0.12),
+                color: accent.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
@@ -248,7 +248,7 @@ class _SectionHeader extends StatelessWidget {
                 icon: Icon(
                   Icons.delete_sweep_outlined,
                   size: 18,
-                  color: textColor.withOpacity(0.3),
+                  color: textColor.withValues(alpha: 0.3),
                 ),
                 tooltip: 'Close all',
                 onPressed: onClear,
@@ -303,8 +303,8 @@ class _TabRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 6),
       child: Material(
         color: isActive
-            ? accent.withOpacity(0.08)
-            : textColor.withOpacity(0.03),
+            ? accent.withValues(alpha: 0.08)
+            : textColor.withValues(alpha: 0.03),
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
@@ -315,7 +315,7 @@ class _TabRow extends StatelessWidget {
                 ? BoxDecoration(
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                      color: accent.withOpacity(0.3),
+                      color: accent.withValues(alpha: 0.3),
                       width: 1,
                     ),
                   )
@@ -328,8 +328,8 @@ class _TabRow extends StatelessWidget {
                   height: 32,
                   decoration: BoxDecoration(
                     color: isGhost
-                        ? Colors.redAccent.withOpacity(0.1)
-                        : accent.withOpacity(0.08),
+                        ? Colors.redAccent.withValues(alpha: 0.1)
+                        : accent.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
@@ -340,8 +340,8 @@ class _TabRow extends StatelessWidget {
                             : Icons.language),
                     size: 16,
                     color: isGhost
-                        ? Colors.redAccent.withOpacity(0.7)
-                        : accent.withOpacity(0.6),
+                        ? Colors.redAccent.withValues(alpha: 0.7)
+                        : accent.withValues(alpha: 0.6),
                   ),
                 ),
 
@@ -360,7 +360,7 @@ class _TabRow extends StatelessWidget {
                               isActive ? FontWeight.w600 : FontWeight.w400,
                           color: isActive
                               ? textColor
-                              : textColor.withOpacity(0.75),
+                              : textColor.withValues(alpha: 0.75),
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -371,7 +371,7 @@ class _TabRow extends StatelessWidget {
                           subtitle,
                           style: TextStyle(
                             fontSize: 11,
-                            color: textColor.withOpacity(0.35),
+                            color: textColor.withValues(alpha: 0.35),
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -403,7 +403,7 @@ class _TabRow extends StatelessWidget {
                     child: Icon(
                       Icons.close,
                       size: 16,
-                      color: textColor.withOpacity(0.25),
+                      color: textColor.withValues(alpha: 0.25),
                     ),
                   ),
                 ),

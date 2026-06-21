@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 /// Cached desktop user-agent string fetched from the active BrowserEngine.
 String? _cachedEngineUa;
 
