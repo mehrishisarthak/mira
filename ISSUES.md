@@ -1,0 +1,113 @@
+# MIRA — Issue Tracker
+
+> **Living document.** Single source of truth for known issues, fixes, and
+> dismissed findings. Supersedes and replaces the prior scattered audit files
+> (`audit_report.md`, `definitive_audit_report.md`, `MIRA_DEFINITIVE_AUDIT.md`,
+> `ISSUES_AUDIT.md`, `FULL_CODEBASE_VALIDATOR_REPORT.md`), all now deleted.
+>
+> **Last updated:** 2026-06-21
+> **Legend:** 🔴 high · 🟠 medium · 🟡 low · ⚪ info/cosmetic · ✅ done · 🟣 done, PR open · ❌ rejected
+
+---
+
+## OPEN
+
+### Security / Privacy
+| ID | Sev | Issue | Location | Notes |
+|----|----|-------|----------|-------|
+| O-01 | 🔴 | **Verify ghost/incognito cookie isolation on Android.** Clearing goes through the *global* `CookieManager`/`WebStorageManager`; Android incognito doesn't guarantee a separate cookie jar. | `in_app_webview_engine.dart:243-250` | Test on-device that a ghost cookie isn't visible to a normal tab, and a ghost clear can't nuke the main profile. Highest-value privacy item. |
+| O-02 | 🟠 | **No navigation scheme allow-list** (defense-in-depth). `shouldOverrideUrlLoading` returns `ALLOW` unconditionally; relies on WebView defaults to refuse `file://`/`intent://`/`javascript:`/`data:`. | `in_app_webview_engine.dart:306` | Add an allow-list (`http/https/about/blob`), hand off `mailto:`/`tel:` to OS, drop the rest. Hardening, not a confirmed exploit. |
+| O-03 | 🟡 | **Excessive Android storage perms** + `requestLegacyExternalStorage="true"` (disables scoped storage). | `AndroidManifest.xml:12,13,22` | Downloads now use app-scoped `getDownloadsDirectory()`; likely removable. Contradicts privacy brand. |
+| O-04 | 🟡 | `saved_tabs` (normal-tab URLs/titles) stored as **plaintext** SharedPreferences. | `preferences_service.dart` | Ghost mode is correctly ephemeral; consider `flutter_secure_storage` for normal tabs if "privacy" is a hard claim. |
+
+### Performance
+| ID | Sev | Issue | Location | Notes |
+|----|----|-------|----------|-------|
+| O-05 | 🟠 | **`main()` blocks first frame**: awaits 285 KB / 2,486-rule blocklist `jsonDecode` + UA platform-channel fetch before `runApp`. | `main.dart:29-41` | Parse via `compute()` off-isolate; defer UA fetch to a post-`runApp` callback. |
+| O-06 | 🟡 | `BrowserView.build` watches the whole tab list; rebuilds the full `Stack` on every title/url tick. | `browser_view.dart:51` | `.select` to `(tab ids, activeIndex)` so heavy rebuild only fires on add/remove/switch. |
+| O-07 | 🟡 | `Mainscreen.build` still watches broad slices (`tabsProvider`, `ghostTabsProvider` for count, full `bookmarksProvider`). | `mainscreen.dart:330-342` | Derive `tabCountProvider` / `isCurrentUrlBookmarkedProvider` and `.select`. (Progress watch already fixed — see D-10.) |
+| O-08 | 🟡 | Desktop find bar re-injects a 175-line JS library on every keystroke / Next. | `desktop_find_bar.dart:193` | Inject the library once on open (flag), then only the command. Desktop only. |
+| O-09 | 🟡 | `tab_notifier` persists to SharedPreferences on every url/title event. | `tab_notifier.dart` | Verify the existing debounce covers this; if not, persist only on `loadStop` + tab actions. |
+
+### Memory / Lifecycle
+| ID | Sev | Issue | Location | Notes |
+|----|----|-------|----------|-------|
+| O-10 | 🟠 | **`_engineEventsSubscriptionProvider` is a non-`autoDispose` family** keyed by engine; entries accumulate one per engine ever activated. | `browser_side_effects.dart:21` | Make it `autoDispose.family` + `ref.onDispose(sub.cancel)`. |
+| O-11 | 🟡 | Force-kill tab loss: 500 ms save debounce + only `resumed` lifecycle handled → pending tab state lost on OS kill. *(unverified)* | `tab_notifier.dart`, `mainscreen.dart:122` | Flush `saved_tabs` on `paused`/`detached`. |
+| O-12 | 🟡 | Unawaited prefs setters can silently swallow write failures → in-memory vs disk divergence. *(unverified)* | `*_notifier.dart`, `preferences_service.dart` | Low; consider surfacing/logging write errors. |
+
+### Bugs
+| ID | Sev | Issue | Location | Notes |
+|----|----|-------|----------|-------|
+| O-13 | 🟠 | **History recorded only on `titleChanged`**, not `loadStop`; SPAs/error pages with no title change get no history entry, and it keys off active-tab url at event time. | `browser_side_effects.dart:44-49` | Record on `loadStop`; pass url with the event. |
+| O-14 | 🟡 | `activeUrlProvider` returns `tabsState.activeTab.url`, and `activeTab` **throws** on empty tabs. | `tab_notifier.dart:17,249` | Use `safeActiveTab?.url ?? ''`. Narrow (transient empty-tabs window) but real. |
+| O-15 | 🟡 | `isForMainFrame ?? true` → a subframe (blocked-ad) error can trigger the full-screen error page. | `in_app_webview_engine.dart:386` | Default ambiguous case to `false`. Especially with ad-block on. |
+| O-16 | 🟡 | `_performSearch` guards empty but **not whitespace-only** input → searches for `""`. *(verify against current `value.trim().isEmpty` guard)* | `mainscreen.dart:171` | Appears partly addressed; confirm. |
+| O-17 | 🟡 | Desktop "resume"/"retry" deletes the partial and restarts from byte 0 (no HTTP `Range`). | `download_service_desktop.dart:127-130` | Rename to "restart" or implement range-resume. Desktop. |
+| O-18 | 🟡 | Desktop download has no timeout — a slow-loris server holds the handle indefinitely. *(unverified)* | `download_service_desktop.dart` | Add `.timeout(...)`. Desktop. |
+| O-19 | 🟡 | `_isNewerVersion` maps non-numeric semver segments to 0 → pre-release tags (`v2.0.0-beta.1`) mis-compared, updates silently skipped. *(unverified)* | `update_service.dart` | Strip prefixes / parse semver properly. |
+| O-20 | 🟡 | Isar lazy-init has a race window between null-check and `Isar.open`. *(unverified)* | `isar_database_repository.dart` | Guard with a `Completer`. |
+
+### Code health / Cleanup
+| ID | Sev | Issue | Location | Notes |
+|----|----|-------|----------|-------|
+| O-21 | 🟡 | **Zero tests** for hibernation LRU, ghost tabs, `reorderTab`, `_isValidUrl`, side-effect engine sync, download notifiers, Isar repos. No integration tests. | `test/` | Pure deterministic units (LRU, reorder, url-routing) are cheapest/highest-value first. |
+| O-22 | 🟡 | Magic-string port name `'mira_download_port'` duplicated vs `DownloadManager.portName`. | `download_service_mobile.dart:33-37` | Import and reuse the constant. |
+| O-23 | 🟡 | Unchecked isolate payload `data[0..2]` (no length/type guard). | `download_service_mobile.dart:40-42` | `if (data is List && data.length >= 3)`. |
+| O-24 | 🟡 | Dead code: `searchProvider` / `SearchNotifier` / `Search` entity unused. | `search_notifier.dart`, `search_entity.dart` | Deletable. |
+| O-25 | 🟡 | Orphaned import: `history_notifier` no longer referenced in `mainscreen`. | `mainscreen.dart` | Remove import. |
+| O-26 | 🟡 | Abstract `BrowserEngine.create()` factory imports the concrete `InAppWebViewEngine` (DIP violation). | `browser_engine_blueprints.dart` | Inject via a `shell/` provider instead. |
+| O-27 | 🟡 | `ghost_notifier.dart` is a kitchen sink (7 providers incl. engine lifecycle). | `ghost_notifier.dart` | Split into ghost-state / active-tab / engine-factory files. |
+| O-28 | ⚪ | Dead 37-byte re-export shim `lib/pages/browser_view.dart` (`export 'browser/browser_view.dart';`), imported by nothing. | `lib/pages/browser_view.dart` | Delete. |
+| O-29 | ⚪ | Typo: `skelleton_loader.dart` → `skeleton_loader.dart`. | `lib/pages/skelleton_loader.dart` | Rename. |
+| O-30 | ⚪ | `mocktail` dev-dep declared but unused; `flutter_lints` only, no strict rules. | `pubspec.yaml`, `analysis_options.yaml` | Consider stricter lints (`unawaited_futures`, etc.). |
+| O-31 | ⚪ | Isar 3 is in community maintenance — long-term dependency risk to track. | — | Strategic, not a defect. |
+
+---
+
+## DONE (this session)
+
+### Merged to `master`
+| ID | Item |
+|----|------|
+| D-01 | Weekly OTA tracker-blocklist pipeline (GitHub Actions + sha256-verified client + bundled fallback) |
+| D-02 | GitHub Actions bumped to Node 24 (checkout v5 / setup-python v6 / action-gh-release v3) |
+| D-03 | Onboarding first-run flag routed through `PreferencesService` |
+| D-04 | "Download started" snackbar with VIEW → Downloads on the main download path |
+| D-05 | Android notification-permission result captured/logged (download no longer silently un-notified) |
+| D-06 | Mobile live-WebView cap 10 → 4 (memory/lag creep) |
+| D-07 | Content-blocker list memoized (no rebuild of ~2.5k rules per settings change) |
+
+### Fixed, PR open
+| ID | Item | Branch |
+|----|------|--------|
+| D-08 | 🟣 Skeleton shimmer paused when not loading (`TickerMode`) — killed a perpetual ~60fps repaint | `fix/skeleton-perpetual-anim` |
+| D-09 | 🟣 Open downloaded files via `open_filex` by path (replaces flaky `FlutterDownloader.open`; also fixes saved-pages) | `fix/open-downloaded-file` |
+| D-10 | 🟣 Extracted `BrowserProgressBar`; `Mainscreen` no longer full-rebuilds on every progress tick | `fix/mainscreen-progress-rebuild` |
+| D-11 | 🟣 Firebase-free speed-dial plan doc | `docs/speeddial-plan` |
+
+### Verified already-fixed (found resolved during audit triage — no action)
+- `CustomErrorScreen` is rendered on `webError` (`browser_view.dart`).
+- `HistoryNotifier` & `BookmarksNotifier` cancel their stream subscriptions in `dispose()`.
+- `UpdateScreen` "Skip" passes `nextScreen` (no crash/exit).
+- History tap guards against double-`https://`.
+- Bookmarks respect ghost mode (route to `ghostTabsProvider`).
+- `HibernatedTabPlaceholder` uses `ref.watch(themeProvider)` (live theme).
+- Ad-block toggle updates live WebViews (`updateSettings` sets `contentBlockers`).
+- Location/camera flags applied to the WebView (`geolocationEnabled`, `onPermissionRequest`).
+
+---
+
+## ❌ REJECTED / NOT-A-BUG (documented so they aren't re-raised)
+
+| Claim (from old reports) | Why dismissed |
+|---|---|
+| OTA source URL is `nicepkg/aspect-ratio` | **Hallucination.** Real URLs are `github.com/mehrishisarthak/mira/releases/...` |
+| OTA file written to world-readable `systemTemp` | **False.** Written to `getApplicationSupportDirectory()` (sandboxed) |
+| `DownloadsNotifier` runs a 600 ms `Timer.periodic` forever (battery) | **False.** `grep Timer.periodic lib/` → none; mobile uses the isolate-port bridge |
+| `DownloadsNotifier` creates a new `IsarDownloadRepository` per read | **False.** Repo is injected (optional/nullable) |
+| Test suite is one `1+1==2` test | **False.** 3 real test files incl. the strong `adblock_ota_test.dart` |
+| `SafeArea(bottom: false)` is a notch bug | **By design** — bottom bar handles its own inset (`MediaQuery.padding.bottom`) |
+| `_lastAutoHealAt` resets on rebuild | **False.** `State` fields survive rebuilds |
+| `_isValidUrl` routing spaced input to search is a bug | **Correct behavior** (Chrome/Firefox do the same) |
+| Cleartext traffic enabled = HIGH vuln | **Necessary** for a browser to load HTTP sites; Dart-level OTA/update calls are already HTTPS + sha256-verified |
