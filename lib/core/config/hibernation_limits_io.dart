@@ -11,5 +11,9 @@ int maxAliveWebViewTabs() {
   if (Platform.isMacOS || Platform.isLinux) {
     return 64;
   }
-  return 10;
+  // Mobile: each live WebView is a heavy native instance carrying the full
+  // content-blocker list. Keep a small LRU working set so memory/CPU don't
+  // creep up as tabs accumulate; older tabs hibernate to a lightweight
+  // placeholder and reload on focus.
+  return 4;
 }
