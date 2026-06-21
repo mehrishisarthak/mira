@@ -1,11 +1,9 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:mira/core/entities/theme_entity.dart';
-import 'package:mira/core/notifiers/ghost_notifier.dart';
 import 'package:mira/core/notifiers/security_notifier.dart';
 import 'package:mira/core/notifiers/theme_notifier.dart';
 import 'package:mira/core/providers/adblock_provider.dart';
@@ -70,7 +68,7 @@ class _SecurityPanel extends ConsumerWidget {
               width: 36,
               height: 4,
               decoration: BoxDecoration(
-                color: textColor.withOpacity(0.12),
+                color: textColor.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -109,7 +107,7 @@ class _SecurityPanel extends ConsumerWidget {
                             : 'Connection is not secure',
                         style: TextStyle(
                           fontSize: 12,
-                          color: securityColor.withOpacity(0.8),
+                          color: securityColor.withValues(alpha: 0.8),
                         ),
                       ),
                     ],
@@ -119,7 +117,7 @@ class _SecurityPanel extends ConsumerWidget {
             ),
 
             const SizedBox(height: 24),
-            Divider(height: 1, color: textColor.withOpacity(0.08)),
+            Divider(height: 1, color: textColor.withValues(alpha: 0.08)),
             const SizedBox(height: 8),
           ] else
             const SizedBox(height: 12),
@@ -131,7 +129,7 @@ class _SecurityPanel extends ConsumerWidget {
               'PERMISSIONS',
               style: GoogleFonts.jetBrainsMono(
                 fontSize: 10,
-                color: textColor.withOpacity(0.35),
+                color: textColor.withValues(alpha: 0.35),
                 letterSpacing: 2.5,
               ),
             ),
@@ -164,7 +162,7 @@ class _SecurityPanel extends ConsumerWidget {
           ),
 
           const SizedBox(height: 8),
-          Divider(height: 1, color: textColor.withOpacity(0.08)),
+          Divider(height: 1, color: textColor.withValues(alpha: 0.08)),
           const SizedBox(height: 8),
 
           // Desktop mode row
@@ -184,7 +182,7 @@ class _SecurityPanel extends ConsumerWidget {
           ),
 
           const SizedBox(height: 8),
-          Divider(height: 1, color: textColor.withOpacity(0.08)),
+          Divider(height: 1, color: textColor.withValues(alpha: 0.08)),
           const SizedBox(height: 8),
 
           Padding(
@@ -193,7 +191,7 @@ class _SecurityPanel extends ConsumerWidget {
               'PRIVACY',
               style: GoogleFonts.jetBrainsMono(
                 fontSize: 10,
-                color: textColor.withOpacity(0.35),
+                color: textColor.withValues(alpha: 0.35),
                 letterSpacing: 2.5,
               ),
             ),
@@ -247,14 +245,14 @@ class _PermissionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color statusColor = isSwitch
-        ? (switchValue ? (accentColor ?? Colors.greenAccent) : textColor.withOpacity(0.3))
+        ? (switchValue ? (accentColor ?? Colors.greenAccent) : textColor.withValues(alpha: 0.3))
         : (isBlocked ? Colors.greenAccent : Colors.orangeAccent);
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: textColor.withOpacity(0.5)),
+          Icon(icon, size: 18, color: textColor.withValues(alpha: 0.5)),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -282,7 +280,7 @@ class _PermissionRow extends StatelessWidget {
             Switch(
               value: switchValue,
               onChanged: onToggle,
-              activeColor: accentColor ?? Colors.greenAccent,
+              activeThumbColor: accentColor ?? Colors.greenAccent,
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
             )
           else
@@ -292,10 +290,10 @@ class _PermissionRow extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.1),
+                  color: statusColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: statusColor.withOpacity(0.3),
+                    color: statusColor.withValues(alpha: 0.3),
                     width: 1,
                   ),
                 ),

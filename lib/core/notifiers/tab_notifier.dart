@@ -247,5 +247,7 @@ final tabsProvider = StateNotifierProvider<TabsNotifier, TabsState>((ref) {
 // --- 4. HELPER ---
 final activeUrlProvider = Provider<String>((ref) {
   final tabsState = ref.watch(tabsProvider);
-  return tabsState.activeTab.url;
+  // safeActiveTab avoids a StateError crash during the transient empty-tabs
+  // window (e.g. mid-nuke before the blank tab is added).
+  return tabsState.safeActiveTab?.url ?? '';
 });

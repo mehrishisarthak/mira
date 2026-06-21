@@ -228,7 +228,7 @@ class _SplashScreenState extends State<SplashScreen>
                     'YOUR WEB.  YOUR RULES.',
                     style: GoogleFonts.jetBrainsMono(
                       fontSize: 10,
-                      color: Colors.white.withOpacity(0.28),
+                      color: Colors.white.withValues(alpha: 0.28),
                       letterSpacing: 3.2,
                       fontWeight: FontWeight.w400,
                     ),
@@ -284,7 +284,7 @@ class _ScanLinePainter extends CustomPainter {
       Rect.fromCenter(
           center: Offset(x, size.height / 2), width: 28, height: size.height),
       Paint()
-        ..color = color.withOpacity(0.07)
+        ..color = color.withValues(alpha: 0.07)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 14),
     );
 
@@ -297,10 +297,10 @@ class _ScanLinePainter extends CustomPainter {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            color.withOpacity(0.0),
-            color.withOpacity(0.85),
-            color.withOpacity(0.85),
-            color.withOpacity(0.0),
+            color.withValues(alpha: 0.0),
+            color.withValues(alpha: 0.85),
+            color.withValues(alpha: 0.85),
+            color.withValues(alpha: 0.0),
           ],
           stops: const [0.0, 0.18, 0.82, 1.0],
         ).createShader(rect),

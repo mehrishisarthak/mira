@@ -131,7 +131,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen>
                     child: Text(
                       'SKIP',
                       style: GoogleFonts.jetBrainsMono(
-                        color: Colors.white.withOpacity(0.3),
+                        color: Colors.white.withValues(alpha: 0.3),
                         fontSize: 11,
                         letterSpacing: 2,
                         fontWeight: FontWeight.w500,
@@ -165,7 +165,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen>
                           decoration: BoxDecoration(
                             color: isActive
                                 ? Colors.greenAccent
-                                : Colors.white.withOpacity(0.2),
+                                : Colors.white.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(3),
                           ),
                         );
@@ -269,7 +269,7 @@ class _BgPainter extends CustomPainter {
         Offset(cx, cy),
         r,
         Paint()
-          ..color = Colors.greenAccent.withOpacity(opacity)
+          ..color = Colors.greenAccent.withValues(alpha: opacity)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1.0,
       );
@@ -279,7 +279,7 @@ class _BgPainter extends CustomPainter {
     canvas.drawCircle(
       Offset(cx, cy),
       3 + t * 1.5,
-      Paint()..color = Colors.greenAccent.withOpacity(0.6),
+      Paint()..color = Colors.greenAccent.withValues(alpha: 0.6),
     );
   }
 
@@ -301,7 +301,7 @@ class _BgPainter extends CustomPainter {
       canvas.drawCircle(
         Offset(x, y),
         r,
-        Paint()..color = Colors.white.withOpacity(opacity),
+        Paint()..color = Colors.white.withValues(alpha: opacity),
       );
     }
   }
@@ -309,7 +309,7 @@ class _BgPainter extends CustomPainter {
   // Page 2 — static geometric grid (structure / control)
   void _paintShield(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.greenAccent.withOpacity(0.04 + t * 0.03)
+      ..color = Colors.greenAccent.withValues(alpha: 0.04 + t * 0.03)
       ..strokeWidth = 1.0
       ..style = PaintingStyle.stroke;
 
@@ -327,7 +327,7 @@ class _BgPainter extends CustomPainter {
       Offset(0, scanY),
       Offset(size.width, scanY),
       Paint()
-        ..color = Colors.greenAccent.withOpacity(0.18)
+        ..color = Colors.greenAccent.withValues(alpha: 0.18)
         ..strokeWidth = 1.5,
     );
   }
@@ -379,7 +379,7 @@ class _PageContent extends StatelessWidget {
             d.eyebrow,
             style: GoogleFonts.jetBrainsMono(
               fontSize: 10,
-              color: Colors.greenAccent.withOpacity(0.7),
+              color: Colors.greenAccent.withValues(alpha: 0.7),
               letterSpacing: 3.5,
               fontWeight: FontWeight.w500,
             ),
@@ -406,7 +406,7 @@ class _PageContent extends StatelessWidget {
             d.body,
             style: GoogleFonts.jetBrainsMono(
               fontSize: 13,
-              color: Colors.white.withOpacity(0.45),
+              color: Colors.white.withValues(alpha: 0.45),
               height: 1.65,
               letterSpacing: 0.1,
             ),
@@ -441,10 +441,10 @@ class _NextButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.06),
+          color: Colors.white.withValues(alpha: 0.06),
           borderRadius: BorderRadius.circular(30),
           border: Border.all(
-            color: Colors.white.withOpacity(0.12),
+            color: Colors.white.withValues(alpha: 0.12),
             width: 1,
           ),
         ),
@@ -455,7 +455,7 @@ class _NextButton extends StatelessWidget {
               'NEXT',
               style: GoogleFonts.jetBrainsMono(
                 fontSize: 12,
-                color: Colors.white.withOpacity(0.85),
+                color: Colors.white.withValues(alpha: 0.85),
                 letterSpacing: 2.5,
                 fontWeight: FontWeight.w600,
               ),

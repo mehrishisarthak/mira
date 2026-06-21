@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mira/core/entities/tab_entity.dart';
 import 'package:mira/core/notifiers/ghost_notifier.dart';
 import 'package:mira/core/notifiers/tab_notifier.dart';
 import 'package:mira/core/services/browser_engine_blueprints.dart';

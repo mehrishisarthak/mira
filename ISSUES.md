@@ -40,8 +40,6 @@
 | ID | Sev | Issue | Location | Notes |
 |----|----|-------|----------|-------|
 | O-13 | 🟠 | **History recorded only on `titleChanged`**, not `loadStop`; SPAs/error pages with no title change get no history entry, and it keys off active-tab url at event time. | `browser_side_effects.dart:44-49` | Record on `loadStop`; pass url with the event. |
-| O-14 | 🟡 | `activeUrlProvider` returns `tabsState.activeTab.url`, and `activeTab` **throws** on empty tabs. | `tab_notifier.dart:17,249` | Use `safeActiveTab?.url ?? ''`. Narrow (transient empty-tabs window) but real. |
-| O-15 | 🟡 | `isForMainFrame ?? true` → a subframe (blocked-ad) error can trigger the full-screen error page. | `in_app_webview_engine.dart:386` | Default ambiguous case to `false`. Especially with ad-block on. |
 | O-17 | 🟡 | Desktop "resume"/"retry" deletes the partial and restarts from byte 0 (no HTTP `Range`). | `download_service_desktop.dart:127-130` | Rename to "restart" or implement range-resume. Desktop. |
 | O-18 | 🟡 | Desktop download has no timeout — a slow-loris server holds the handle indefinitely. *(unverified)* | `download_service_desktop.dart` | Add `.timeout(...)`. Desktop. |
 | O-19 | 🟡 | `_isNewerVersion` maps non-numeric semver segments to 0 → pre-release tags (`v2.0.0-beta.1`) mis-compared, updates silently skipped. *(unverified)* | `update_service.dart` | Strip prefixes / parse semver properly. |
@@ -55,6 +53,8 @@
 | O-27 | 🟡 | `ghost_notifier.dart` is a kitchen sink (7 providers incl. engine lifecycle). | `ghost_notifier.dart` | Split into ghost-state / active-tab / engine-factory files. |
 | O-30 | ⚪ | `mocktail` dev-dep declared but unused; `flutter_lints` only, no strict rules. | `pubspec.yaml`, `analysis_options.yaml` | Consider stricter lints (`unawaited_futures`, etc.). |
 | O-31 | ⚪ | Isar 3 is in community maintenance — long-term dependency risk to track. | — | Strategic, not a defect. |
+| O-34 | ⚪ | Deprecated `Radio` API (`groupValue`/`onChanged`) — needs migration to a `RadioGroup` ancestor (behavior-sensitive). | `browser_sheet.dart:62-63` | Real refactor, not a one-liner. |
+| O-35 | ⚪ | Unused local `seedY` — can't just delete (its `rng.nextDouble()` advances the RNG; removing it changes the particle animation). | `onboarding_screen.dart:291` | Reorder so the consumed value is actually used, or accept the warning. |
 
 ### Refactor — large / "god" files
 Files carrying too many responsibilities; split for testability and readability (refactors, not defects).
@@ -92,6 +92,9 @@ Files carrying too many responsibilities; split for testability and readability 
 | D-14 | Deleted dead `lib/core/entities/search_entity.dart` (`class Search`, unused) (was O-24) |
 | D-15 | Deleted dead re-export shim `lib/pages/browser_view.dart` (was O-28) |
 | D-16 | Renamed `skelleton_loader.dart` → `skeleton_loader.dart` (was O-29) |
+| D-17 | `activeUrlProvider` uses `safeActiveTab?.url ?? ''` — no crash on empty tabs (was O-14) |
+| D-18 | `isForMainFrame ?? false` — subframe errors no longer trigger the full-screen error page (was O-15) |
+| D-19 | Migrated all 63 `withOpacity()` → `withValues(alpha:)` (6 files); removed unused imports, dead `_onTap`, `dart:typed_data`; `activeColor` → `activeThumbColor`. Analyzer **74 → 3 issues, 0 errors** (remaining 3 = O-34, O-35). |
 
 ### Verified already-fixed (found resolved during audit triage — no action)
 - O-25: `mainscreen` no longer imports `history_notifier` (orphaned import already gone).

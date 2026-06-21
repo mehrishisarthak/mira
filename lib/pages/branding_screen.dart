@@ -86,7 +86,7 @@ class _GhostLandingPageState extends ConsumerState<_GhostLandingPage>
                       builder: (_, __) => Icon(
                         Icons.visibility_outlined,
                         size: 36,
-                        color: Colors.redAccent.withOpacity(_pulse.value * 0.8),
+                        color: Colors.redAccent.withValues(alpha: _pulse.value * 0.8),
                       ),
                     ),
 
@@ -108,7 +108,7 @@ class _GhostLandingPageState extends ConsumerState<_GhostLandingPage>
                       'Browse. Then vanish.',
                       style: GoogleFonts.jetBrainsMono(
                         fontSize: 13,
-                        color: Colors.white.withOpacity(0.35),
+                        color: Colors.white.withValues(alpha: 0.35),
                         letterSpacing: 0.3,
                       ),
                     ),
@@ -133,7 +133,7 @@ class _GhostLandingPageState extends ConsumerState<_GhostLandingPage>
                     ),
 
                     const SizedBox(height: 16),
-                    Divider(color: Colors.white.withOpacity(0.06)),
+                    Divider(color: Colors.white.withValues(alpha: 0.06)),
                     const SizedBox(height: 16),
 
                     _GhostItem(
@@ -154,7 +154,7 @@ class _GhostLandingPageState extends ConsumerState<_GhostLandingPage>
                       'QUICK START',
                       style: GoogleFonts.jetBrainsMono(
                         fontSize: 10,
-                        color: Colors.white.withOpacity(0.25),
+                        color: Colors.white.withValues(alpha: 0.25),
                         letterSpacing: 3,
                       ),
                     ),
@@ -214,8 +214,8 @@ class _GhostItem extends StatelessWidget {
             icon,
             size: 16,
             color: protected
-                ? Colors.redAccent.withOpacity(0.7)
-                : Colors.white.withOpacity(0.2),
+                ? Colors.redAccent.withValues(alpha: 0.7)
+                : Colors.white.withValues(alpha: 0.2),
           ),
           const SizedBox(width: 14),
           Text(
@@ -223,8 +223,8 @@ class _GhostItem extends StatelessWidget {
             style: GoogleFonts.jetBrainsMono(
               fontSize: 13,
               color: protected
-                  ? Colors.white.withOpacity(0.75)
-                  : Colors.white.withOpacity(0.22),
+                  ? Colors.white.withValues(alpha: 0.75)
+                  : Colors.white.withValues(alpha: 0.22),
               height: 1.4,
             ),
           ),
@@ -263,15 +263,15 @@ class _QuickLaunchChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          border: Border.all(color: Colors.redAccent.withOpacity(0.25)),
+          border: Border.all(color: Colors.redAccent.withValues(alpha: 0.25)),
           borderRadius: BorderRadius.circular(20),
-          color: Colors.redAccent.withOpacity(0.05),
+          color: Colors.redAccent.withValues(alpha: 0.05),
         ),
         child: Text(
           label,
           style: GoogleFonts.jetBrainsMono(
             fontSize: 12,
-            color: Colors.white.withOpacity(0.55),
+            color: Colors.white.withValues(alpha: 0.55),
             letterSpacing: 0.2,
           ),
         ),
@@ -334,7 +334,7 @@ class _NormalSpeedDial extends ConsumerWidget {
                       'Where to?',
                       style: GoogleFonts.jetBrainsMono(
                         fontSize: 13,
-                        color: textColor.withOpacity(0.35),
+                        color: textColor.withValues(alpha: 0.35),
                         letterSpacing: 0.2,
                       ),
                     ),
@@ -422,13 +422,6 @@ class _DialTileState extends State<_DialTile>
     super.dispose();
   }
 
-  void _onTap() async {
-    HapticFeedback.lightImpact();
-    await _tapCtrl.forward();
-    await _tapCtrl.reverse();
-    widget.ref.read(tabsProvider.notifier).updateUrl(widget.data.url);
-  }
-
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -443,10 +436,10 @@ class _DialTileState extends State<_DialTile>
         scale: _scale,
         child: Container(
           decoration: BoxDecoration(
-            color: widget.accent.withOpacity(0.06),
+            color: widget.accent.withValues(alpha: 0.06),
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
-              color: widget.accent.withOpacity(0.12),
+              color: widget.accent.withValues(alpha: 0.12),
               width: 1,
             ),
           ),
@@ -456,14 +449,14 @@ class _DialTileState extends State<_DialTile>
               Icon(
                 widget.data.icon,
                 size: 28,
-                color: widget.textColor.withOpacity(0.75),
+                color: widget.textColor.withValues(alpha: 0.75),
               ),
               const SizedBox(height: 8),
               Text(
                 widget.data.label,
                 style: GoogleFonts.jetBrainsMono(
                   fontSize: 10,
-                  color: widget.textColor.withOpacity(0.5),
+                  color: widget.textColor.withValues(alpha: 0.5),
                   fontWeight: FontWeight.w500,
                   letterSpacing: 0.2,
                 ),
