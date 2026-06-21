@@ -6,7 +6,7 @@
 > `ISSUES_AUDIT.md`, `FULL_CODEBASE_VALIDATOR_REPORT.md`), all now deleted.
 >
 > **Last updated:** 2026-06-21
-> **Legend:** 🔴 high · 🟠 medium · 🟡 low · ⚪ info/cosmetic · ✅ done · 🟣 done, PR open · ❌ rejected
+> **Legend:** 🔴 high · 🟠 medium · 🟡 low · ⚪ info/cosmetic · ✅ done · ❌ rejected
 
 ---
 
@@ -42,7 +42,6 @@
 | O-13 | 🟠 | **History recorded only on `titleChanged`**, not `loadStop`; SPAs/error pages with no title change get no history entry, and it keys off active-tab url at event time. | `browser_side_effects.dart:44-49` | Record on `loadStop`; pass url with the event. |
 | O-14 | 🟡 | `activeUrlProvider` returns `tabsState.activeTab.url`, and `activeTab` **throws** on empty tabs. | `tab_notifier.dart:17,249` | Use `safeActiveTab?.url ?? ''`. Narrow (transient empty-tabs window) but real. |
 | O-15 | 🟡 | `isForMainFrame ?? true` → a subframe (blocked-ad) error can trigger the full-screen error page. | `in_app_webview_engine.dart:386` | Default ambiguous case to `false`. Especially with ad-block on. |
-| O-16 | 🟡 | `_performSearch` guards empty but **not whitespace-only** input → searches for `""`. *(verify against current `value.trim().isEmpty` guard)* | `mainscreen.dart:171` | Appears partly addressed; confirm. |
 | O-17 | 🟡 | Desktop "resume"/"retry" deletes the partial and restarts from byte 0 (no HTTP `Range`). | `download_service_desktop.dart:127-130` | Rename to "restart" or implement range-resume. Desktop. |
 | O-18 | 🟡 | Desktop download has no timeout — a slow-loris server holds the handle indefinitely. *(unverified)* | `download_service_desktop.dart` | Add `.timeout(...)`. Desktop. |
 | O-19 | 🟡 | `_isNewerVersion` maps non-numeric semver segments to 0 → pre-release tags (`v2.0.0-beta.1`) mis-compared, updates silently skipped. *(unverified)* | `update_service.dart` | Strip prefixes / parse semver properly. |
@@ -77,14 +76,10 @@
 | D-05 | Android notification-permission result captured/logged (download no longer silently un-notified) |
 | D-06 | Mobile live-WebView cap 10 → 4 (memory/lag creep) |
 | D-07 | Content-blocker list memoized (no rebuild of ~2.5k rules per settings change) |
-
-### Fixed, PR open
-| ID | Item | Branch |
-|----|------|--------|
-| D-08 | 🟣 Skeleton shimmer paused when not loading (`TickerMode`) — killed a perpetual ~60fps repaint | `fix/skeleton-perpetual-anim` |
-| D-09 | 🟣 Open downloaded files via `open_filex` by path (replaces flaky `FlutterDownloader.open`; also fixes saved-pages) | `fix/open-downloaded-file` |
-| D-10 | 🟣 Extracted `BrowserProgressBar`; `Mainscreen` no longer full-rebuilds on every progress tick | `fix/mainscreen-progress-rebuild` |
-| D-11 | 🟣 Firebase-free speed-dial plan doc | `docs/speeddial-plan` |
+| D-08 | Skeleton shimmer paused when not loading (`TickerMode`) — killed a perpetual ~60fps repaint |
+| D-09 | Open downloaded files via `open_filex` by path (replaces flaky `FlutterDownloader.open`; also fixes saved-pages) |
+| D-10 | Extracted `BrowserProgressBar`; `Mainscreen` no longer full-rebuilds on every progress tick |
+| D-11 | Firebase-free speed-dial plan doc |
 
 ### Verified already-fixed (found resolved during audit triage — no action)
 - `CustomErrorScreen` is rendered on `webError` (`browser_view.dart`).
@@ -95,6 +90,7 @@
 - `HibernatedTabPlaceholder` uses `ref.watch(themeProvider)` (live theme).
 - Ad-block toggle updates live WebViews (`updateSettings` sets `contentBlockers`).
 - Location/camera flags applied to the WebView (`geolocationEnabled`, `onPermissionRequest`).
+- `_performSearch` already guards whitespace-only input via `value.trim().isEmpty` (was O-16).
 
 ---
 
