@@ -29,6 +29,7 @@ class InAppWebViewEngine implements BrowserEngine {
   Map<String, String>? _pendingHeaders;
 
   int _lastProgress = 100;
+  String? _currentUrl;
 
   InAppWebViewEngine({
     bool isPrivate = false,
@@ -352,6 +353,7 @@ class InAppWebViewEngine implements BrowserEngine {
 
   void handleLoadStart(WebUri? url) {
     _lastProgress = 0;
+    _currentUrl = url?.toString();
     _eventController.add(BrowserPageEvent(
       type: BrowserPageEventType.loadStart,
       url: url?.toString(),
@@ -360,6 +362,7 @@ class InAppWebViewEngine implements BrowserEngine {
 
   void handleLoadStop(WebUri? url) {
     _lastProgress = 100;
+    _currentUrl = url?.toString();
     _eventController.add(BrowserPageEvent(
       type: BrowserPageEventType.loadStop,
       url: url?.toString(),
@@ -375,9 +378,12 @@ class InAppWebViewEngine implements BrowserEngine {
   }
 
   void handleTitleChanged(String? title) {
+    // Stamp the current url so the history-title refiner keys off the page the
+    // title actually belongs to, not whatever tab is active when this lands.
     _eventController.add(BrowserPageEvent(
       type: BrowserPageEventType.titleChanged,
       title: title,
+      url: _currentUrl,
     ));
   }
 

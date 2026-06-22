@@ -17,61 +17,76 @@ import 'package:mira/pages/browser_chrome_providers.dart';
 import 'package:mira/pages/main_screen/main_screen_security.dart';
 
 /// Provider that manages the stream subscription for a given [BrowserEngine].
-/// It ensures that we only have one listener per engine and that it's properly
-/// disposed when the engine is no longer active or the provider is disposed.
-final _engineEventsSubscriptionProvider = Provider.family<void, BrowserEngine>((ref, engine) {
+/// autoDispose so the family entry — and its `pageEvents` subscription — is torn
+/// down once the engine is de-activated (no longer watched). Without autoDispose
+/// the family caches one live subscription per engine ever activated, leaking
+/// across tab churn even though the onDispose teardown below was already correct.
+final _engineEventsSubscriptionProvider =
+    Provider.autoDispose.family<void, BrowserEngine>((ref, engine) {
   final subscription = engine.pageEvents.listen((event) {
-    final notifier = ref.read(browserChromeProvider.notifier);
-    switch (event.type) {
-      case BrowserPageEventType.loadStart:
-        notifier.clearWebError();
-        notifier.setLoadingProgress(0);
-        if (event.url != null) {
-          _updateTabUrl(ref, event.url!);
-        }
-        break;
-      case BrowserPageEventType.loadStop:
-        notifier.setLoadingProgress(100);
-        if (event.url != null) {
-          _updateTabUrl(ref, event.url!);
-        }
-        break;
-      case BrowserPageEventType.progressChanged:
-        if (event.progress != null) {
-          notifier.setLoadingProgress(event.progress!);
-        }
-        break;
-      case BrowserPageEventType.titleChanged:
-        if (event.title != null) {
-          _updateTabTitle(ref, event.title!);
-          _updateHistoryTitle(ref, event.title!);
-        }
-        break;
-      case BrowserPageEventType.error:
-        notifier.setWebError(event.errorDescription);
-        break;
-      case BrowserPageEventType.downloadRequested:
-        if (event.downloadRequest != null) {
-          final req = event.downloadRequest!;
-          unawaited(
-            ref.read(downloadsProvider.notifier).startDownload(
-              req.url,
-              filename: req.filename,
-              headers: _parseHeaders(req.cookies),
-            ).catchError((Object e) {
-              debugPrint('MIRA_DOWNLOAD: event handler error -> $e');
-            }),
-          );
-          _showDownloadStartedSnackBar(req.filename);
-        }
-        break;
-    }
+    handleEnginePageEvent(ref, event);
   });
 
   ref.onDispose(() {
     subscription.cancel();
   });
 });
+
+/// Translates a single engine [BrowserPageEvent] into chrome/tab/history state
+/// updates. Extracted from the subscription closure so the mapping can be
+/// unit-tested with a [ProviderContainer] — no live webview required.
+@visibleForTesting
+void handleEnginePageEvent(Ref ref, BrowserPageEvent event) {
+  final notifier = ref.read(browserChromeProvider.notifier);
+  switch (event.type) {
+    case BrowserPageEventType.loadStart:
+      notifier.clearWebError();
+      notifier.setLoadingProgress(0);
+      if (event.url != null) {
+        _updateTabUrl(ref, event.url!);
+      }
+      break;
+    case BrowserPageEventType.loadStop:
+      notifier.setLoadingProgress(100);
+      if (event.url != null) {
+        _updateTabUrl(ref, event.url!);
+        // Record on loadStop (not only titleChanged) so pages that never
+        // change their title — error pages, PDFs, many SPAs — still land in
+        // history. Keyed off the event's own url, immune to a tab switch.
+        _recordHistory(ref, event.url!);
+      }
+      break;
+    case BrowserPageEventType.progressChanged:
+      if (event.progress != null) {
+        notifier.setLoadingProgress(event.progress!);
+      }
+      break;
+    case BrowserPageEventType.titleChanged:
+      if (event.title != null) {
+        _updateTabTitle(ref, event.title!);
+        _updateHistoryTitle(ref, event.url, event.title!);
+      }
+      break;
+    case BrowserPageEventType.error:
+      notifier.setWebError(event.errorDescription);
+      break;
+    case BrowserPageEventType.downloadRequested:
+      if (event.downloadRequest != null) {
+        final req = event.downloadRequest!;
+        unawaited(
+          ref.read(downloadsProvider.notifier).startDownload(
+            req.url,
+            filename: req.filename,
+            headers: _parseHeaders(req.cookies),
+          ).catchError((Object e) {
+            debugPrint('MIRA_DOWNLOAD: event handler error -> $e');
+          }),
+        );
+        _showDownloadStartedSnackBar(req.filename);
+      }
+      break;
+  }
+}
 
 Map<String, String>? _parseHeaders(String? cookies) {
   if (cookies == null || cookies.isEmpty) return null;
@@ -196,10 +211,23 @@ void _updateTabTitle(Ref ref, String title) {
   }
 }
 
-void _updateHistoryTitle(Ref ref, String title) {
-  // Skip in ghost mode — history is not recorded
+/// Records a completed navigation in history. Called on loadStop with the
+/// event's own url so it is correct even if the active tab changed between the
+/// native callback and this handler.
+void _recordHistory(Ref ref, String url) {
+  // Skip in ghost mode — history is not recorded.
   if (ref.read(isGhostModeProvider)) return;
-  final url = ref.read(tabsProvider).safeActiveTab?.url ?? '';
   if (url.isEmpty || url == 'about:blank') return;
+  // Best-effort title; refined by the titleChanged upsert when it arrives.
+  final title = ref.read(tabsProvider).safeActiveTab?.title ?? '';
+  ref.read(historyProvider.notifier).addToHistory(url, title: title);
+}
+
+/// Refines the title of the history entry for [url] (the page the title event
+/// belongs to), not whichever tab happens to be active right now.
+void _updateHistoryTitle(Ref ref, String? url, String title) {
+  // Skip in ghost mode — history is not recorded.
+  if (ref.read(isGhostModeProvider)) return;
+  if (url == null || url.isEmpty || url == 'about:blank') return;
   ref.read(historyProvider.notifier).addToHistory(url, title: title);
 }
