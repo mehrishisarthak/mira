@@ -73,6 +73,25 @@ Compliance/release gates, **separate from the code defects above**. Closing ever
 | R-07 | 🟡 | **Content rating + store listing assets** (screenshots, feature graphic, descriptions) not done. | — (Play Console) | Complete content-rating questionnaire; prepare listing assets. |
 | R-08 | ⚪ | Confirm AAB (not APK) release artifact + versionCode/versionName strategy; 64-bit is handled by Flutter. | `build.gradle.kts` | Standard `flutter build appbundle`; verify signing applies to the AAB. |
 
+### Feature gaps / roadmap
+Missing *capabilities* (not defects) that separate "a reliable browser" from a
+daily-driver competitive with Chrome/DDG/Firefox. **None are bugs** — the `O-*`
+fixes add zero features; these are the second leg of the path. Severity here =
+**daily-use impact**, not defect severity. (Compiled 2026-06-22.)
+
+| ID | Impact | Capability | Notes |
+|----|----|-----------|-------|
+| F-01 | 🔴 | **Address-bar autocomplete / suggestions** — as-you-type dropdown from history, bookmarks, and search-suggest. | The single biggest "feels unfinished" gap. Today the URL bar only routes to a full URL or a search. Privacy angle: prefer local history/bookmark matches; gate remote search-suggest behind a setting. Touches `mainscreen`/`mobile_main_app_bar`/`desktop_browser_chrome`. |
+| F-02 | 🔴 | **Password manager / autofill** — save + fill credentials. | Login-heavy users bounce without it. Needs secure credential storage (ties to O-04 `flutter_secure_storage`) + webview form integration / platform autofill. |
+| F-03 | 🟠 | **Mobile find-in-page.** | Desktop-only today (`desktop_find_bar.dart`). Reuse the desktop JS find logic on mobile (also see O-08 on the inject-once perf fix). |
+| F-04 | 🟠 | **Cross-device sync** (bookmarks / history / open tabs). | High value, heavy: needs an account + backend (or a privacy-preserving E2E sync). Strategic, not a quick win. |
+| F-05 | 🟡 | **Reader mode** (declutter / readability view). | Inject a readability script + a styled reader view. |
+| F-06 | 🟡 | **Translate page.** | Needs a translation backend or on-device model; privacy trade-offs to weigh. |
+| F-07 | 🟡 | **Per-site settings** — cookies / location / camera / JS per origin. | Today these are *global* toggles only; mainstream browsers scope them per site. |
+| F-08 | 🟡 | **Share integration** — share a page out; receive shared URLs/text in (Android `PROCESS_TEXT` query already declared). | Wire share-sheet out + an intent handler for inbound shares. |
+| F-09 | ⚪ | **Desktop extensions.** | Likely **infeasible** on `flutter_inappwebview` (no extension runtime). Strategic/uncertain — track, don't promise. |
+| F-10 | ⚪ | **Tab groups / pinned tabs.** | Nice-to-have organizational depth; basic tabs + reorder already exist. |
+
 ---
 
 ## DONE (this session)
