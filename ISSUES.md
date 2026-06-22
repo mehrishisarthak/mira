@@ -43,7 +43,7 @@
 ### Code health / Cleanup
 | ID | Sev | Issue | Location | Notes |
 |----|----|-------|----------|-------|
-| O-21 | 🟡 | **Sparse tests** for hibernation LRU, ghost tabs, `reorderTab`, `_isValidUrl`, download notifiers, Isar repos. No integration tests. *(Side-effect engine-event mapping now covered — `browser_history_recording_test.dart`, added with D-20.)* | `test/` | Pure deterministic units (LRU, reorder, url-routing) are cheapest/highest-value first. |
+| O-21 | 🟡 | **Sparse tests** — still missing: ghost-tab ops, `_isValidUrl`, download notifiers, Isar repos, integration tests. *(Now covered: side-effect engine-event mapping `browser_history_recording_test.dart` (D-20); semver compare `update_service_version_test.dart` (D-23); hibernation LRU `hibernation_notifier_test.dart` + `reorderTab` `tab_reorder_test.dart`.)* | `test/` | `_isValidUrl` needs extraction from `_MainscreenState` to be unit-testable; Isar repos need the native test harness. |
 | O-26 | 🟡 | Abstract `BrowserEngine.create()` factory imports the concrete `InAppWebViewEngine` (DIP violation). | `browser_engine_blueprints.dart` | Inject via a `shell/` provider instead. |
 | O-27 | 🟡 | `ghost_notifier.dart` is a kitchen sink (7 providers incl. engine lifecycle). | `ghost_notifier.dart` | Split into ghost-state / active-tab / engine-factory files. |
 | O-30 | ⚪ | `mocktail` dev-dep declared but unused; `flutter_lints` only, no strict rules. | `pubspec.yaml`, `analysis_options.yaml` | Consider stricter lints (`unawaited_futures`, etc.). |
