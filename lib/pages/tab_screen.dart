@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:mira/constants/app_fonts.dart';
 
 import 'package:mira/core/entities/tab_entity.dart';
 import 'package:mira/core/entities/theme_entity.dart';
@@ -219,7 +219,7 @@ class _SectionHeader extends StatelessWidget {
           children: [
             Text(
               label,
-              style: GoogleFonts.jetBrainsMono(
+              style: jetBrainsMono(
                 fontSize: 10,
                 color: accent,
                 letterSpacing: 2.5,

@@ -4,7 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:mira/constants/app_fonts.dart';
 
 import 'package:mira/core/entities/theme_entity.dart';
 import 'package:mira/core/services/preferences_service.dart';
@@ -130,7 +130,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen>
                     padding: const EdgeInsets.all(8),
                     child: Text(
                       'SKIP',
-                      style: GoogleFonts.jetBrainsMono(
+                      style: jetBrainsMono(
                         color: Colors.white.withValues(alpha: 0.3),
                         fontSize: 11,
                         letterSpacing: 2,
@@ -377,7 +377,7 @@ class _PageContent extends StatelessWidget {
           // Eyebrow
           Text(
             d.eyebrow,
-            style: GoogleFonts.jetBrainsMono(
+            style: jetBrainsMono(
               fontSize: 10,
               color: Colors.greenAccent.withValues(alpha: 0.7),
               letterSpacing: 3.5,
@@ -390,7 +390,7 @@ class _PageContent extends StatelessWidget {
           // Headline — the hero
           Text(
             d.headline,
-            style: GoogleFonts.jetBrainsMono(
+            style: jetBrainsMono(
               fontSize: 38,
               fontWeight: FontWeight.w700,
               color: Colors.white,
@@ -404,7 +404,7 @@ class _PageContent extends StatelessWidget {
           // Body
           Text(
             d.body,
-            style: GoogleFonts.jetBrainsMono(
+            style: jetBrainsMono(
               fontSize: 13,
               color: Colors.white.withValues(alpha: 0.45),
               height: 1.65,
@@ -453,7 +453,7 @@ class _NextButton extends StatelessWidget {
           children: [
             Text(
               'NEXT',
-              style: GoogleFonts.jetBrainsMono(
+              style: jetBrainsMono(
                 fontSize: 12,
                 color: Colors.white.withValues(alpha: 0.85),
                 letterSpacing: 2.5,
@@ -492,7 +492,7 @@ class _EnterButton extends StatelessWidget {
           children: [
             Text(
               'ENTER MIRA',
-              style: GoogleFonts.jetBrainsMono(
+              style: jetBrainsMono(
                 fontSize: 12,
                 color: kMiraMatteBlack,
                 letterSpacing: 2,

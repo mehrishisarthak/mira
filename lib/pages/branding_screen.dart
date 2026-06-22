@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:mira/constants/app_fonts.dart';
 
 import 'package:mira/core/entities/theme_entity.dart';
 import 'package:mira/core/notifiers/ghost_notifier.dart';
@@ -94,7 +94,7 @@ class _GhostLandingPageState extends ConsumerState<_GhostLandingPage>
 
                     Text(
                       'Ghost\nProtocol.',
-                      style: GoogleFonts.jetBrainsMono(
+                      style: jetBrainsMono(
                         fontSize: 36,
                         fontWeight: FontWeight.w700,
                         color: Colors.white,
@@ -106,7 +106,7 @@ class _GhostLandingPageState extends ConsumerState<_GhostLandingPage>
 
                     Text(
                       'Browse. Then vanish.',
-                      style: GoogleFonts.jetBrainsMono(
+                      style: jetBrainsMono(
                         fontSize: 13,
                         color: Colors.white.withValues(alpha: 0.35),
                         letterSpacing: 0.3,
@@ -152,7 +152,7 @@ class _GhostLandingPageState extends ConsumerState<_GhostLandingPage>
                     // Quick launch buttons
                     Text(
                       'QUICK START',
-                      style: GoogleFonts.jetBrainsMono(
+                      style: jetBrainsMono(
                         fontSize: 10,
                         color: Colors.white.withValues(alpha: 0.25),
                         letterSpacing: 3,
@@ -220,7 +220,7 @@ class _GhostItem extends StatelessWidget {
           const SizedBox(width: 14),
           Text(
             label,
-            style: GoogleFonts.jetBrainsMono(
+            style: jetBrainsMono(
               fontSize: 13,
               color: protected
                   ? Colors.white.withValues(alpha: 0.75)
@@ -269,7 +269,7 @@ class _QuickLaunchChip extends StatelessWidget {
         ),
         child: Text(
           label,
-          style: GoogleFonts.jetBrainsMono(
+          style: jetBrainsMono(
             fontSize: 12,
             color: Colors.white.withValues(alpha: 0.55),
             letterSpacing: 0.2,
@@ -322,7 +322,7 @@ class _NormalSpeedDial extends ConsumerWidget {
                   children: [
                     Text(
                       _greeting(),
-                      style: GoogleFonts.jetBrainsMono(
+                      style: jetBrainsMono(
                         fontSize: 26,
                         fontWeight: FontWeight.w700,
                         color: textColor,
@@ -332,7 +332,7 @@ class _NormalSpeedDial extends ConsumerWidget {
                     const SizedBox(height: 6),
                     Text(
                       'Where to?',
-                      style: GoogleFonts.jetBrainsMono(
+                      style: jetBrainsMono(
                         fontSize: 13,
                         color: textColor.withValues(alpha: 0.35),
                         letterSpacing: 0.2,
@@ -454,7 +454,7 @@ class _DialTileState extends State<_DialTile>
               const SizedBox(height: 8),
               Text(
                 widget.data.label,
-                style: GoogleFonts.jetBrainsMono(
+                style: jetBrainsMono(
                   fontSize: 10,
                   color: widget.textColor.withValues(alpha: 0.5),
                   fontWeight: FontWeight.w500,

@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mira/pages/main_screen/main_screen_haptics.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:mira/constants/app_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:mira/core/notifiers/history_notifier.dart';
 
@@ -82,7 +82,7 @@ class MiraMenuPage extends ConsumerWidget {
         ),
         title: Text(
           'M I R A',
-          style: GoogleFonts.jetBrainsMono(
+          style: jetBrainsMono(
             color: primaryAccent,
             fontSize: 18,
             letterSpacing: 5,

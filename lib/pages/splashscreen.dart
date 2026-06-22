@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:mira/constants/app_fonts.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:mira/core/entities/theme_entity.dart';
@@ -226,7 +226,7 @@ class _SplashScreenState extends State<SplashScreen>
                   opacity: _taglineFade,
                   child: Text(
                     'YOUR WEB.  YOUR RULES.',
-                    style: GoogleFonts.jetBrainsMono(
+                    style: jetBrainsMono(
                       fontSize: 10,
                       color: Colors.white.withValues(alpha: 0.28),
                       letterSpacing: 3.2,
@@ -251,7 +251,7 @@ class _SplashScreenState extends State<SplashScreen>
           padding: const EdgeInsets.symmetric(horizontal: 2.5),
           child: Text(
             _letters[i],
-            style: GoogleFonts.jetBrainsMono(
+            style: jetBrainsMono(
               fontSize: 58,
               fontWeight: FontWeight.w700,
               color: Colors.white,

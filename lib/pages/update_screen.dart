@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:mira/constants/app_fonts.dart';
 import 'package:mira/core/entities/theme_entity.dart';
 import 'package:mira/core/services/update_service.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -38,7 +38,7 @@ class UpdateScreen extends StatelessWidget {
               const SizedBox(height: 32),
               Text(
                 title,
-                style: GoogleFonts.jetBrainsMono(
+                style: jetBrainsMono(
                   color: Colors.white,
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
@@ -48,7 +48,7 @@ class UpdateScreen extends StatelessWidget {
               const SizedBox(height: 16),
               Text(
                 subtitle,
-                style: GoogleFonts.jetBrainsMono(
+                style: jetBrainsMono(
                   color: Colors.white70,
                   fontSize: 14,
                   height: 1.6,
@@ -72,7 +72,7 @@ class UpdateScreen extends StatelessWidget {
                     },
                     child: Text(
                       'SKIP FOR NOW',
-                      style: GoogleFonts.jetBrainsMono(
+                      style: jetBrainsMono(
                         color: Colors.white38,
                         letterSpacing: 2,
                       ),
@@ -100,7 +100,7 @@ class UpdateScreen extends StatelessWidget {
                   ),
                   child: Text(
                     'UPDATE MIRA',
-                    style: GoogleFonts.jetBrainsMono(
+                    style: jetBrainsMono(
                       color: Colors.greenAccent,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 2,

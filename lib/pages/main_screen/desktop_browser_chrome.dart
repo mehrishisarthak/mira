@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:mira/constants/app_fonts.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'package:mira/core/entities/tab_entity.dart';
@@ -347,7 +347,7 @@ class _DesktopAddressBarState extends State<_DesktopAddressBar> {
                     },
                     child: Text(
                       _domain,
-                      style: GoogleFonts.jetBrainsMono(
+                      style: jetBrainsMono(
                         color: widget.contentColor,
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
@@ -358,7 +358,7 @@ class _DesktopAddressBarState extends State<_DesktopAddressBar> {
                 : TextField(
                     controller: widget.urlController,
                     focusNode: widget.urlFocusNode,
-                    style: GoogleFonts.jetBrainsMono(
+                    style: jetBrainsMono(
                         color: widget.contentColor, fontSize: 13),
                     cursorColor: widget.accentColor,
                     decoration: InputDecoration(
@@ -367,7 +367,7 @@ class _DesktopAddressBarState extends State<_DesktopAddressBar> {
                           : 'Search or enter address',
                       border: InputBorder.none,
                       isDense: true,
-                      hintStyle: GoogleFonts.jetBrainsMono(
+                      hintStyle: jetBrainsMono(
                           color: isGhost
                               ? Colors.redAccent.withValues(alpha: 0.5)
                               : widget.hintColor,

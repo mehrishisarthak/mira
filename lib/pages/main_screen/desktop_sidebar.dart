@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:mira/constants/app_fonts.dart';
 
 import 'package:mira/core/entities/tab_entity.dart';
 import 'package:mira/core/notifiers/ghost_notifier.dart';
@@ -172,7 +172,7 @@ class _SidebarHeader extends ConsumerWidget {
           Expanded(
             child: Text(
               isGhost ? 'GHOST MODE' : 'MIRA',
-              style: GoogleFonts.jetBrainsMono(
+              style: jetBrainsMono(
                 color: isGhost ? Colors.redAccent : fg,
                 fontSize: 13,
                 fontWeight: FontWeight.bold,
@@ -241,7 +241,7 @@ class _NewTabButton extends ConsumerWidget {
               const SizedBox(width: 8),
               Text(
                 isGhost ? 'New ghost tab' : 'New tab',
-                style: GoogleFonts.jetBrainsMono(
+                style: jetBrainsMono(
                   color: accent,
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
@@ -269,7 +269,7 @@ class _SectionLabel extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(12, 8, 8, 4),
       child: Text(
         label,
-        style: GoogleFonts.jetBrainsMono(
+        style: jetBrainsMono(
           color: color,
           fontSize: 9,
           fontWeight: FontWeight.bold,
@@ -392,7 +392,7 @@ class _SidebarTabItemState extends ConsumerState<_SidebarTabItem> {
               Expanded(
                 child: Text(
                   label,
-                  style: GoogleFonts.jetBrainsMono(
+                  style: jetBrainsMono(
                     color: widget.isActive ? widget.fg : widget.muted,
                     fontSize: 12,
                     fontWeight:
@@ -525,7 +525,7 @@ class _NavItem extends StatelessWidget {
             const SizedBox(width: 12),
             Text(
               label,
-              style: GoogleFonts.jetBrainsMono(color: color, fontSize: 12),
+              style: jetBrainsMono(color: color, fontSize: 12),
             ),
           ],
         ),

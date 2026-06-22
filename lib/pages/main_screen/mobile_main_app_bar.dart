@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:mira/constants/app_fonts.dart';
 
 import 'package:mira/core/entities/tab_entity.dart';
 import 'package:mira/core/notifiers/bookmarks_notifier.dart';
@@ -100,7 +100,7 @@ Widget buildMobileBottomBar({
                       child: TextField(
                         controller: urlController,
                         focusNode: urlFocusNode,
-                        style: GoogleFonts.jetBrainsMono(
+                        style: jetBrainsMono(
                           color: contentColor,
                           fontWeight: FontWeight.w500,
                           fontSize: 13,
@@ -111,7 +111,7 @@ Widget buildMobileBottomBar({
                               ? 'Ghost Mode Active'
                               : 'Search or enter address',
                           border: InputBorder.none,
-                          hintStyle: GoogleFonts.jetBrainsMono(
+                          hintStyle: jetBrainsMono(
                               color: hintColor, fontSize: 13),
                           isDense: true,
                           contentPadding:
@@ -167,7 +167,7 @@ Widget buildMobileBottomBar({
                 ),
                 child: Text(
                   '$tabCount',
-                  style: GoogleFonts.jetBrainsMono(
+                  style: jetBrainsMono(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
                   ),

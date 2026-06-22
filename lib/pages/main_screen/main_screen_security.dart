@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:mira/constants/app_fonts.dart';
 
 import 'package:mira/core/entities/theme_entity.dart';
 import 'package:mira/core/notifiers/security_notifier.dart';
@@ -92,7 +92,7 @@ class _SecurityPanel extends ConsumerWidget {
                     children: [
                       Text(
                         domain,
-                        style: GoogleFonts.jetBrainsMono(
+                        style: jetBrainsMono(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
                           color: textColor,
@@ -127,7 +127,7 @@ class _SecurityPanel extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Text(
               'PERMISSIONS',
-              style: GoogleFonts.jetBrainsMono(
+              style: jetBrainsMono(
                 fontSize: 10,
                 color: textColor.withValues(alpha: 0.35),
                 letterSpacing: 2.5,
@@ -189,7 +189,7 @@ class _SecurityPanel extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Text(
               'PRIVACY',
-              style: GoogleFonts.jetBrainsMono(
+              style: jetBrainsMono(
                 fontSize: 10,
                 color: textColor.withValues(alpha: 0.35),
                 letterSpacing: 2.5,
