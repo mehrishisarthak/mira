@@ -97,22 +97,30 @@ class UpdateService {
   }
 
   /// Returns true if [version] is strictly below [minimum].
-  /// Compares major.minor.patch segments numerically.
+  /// Compares the numeric major.minor.patch core; tolerant of a leading `v`
+  /// and of pre-release/build suffixes (`2.0.0-beta.1`, `1.4.0+42`).
   static bool _isBelow(String version, String minimum) {
-    try {
-      final v = version.split('.').map(int.parse).toList();
-      final m = minimum.split('.').map(int.parse).toList();
+    final v = _parseCore(version);
+    final m = _parseCore(minimum);
 
-      for (int i = 0; i < 3; i++) {
-        final vSeg = i < v.length ? v[i] : 0;
-        final mSeg = i < m.length ? m[i] : 0;
-
-        if (vSeg < mSeg) return true;
-        if (vSeg > mSeg) return false;
-      }
-      return false; // equal
-    } catch (e) {
-      return false; // parse error — don't block
+    for (int i = 0; i < 3; i++) {
+      if (v[i] < m[i]) return true;
+      if (v[i] > m[i]) return false;
     }
+    return false; // equal
+  }
+
+  /// Parses the numeric major.minor.patch core of a semver-ish string into a
+  /// 3-element list, never throwing. Strips a leading `v`/`V` and ignores any
+  /// non-numeric suffix on a segment (`0-beta` → 0); missing segments are 0.
+  static List<int> _parseCore(String raw) {
+    var s = raw.trim();
+    if (s.startsWith('v') || s.startsWith('V')) s = s.substring(1);
+    final parts = s.split('.');
+    return List<int>.generate(3, (i) {
+      if (i >= parts.length) return 0;
+      final match = RegExp(r'^\d+').firstMatch(parts[i]);
+      return match == null ? 0 : int.parse(match.group(0)!);
+    });
   }
 }

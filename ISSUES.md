@@ -39,7 +39,6 @@
 |----|----|-------|----------|-------|
 | O-17 | 🟡 | Desktop "resume"/"retry" deletes the partial and restarts from byte 0 (no HTTP `Range`). | `download_service_desktop.dart:127-130` | Rename to "restart" or implement range-resume. Desktop. |
 | O-18 | 🟡 | Desktop download has no timeout — a slow-loris server holds the handle indefinitely. *(unverified)* | `download_service_desktop.dart` | Add `.timeout(...)`. Desktop. |
-| O-19 | 🟡 | `_isNewerVersion` maps non-numeric semver segments to 0 → pre-release tags (`v2.0.0-beta.1`) mis-compared, updates silently skipped. *(unverified)* | `update_service.dart` | Strip prefixes / parse semver properly. |
 | O-20 | 🟡 | Isar lazy-init has a race window between null-check and `Isar.open`. *(unverified)* | `isar_database_repository.dart` | Guard with a `Completer`. |
 
 ### Code health / Cleanup
@@ -95,6 +94,7 @@ Files carrying too many responsibilities; split for testability and readability 
 | D-20 | History now recorded on `loadStop` (not only `titleChanged`) so title-less pages/error pages/SPAs land in history; engine stamps current url onto `titleChanged` events so the title refiner keys off the event's url, not active-tab-at-event-time (was O-13). |
 | D-21 | `_engineEventsSubscriptionProvider` is now `autoDispose.family` — its `pageEvents` subscription is torn down when an engine is de-activated instead of leaking one per engine ever activated (was O-10). |
 | D-22 | `main()` no longer blocks the first frame: adblock cache warms off the critical path (and its 285KB decode runs off-isolate via `compute()`); UA platform-channel fetch deferred to a post-`runApp` callback. Cache-ready invariant held by the always-present ~1.8s+ splash buffer before the first engine (was O-05). |
+| D-23 | `UpdateService` version compare now tolerates a `v` prefix and pre-release/build suffixes (`2.0.0-beta.1`, `1.4.0+42`) instead of throwing on `int.parse` and silently skipping updates; + `update_service_version_test.dart` (5 tests) (was O-19). |
 
 ### Verified already-fixed (found resolved during audit triage — no action)
 - O-25: `mainscreen` no longer imports `history_notifier` (orphaned import already gone).
