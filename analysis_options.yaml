@@ -21,8 +21,15 @@ linter:
   # `// ignore_for_file: name_of_lint` syntax on the line or in the file
   # producing the lint.
   rules:
-    # avoid_print: false  # Uncomment to disable the `avoid_print` rule
-    # prefer_single_quotes: true  # Uncomment to enable the `prefer_single_quotes` rule
+    # Correctness-focused additions (curated to stay high-signal, low-noise;
+    # each currently has zero violations in the codebase).
+    # `unawaited_futures` is deliberately NOT enabled yet: it flags 18 mostly
+    # intentional fire-and-forget sites that need a dedicated unawaited()-wrap
+    # pass (+ runtime check on the navigation/lifecycle ones). See O-30.
+    - cancel_subscriptions     # StreamSubscriptions must be cancelled
+    - close_sinks              # sinks/controllers must be closed
+    - avoid_empty_else         # `else {}` is almost always a bug
+    - unnecessary_statements   # expressions with no effect
 
 # Additional information about this file can be found at
 # https://dart.dev/guides/language/analysis-options
