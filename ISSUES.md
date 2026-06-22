@@ -26,6 +26,8 @@
 | O-06 | 🟡 | `BrowserView.build` watches the whole tab list; rebuilds the full `Stack` on every title/url tick. | `browser_view.dart:51` | `.select` to `(tab ids, activeIndex)` so heavy rebuild only fires on add/remove/switch. |
 | O-07 | 🟡 | `Mainscreen.build` still watches broad slices (`tabsProvider`, `ghostTabsProvider` for count, full `bookmarksProvider`). | `mainscreen.dart:330-342` | Derive `tabCountProvider` / `isCurrentUrlBookmarkedProvider` and `.select`. (Progress watch already fixed — see D-10.) |
 | O-08 | 🟡 | Desktop find bar re-injects a 175-line JS library on every keystroke / Next. | `desktop_find_bar.dart:193` | Inject the library once on open (flag), then only the command. Desktop only. |
+| O-40 | 🟠 | **`GoogleFonts.jetBrainsMono()` fetched at runtime** — no font bundled in `pubspec.yaml`, so first use of each weight/style downloads over the network (also why offline smoke tests fail). Used pervasively (e.g. mobile bottom bar calls it 4×/build). Likely the main cause of "screens feel laggy / text flicker." | `pubspec.yaml`, all UI files | Bundle JetBrains Mono (OFL) as an asset + `GoogleFonts.config.allowRuntimeFetching = false`. |
+| — | ℹ️ | **Perf caveat:** O-06/O-07/O-40 must be judged in `--profile`/release on Android, **not** debug (`flutter run`). Debug jank is an artifact; profile the specific interaction (perf overlay → UI vs raster thread) before optimizing the hot path. | — | Profile first. |
 
 ### Memory / Lifecycle
 | ID | Sev | Issue | Location | Notes |
