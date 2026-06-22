@@ -59,6 +59,20 @@ Files carrying too many responsibilities; split for testability and readability 
 | O-33 | 🟡 | `lib/pages/mira_drawer.dart` | 557 | Theme picker, search-engine picker, security toggles, ad-block toggle, Nuke, update check, and bookmark/history/download sheet launchers all in one `MiraMenuPage`. Split into per-section widgets. |
 | O-27 | 🟡 | `lib/core/notifiers/ghost_notifier.dart` | 146 | *(see O-27 above)* — kitchen sink of 7 providers incl. engine lifecycle; split into ghost-state / active-tab / engine-factory files. |
 
+### Release — Google Play Store readiness
+Compliance/release gates, **separate from the code defects above**. Closing every `O-*` issue is **necessary but not sufficient** to publish — these must also be done. (Found 2026-06-22 while auditing Play shippability.)
+
+| ID | Sev | Gate | Location | Notes |
+|----|----|------|----------|-------|
+| R-01 | 🔴 | **Release build is signed with the *debug* keystore.** Play rejects anything signed with the debug key. | `android/app/build.gradle.kts:37` | Create a real upload keystore, add a `release` signingConfig, enroll in Play App Signing. **Hard blocker.** |
+| R-02 | 🔴 | **`targetSdk = 34`.** Since 2025-08-31 Play requires new apps *and updates* to target **API 35** (Android 15); a 34 submission is rejected. | `android/app/build.gradle.kts:29` | Bump `targetSdk` to 35, re-test (esp. permissions/back-gesture behavior). **Hard blocker.** |
+| R-03 | 🟠 | **Broad storage perms** (`WRITE/READ_EXTERNAL_STORAGE` + `requestLegacyExternalStorage="true"`) trigger a Play storage-permissions review; likely unnecessary since downloads use app-scoped `getDownloadsDirectory()`. | `AndroidManifest.xml:12,13,22` | Remove, or file the storage-permission declaration. *(Same root as O-03.)* |
+| R-04 | 🟠 | **Sensitive perms undeclared to Play:** `ACCESS_FINE_LOCATION`/`CAMERA`/`RECORD_AUDIO` (exist to grant *web pages* access) need a Permissions Declaration / prominent disclosure; location triggers a review form. | `AndroidManifest.xml:6,8,9` | Complete Play declaration + in-app prominent disclosure, or drop perms not actually required. |
+| R-05 | 🟠 | **No published Privacy Policy URL and no Data Safety form** — both mandatory to submit (more so with the sensitive perms above and a privacy-branded listing). | — (Play Console) | Publish a privacy policy; complete Data Safety accurately to match real data behavior. |
+| R-06 | 🟡 | **`store_url` must point to the Play listing**, not a GitHub APK — otherwise the force-update flow pushes users to off-Play distribution. Mechanically the app only `launchUrl`s it (no APK sideload), so this is config, not code. | `update_service.dart`, `mira-updates/version.json`, `update_screen.dart:86-94` | Point `store_url` at the Play listing; reconsider hard force-update UX. |
+| R-07 | 🟡 | **Content rating + store listing assets** (screenshots, feature graphic, descriptions) not done. | — (Play Console) | Complete content-rating questionnaire; prepare listing assets. |
+| R-08 | ⚪ | Confirm AAB (not APK) release artifact + versionCode/versionName strategy; 64-bit is handled by Flutter. | `build.gradle.kts` | Standard `flutter build appbundle`; verify signing applies to the AAB. |
+
 ---
 
 ## DONE (this session)
