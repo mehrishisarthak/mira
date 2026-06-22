@@ -26,7 +26,6 @@
 | O-06 | 🟡 | `BrowserView.build` watches the whole tab list; rebuilds the full `Stack` on every title/url tick. | `browser_view.dart:51` | `.select` to `(tab ids, activeIndex)` so heavy rebuild only fires on add/remove/switch. |
 | O-07 | 🟡 | `Mainscreen.build` still watches broad slices (`tabsProvider`, `ghostTabsProvider` for count, full `bookmarksProvider`). | `mainscreen.dart:330-342` | Derive `tabCountProvider` / `isCurrentUrlBookmarkedProvider` and `.select`. (Progress watch already fixed — see D-10.) |
 | O-08 | 🟡 | Desktop find bar re-injects a 175-line JS library on every keystroke / Next. | `desktop_find_bar.dart:193` | Inject the library once on open (flag), then only the command. Desktop only. |
-| O-09 | 🟡 | `tab_notifier` persists to SharedPreferences on every url/title event. | `tab_notifier.dart` | Verify the existing debounce covers this; if not, persist only on `loadStop` + tab actions. |
 
 ### Memory / Lifecycle
 | ID | Sev | Issue | Location | Notes |
@@ -107,6 +106,7 @@ Files carrying too many responsibilities; split for testability and readability 
 - Ad-block toggle updates live WebViews (`updateSettings` sets `contentBlockers`).
 - Location/camera flags applied to the WebView (`geolocationEnabled`, `onPermissionRequest`).
 - `_performSearch` already guards whitespace-only input via `value.trim().isEmpty` (was O-16).
+- O-09: `tab_notifier` does **not** persist on every url/title event — `updateUrl`/`updateTitle` route through a 500 ms `_scheduleSave()` debounce; only discrete actions (`addTab`/`closeTab`/`switchTab`/`reorderTab`/`nuke`) write immediately. Resolved by existing design. (The same debounce is the *risk* tracked by O-11 — pending write lost on OS kill.)
 
 ---
 
