@@ -144,3 +144,12 @@ final currentActiveTabProvider = Provider<BrowserTab>((ref) {
   if (g != null) return g;
   return normal.activeTab;
 });
+
+/// Active-session tab count only. `.select`s the length so watchers rebuild on
+/// add/remove/switch — not on every url/title tick of a tab (O-07).
+final tabCountProvider = Provider<int>((ref) {
+  final isGhost = ref.watch(isGhostModeProvider);
+  return isGhost
+      ? ref.watch(ghostTabsProvider.select((s) => s.tabs.length))
+      : ref.watch(tabsProvider.select((s) => s.tabs.length));
+});

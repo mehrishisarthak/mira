@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mira/core/notifiers/ghost_notifier.dart';
 import 'package:mira/core/services/isar_database_repository.dart';
 import 'package:mira/core/services/isar_schemas.dart';
 import 'package:mira/core/services/database_providers.dart';
@@ -59,4 +60,13 @@ class BookmarksNotifier extends StateNotifier<List<BookmarkSchema>> {
 final bookmarksProvider = StateNotifierProvider<BookmarksNotifier, List<BookmarkSchema>>((ref) {
   final repository = ref.read(bookmarksRepositoryProvider);
   return BookmarksNotifier(repository);
+});
+
+/// Whether the *current* tab's url is bookmarked. `.select`s to a bool so
+/// watchers (e.g. the toolbar star) rebuild only when this tab's bookmarked
+/// state flips — not on every bookmark add/remove or url/title tick (O-07).
+final isCurrentUrlBookmarkedProvider = Provider<bool>((ref) {
+  final url = ref.watch(currentActiveTabProvider.select((t) => t.url));
+  if (url.isEmpty) return false;
+  return ref.watch(bookmarksProvider.select((list) => list.any((b) => b.url == url)));
 });

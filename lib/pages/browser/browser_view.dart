@@ -48,15 +48,20 @@ class _BrowserViewState extends ConsumerState<BrowserView>
 
     registerBrowserViewSideEffects(ref: ref);
 
-    final tabsState = ref.watch(isGhost ? ghostTabsProvider : tabsProvider);
+    final provider = isGhost ? ghostTabsProvider : tabsProvider;
+    // Rebuild only on structural change — add/remove/switch and the
+    // branding<->webview flip (a tab's url emptying/filling). A url/title tick
+    // during load must NOT rebuild this Stack: each webview is keyed by tabId
+    // and reads initialUrl once at creation (O-06).
+    ref.watch(provider.select((s) =>
+        '${s.activeIndex}|${s.tabs.map((t) => '${t.id}:${t.url.isEmpty}').join(',')}'));
+    final tabsState = ref.read(provider);
     final tabs = tabsState.tabs;
     final activeIndex = tabsState.activeIndex;
 
     final awakeTabIds = ref.watch(hibernationProvider);
     final webError = ref.watch(browserChromeProvider.select((s) => s.webError));
-    final activeUrl = tabsState.tabs.isNotEmpty
-        ? tabsState.tabs[tabsState.activeIndex].url
-        : '';
+    final activeUrl = tabs.isNotEmpty ? tabs[activeIndex].url : '';
 
     return Stack(
       children: [

@@ -23,8 +23,6 @@
 ### Performance
 | ID | Sev | Issue | Location | Notes |
 |----|----|-------|----------|-------|
-| O-06 | 🟡 | `BrowserView.build` watches the whole tab list; rebuilds the full `Stack` on every title/url tick. | `browser_view.dart:51` | `.select` to `(tab ids, activeIndex)` so heavy rebuild only fires on add/remove/switch. |
-| O-07 | 🟡 | `Mainscreen.build` still watches broad slices (`tabsProvider`, `ghostTabsProvider` for count, full `bookmarksProvider`). | `mainscreen.dart:330-342` | Derive `tabCountProvider` / `isCurrentUrlBookmarkedProvider` and `.select`. (Progress watch already fixed — see D-10.) |
 | O-08 | 🟡 | Desktop find bar re-injects a 175-line JS library on every keystroke / Next. | `desktop_find_bar.dart:193` | Inject the library once on open (flag), then only the command. Desktop only. |
 | — | ℹ️ | **Perf caveat:** O-06/O-07 must be judged in `--profile`/release on Android, **not** debug (`flutter run`). Debug jank is an artifact; profile the specific interaction (perf overlay → UI vs raster thread) before optimizing the hot path. | — | Profile first. |
 
@@ -136,6 +134,7 @@ fixes add zero features; these are the second leg of the path. Severity here =
 | D-26 | Desktop: fixed collapsed-sidebar `RenderFlex` overflow — the 52px rail's header packed a `Spacer` + a 48px-min `IconButton`; now a single 40px-constrained centered toggle. (found in runtime pass) |
 | D-27 | Bundled JetBrains Mono (OFL) as a Flutter font asset behind a `jetBrainsMono()` helper; migrated all 36 `GoogleFonts.jetBrainsMono()` call sites (12 files) off the runtime network fetch → no per-screen first-paint flicker, works offline (was O-40). |
 | D-28 | Fixed the 4 stale smoke tests (assertion drift, not a network issue): updated `TabsSheet` labels (`TABS`/`GHOST`/`No open tabs`/`CustomScrollView`) and splash wordmark assertions, and added a frame-by-frame `_drainSplash` helper so the mixed timer+animation splash flow drains cleanly. Full suite now **25/25 green** (was +21/−4) (was O-41). |
+| D-29 | Rebuild-scope hygiene (was O-06/O-07): `BrowserView` now `.select`s a structural signature (ids + url-empty + activeIndex) so the webview `Stack` no longer rebuilds on every url/title tick; `Mainscreen` swapped its full `tabsProvider`/`ghostTabsProvider`/`bookmarksProvider` watches for derived `tabCountProvider` + `isCurrentUrlBookmarkedProvider`. *(Reduces UI-thread rebuilds; impact to be confirmed by an Android `--profile` pass, per the perf caveat.)* |
 
 ### Verified already-fixed (found resolved during audit triage — no action)
 - O-25: `mainscreen` no longer imports `history_notifier` (orphaned import already gone).

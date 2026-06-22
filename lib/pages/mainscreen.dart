@@ -327,9 +327,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     final activeTab = ref.watch(currentActiveTabProvider);
 
     final activeUrl = activeTab.url;
-    final normalTabsList = ref.watch(tabsProvider).tabs;
-    final ghostTabsList = ref.watch(ghostTabsProvider).tabs;
-    final tabCount = isGhost ? ghostTabsList.length : normalTabsList.length;
+    final tabCount = ref.watch(tabCountProvider);
 
     if (!kIsWeb &&
         (Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
@@ -338,8 +336,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
       });
     }
     
-    final bookmarks = ref.watch(bookmarksProvider);
-    final isBookmarked = bookmarks.any((b) => b.url == activeUrl);
+    final isBookmarked = ref.watch(isCurrentUrlBookmarkedProvider);
     final appTheme = ref.watch(themeProvider);
     
     final backgroundColor = appTheme.backgroundColor;
