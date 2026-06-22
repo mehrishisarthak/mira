@@ -29,11 +29,12 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('ACTIVE SESSIONS'), findsOneWidget);
+    expect(find.text('TABS'), findsOneWidget);
     // Ghost/private section is omitted until the user starts a private session.
-    expect(find.text('GHOST PROTOCOL'), findsNothing);
-    expect(find.byType(SliverGrid), findsOneWidget);
-    expect(find.text('New Tab'), findsWidgets);
+    expect(find.text('GHOST'), findsNothing);
+    expect(find.byType(CustomScrollView), findsOneWidget);
+    // The lone seed tab (empty url) shows the empty-state, not a tab row.
+    expect(find.text('No open tabs'), findsOneWidget);
   });
 
   test('tabs notifier supports add/switch/close without index breakage',

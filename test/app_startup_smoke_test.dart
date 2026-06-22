@@ -13,6 +13,16 @@ import 'dart:convert';
 
 class MockHttpClient extends Mock implements http.Client {}
 
+/// Drives the splash frame-by-frame until it navigates away, so its mixed
+/// Future.delayed timers + AnimationControllers all drain (no pending-timer
+/// assertion at teardown).
+Future<void> _drainSplash(WidgetTester tester) async {
+  for (var i = 0; i < 40 && tester.any(find.byType(SplashScreen)); i++) {
+    await tester.pump(const Duration(milliseconds: 250));
+  }
+  await tester.pumpAndSettle();
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -68,11 +78,11 @@ void main() {
       ),
     );
 
-    expect(find.text('M I R A'), findsOneWidget);
-    expect(find.text('INITIALIZING...'), findsOneWidget);
+    // Splash renders the wordmark as individual animated letters.
+    expect(find.text('M'), findsOneWidget);
+    expect(find.text('R'), findsOneWidget);
 
-    await tester.pump(const Duration(milliseconds: 3500));
-    await tester.pumpAndSettle();
+    await _drainSplash(tester);
 
     expect(find.text('Startup Target Screen'), findsOneWidget);
   });
@@ -98,8 +108,7 @@ void main() {
       ),
     );
 
-    await tester.pump(const Duration(milliseconds: 3500));
-    await tester.pumpAndSettle();
+    await _drainSplash(tester);
 
     expect(find.text('REQUIRED UPDATE'), findsOneWidget);
     expect(find.text('UPDATE MIRA'), findsOneWidget);
@@ -126,13 +135,11 @@ void main() {
       ),
     );
 
-    expect(find.text('M I R A'), findsOneWidget);
-    expect(find.text('INITIALIZING...'), findsOneWidget);
+    // Splash renders the wordmark as individual animated letters.
+    expect(find.text('M'), findsOneWidget);
+    expect(find.text('R'), findsOneWidget);
 
-    // SplashScreen schedules async timers; advance past them so the test binding
-    // does not report pending timers after dispose.
-    await tester.pump(const Duration(milliseconds: 2500));
-    await tester.pumpAndSettle();
+    await _drainSplash(tester);
   });
 
   test('preferencesServiceProvider throws StateError without override', () {
