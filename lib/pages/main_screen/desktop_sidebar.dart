@@ -135,43 +135,52 @@ class _SidebarHeader extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Constrained to 40px so it fits inside the 52px collapsed rail without the
+    // default IconButton 48px min-size blowing past the available width.
+    final toggleButton = IconButton(
+      icon: Icon(
+        expanded ? Icons.chevron_left : Icons.chevron_right,
+        color: fg.withValues(alpha: 0.5),
+        size: 20,
+      ),
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+      tooltip: expanded ? 'Collapse sidebar' : 'Expand sidebar',
+      onPressed: () {
+        ref.read(desktopSidebarExpandedProvider.notifier).state = !expanded;
+      },
+    );
+
+    if (!expanded) {
+      // Collapsed: a single centered toggle, no outer padding/Spacer competing
+      // for width — that competition was the RenderFlex overflow.
+      return SizedBox(height: 44, child: Center(child: toggleButton));
+    }
+
     return Container(
       height: 44,
       padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Row(
         children: [
-          if (expanded) ...[
-            Padding(
-              padding: const EdgeInsets.only(left: 4),
-              child: isGhost
-                  ? const Icon(Icons.privacy_tip, color: Colors.redAccent, size: 18)
-                  : Icon(Icons.language, color: theme.primaryColor, size: 18),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                isGhost ? 'GHOST MODE' : 'MIRA',
-                style: GoogleFonts.jetBrainsMono(
-                  color: isGhost ? Colors.redAccent : fg,
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.5,
-                ),
+          Padding(
+            padding: const EdgeInsets.only(left: 4),
+            child: isGhost
+                ? const Icon(Icons.privacy_tip, color: Colors.redAccent, size: 18)
+                : Icon(Icons.language, color: theme.primaryColor, size: 18),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              isGhost ? 'GHOST MODE' : 'MIRA',
+              style: GoogleFonts.jetBrainsMono(
+                color: isGhost ? Colors.redAccent : fg,
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.5,
               ),
             ),
-          ] else
-            const Spacer(),
-          IconButton(
-            icon: Icon(
-              expanded ? Icons.chevron_left : Icons.chevron_right,
-              color: fg.withValues(alpha: 0.5),
-              size: 20,
-            ),
-            tooltip: expanded ? 'Collapse sidebar' : 'Expand sidebar',
-            onPressed: () {
-              ref.read(desktopSidebarExpandedProvider.notifier).state = !expanded;
-            },
           ),
+          toggleButton,
         ],
       ),
     );

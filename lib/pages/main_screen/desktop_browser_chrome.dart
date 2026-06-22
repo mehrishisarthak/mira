@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:window_manager/window_manager.dart';
 
 import 'package:mira/core/entities/tab_entity.dart';
 import 'package:mira/core/notifiers/bookmarks_notifier.dart';
@@ -106,6 +107,10 @@ Widget buildDesktopToolbar({
                 icon: Icon(Icons.more_vert, color: contentColor, size: 20),
                 onPressed: () => showDesktopMiraMenuPopup(context),
               ),
+              const SizedBox(width: 4),
+              // The native title bar is hidden (TitleBarStyle.hidden in main.dart),
+              // so the window has no min/max/close affordance without these.
+              _WindowControls(color: contentColor),
             ],
           ),
         ),
@@ -113,6 +118,106 @@ Widget buildDesktopToolbar({
       ],
     ),
   );
+}
+
+// ── Custom window controls (native title bar is hidden) ───────────────────────
+
+class _WindowControls extends StatelessWidget {
+  final Color color;
+  const _WindowControls({required this.color});
+
+  Future<void> _toggleMaximize() async {
+    if (await windowManager.isMaximized()) {
+      await windowManager.unmaximize();
+    } else {
+      await windowManager.maximize();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _WinBtn(
+          icon: Icons.remove,
+          tooltip: 'Minimize',
+          color: color,
+          onTap: () => windowManager.minimize(),
+        ),
+        _WinBtn(
+          icon: Icons.crop_square_outlined,
+          iconSize: 13,
+          tooltip: 'Maximize',
+          color: color,
+          onTap: _toggleMaximize,
+        ),
+        _WinBtn(
+          icon: Icons.close,
+          tooltip: 'Close',
+          color: color,
+          hoverColor: Colors.redAccent,
+          onTap: () => windowManager.close(),
+        ),
+      ],
+    );
+  }
+}
+
+class _WinBtn extends StatefulWidget {
+  final IconData icon;
+  final String tooltip;
+  final Color color;
+  final Color? hoverColor;
+  final double iconSize;
+  final VoidCallback onTap;
+
+  const _WinBtn({
+    required this.icon,
+    required this.tooltip,
+    required this.color,
+    required this.onTap,
+    this.hoverColor,
+    this.iconSize = 16,
+  });
+
+  @override
+  State<_WinBtn> createState() => _WinBtnState();
+}
+
+class _WinBtnState extends State<_WinBtn> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final isClose = widget.hoverColor != null;
+    final bg = _hover
+        ? (isClose
+            ? widget.hoverColor!.withValues(alpha: 0.9)
+            : widget.color.withValues(alpha: 0.12))
+        : Colors.transparent;
+    final fg = (_hover && isClose) ? Colors.white : widget.color;
+
+    return Tooltip(
+      message: widget.tooltip,
+      waitDuration: const Duration(milliseconds: 500),
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _hover = true),
+        onExit: (_) => setState(() => _hover = false),
+        child: GestureDetector(
+          onTap: widget.onTap,
+          child: Container(
+            width: 42,
+            height: 30,
+            alignment: Alignment.center,
+            color: bg,
+            child: Icon(widget.icon, size: widget.iconSize, color: fg),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // ── Desktop address bar with domain-only unfocused display ────────────────────
