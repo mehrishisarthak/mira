@@ -32,7 +32,6 @@
 ### Memory / Lifecycle
 | ID | Sev | Issue | Location | Notes |
 |----|----|-------|----------|-------|
-| O-10 | 🟠 | **`_engineEventsSubscriptionProvider` is a non-`autoDispose` family** keyed by engine; entries accumulate one per engine ever activated. | `browser_side_effects.dart:21` | Make it `autoDispose.family` + `ref.onDispose(sub.cancel)`. |
 | O-11 | 🟡 | Force-kill tab loss: 500 ms save debounce + only `resumed` lifecycle handled → pending tab state lost on OS kill. *(unverified)* | `tab_notifier.dart`, `mainscreen.dart:122` | Flush `saved_tabs` on `paused`/`detached`. |
 | O-12 | 🟡 | Unawaited prefs setters can silently swallow write failures → in-memory vs disk divergence. *(unverified)* | `*_notifier.dart`, `preferences_service.dart` | Low; consider surfacing/logging write errors. |
 
@@ -95,6 +94,7 @@ Files carrying too many responsibilities; split for testability and readability 
 | D-18 | `isForMainFrame ?? false` — subframe errors no longer trigger the full-screen error page (was O-15) |
 | D-19 | Migrated all 63 `withOpacity()` → `withValues(alpha:)` (6 files); removed unused imports, dead `_onTap`, `dart:typed_data`; `activeColor` → `activeThumbColor`. Analyzer **74 → 3 issues, 0 errors** (remaining 3 = O-34, O-35). |
 | D-20 | History now recorded on `loadStop` (not only `titleChanged`) so title-less pages/error pages/SPAs land in history; engine stamps current url onto `titleChanged` events so the title refiner keys off the event's url, not active-tab-at-event-time (was O-13). |
+| D-21 | `_engineEventsSubscriptionProvider` is now `autoDispose.family` — its `pageEvents` subscription is torn down when an engine is de-activated instead of leaking one per engine ever activated (was O-10). |
 
 ### Verified already-fixed (found resolved during audit triage — no action)
 - O-25: `mainscreen` no longer imports `history_notifier` (orphaned import already gone).

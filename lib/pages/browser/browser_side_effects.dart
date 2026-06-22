@@ -17,9 +17,12 @@ import 'package:mira/pages/browser_chrome_providers.dart';
 import 'package:mira/pages/main_screen/main_screen_security.dart';
 
 /// Provider that manages the stream subscription for a given [BrowserEngine].
-/// It ensures that we only have one listener per engine and that it's properly
-/// disposed when the engine is no longer active or the provider is disposed.
-final _engineEventsSubscriptionProvider = Provider.family<void, BrowserEngine>((ref, engine) {
+/// autoDispose so the family entry — and its `pageEvents` subscription — is torn
+/// down once the engine is de-activated (no longer watched). Without autoDispose
+/// the family caches one live subscription per engine ever activated, leaking
+/// across tab churn even though the onDispose teardown below was already correct.
+final _engineEventsSubscriptionProvider =
+    Provider.autoDispose.family<void, BrowserEngine>((ref, engine) {
   final subscription = engine.pageEvents.listen((event) {
     handleEnginePageEvent(ref, event);
   });
