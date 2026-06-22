@@ -27,8 +27,11 @@ final browserEngineProvider = Provider.family<BrowserEngine, String>((ref, tabId
   final isGhostTab = ref.read(ghostTabsProvider).tabs.any((t) => t.id == tabId);
 
   // Use loadRulesSync() — not adBlockRulesProvider.valueOrNull.
-  // The cache is populated by main.dart's pre-warm before runApp(),
-  // so this always returns the full rule list at engine-creation time.
+  // main.dart warms this cache OFF the critical path (unawaited). The always-on
+  // splash buffer (~1.8s+ of animation + update check before the first webview
+  // is built) guarantees the load finishes before this read. If the splash is
+  // ever shortened/removed, re-verify this still holds — otherwise the first
+  // page loads ad-block-off until a reload.
   final security = ref.read(securityProvider);
   final adBlockRules = security.isAdBlockEnabled
       ? AdBlockService.loadRulesSync()

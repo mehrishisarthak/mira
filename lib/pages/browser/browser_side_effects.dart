@@ -218,7 +218,11 @@ void _recordHistory(Ref ref, String url) {
   // Skip in ghost mode — history is not recorded.
   if (ref.read(isGhostModeProvider)) return;
   if (url.isEmpty || url == 'about:blank') return;
-  // Best-effort title; refined by the titleChanged upsert when it arrives.
+  // Title is the active tab's current title. Usually titleChanged fires before
+  // loadStop, so this is the page's real title (and a later titleChanged refines
+  // it). For image/PDF/no-<title> loads where NO titleChanged follows, it may be
+  // stale (the prior page's title) and won't self-heal. The url — what matters
+  // for revisiting — is always correct.
   final title = ref.read(tabsProvider).safeActiveTab?.title ?? '';
   ref.read(historyProvider.notifier).addToHistory(url, title: title);
 }
