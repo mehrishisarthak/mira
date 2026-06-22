@@ -23,7 +23,6 @@
 ### Performance
 | ID | Sev | Issue | Location | Notes |
 |----|----|-------|----------|-------|
-| O-05 | 🟠 | **`main()` blocks first frame**: awaits 285 KB / 2,486-rule blocklist `jsonDecode` + UA platform-channel fetch before `runApp`. | `main.dart:29-41` | Parse via `compute()` off-isolate; defer UA fetch to a post-`runApp` callback. |
 | O-06 | 🟡 | `BrowserView.build` watches the whole tab list; rebuilds the full `Stack` on every title/url tick. | `browser_view.dart:51` | `.select` to `(tab ids, activeIndex)` so heavy rebuild only fires on add/remove/switch. |
 | O-07 | 🟡 | `Mainscreen.build` still watches broad slices (`tabsProvider`, `ghostTabsProvider` for count, full `bookmarksProvider`). | `mainscreen.dart:330-342` | Derive `tabCountProvider` / `isCurrentUrlBookmarkedProvider` and `.select`. (Progress watch already fixed — see D-10.) |
 | O-08 | 🟡 | Desktop find bar re-injects a 175-line JS library on every keystroke / Next. | `desktop_find_bar.dart:193` | Inject the library once on open (flag), then only the command. Desktop only. |
@@ -95,6 +94,7 @@ Files carrying too many responsibilities; split for testability and readability 
 | D-19 | Migrated all 63 `withOpacity()` → `withValues(alpha:)` (6 files); removed unused imports, dead `_onTap`, `dart:typed_data`; `activeColor` → `activeThumbColor`. Analyzer **74 → 3 issues, 0 errors** (remaining 3 = O-34, O-35). |
 | D-20 | History now recorded on `loadStop` (not only `titleChanged`) so title-less pages/error pages/SPAs land in history; engine stamps current url onto `titleChanged` events so the title refiner keys off the event's url, not active-tab-at-event-time (was O-13). |
 | D-21 | `_engineEventsSubscriptionProvider` is now `autoDispose.family` — its `pageEvents` subscription is torn down when an engine is de-activated instead of leaking one per engine ever activated (was O-10). |
+| D-22 | `main()` no longer blocks the first frame: adblock cache warms off the critical path (and its 285KB decode runs off-isolate via `compute()`); UA platform-channel fetch deferred to a post-`runApp` callback. Cache-ready invariant held by the always-present ~1.8s+ splash buffer before the first engine (was O-05). |
 
 ### Verified already-fixed (found resolved during audit triage — no action)
 - O-25: `mainscreen` no longer imports `history_notifier` (orphaned import already gone).

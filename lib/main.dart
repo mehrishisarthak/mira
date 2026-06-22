@@ -24,23 +24,20 @@ import 'package:mira/shell/browser/in_app_webview_engine.dart';
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Pre-warm the adblock rule cache before runApp so loadRulesSync() returns
-  // the full list at engine-creation time (avoids FutureProvider race).
-  try {
-    await AdBlockService.loadRules();
-  } catch (e) {
-    debugPrint('MIRA: AdBlock rule pre-warm failed: $e');
-  }
+  // Warm the adblock rule cache OFF the first-frame path. The splash screen runs
+  // for ~1.8s+ (wordmark animation + update check) before the first webview is
+  // built, so this async load completes well before loadRulesSync() is read at
+  // engine-creation time — without blocking the first frame on a 285KB decode
+  // (which now also runs off-isolate via compute()).
+  unawaited(() async {
+    try {
+      await AdBlockService.loadRules();
+    } catch (e) {
+      debugPrint('MIRA: AdBlock rule pre-warm failed: $e');
+    }
+  }());
 
-  // 1. Fetch Desktop User Agent for the underlying engine
-  try {
-    final ua = await InAppWebViewEngine.fetchDefaultUserAgent();
-    setCachedDesktopUserAgent(ua);
-  } catch (e) {
-    debugPrint("MIRA: Failed to fetch default user agent: $e");
-  }
-
-  // 2. Initialize the Window Manager for PC platforms
+  // 1. Initialize the Window Manager for PC platforms
   if (!kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.windows ||
           defaultTargetPlatform == TargetPlatform.macOS ||
@@ -67,7 +64,7 @@ Future<void> main(List<String> args) async {
     }
   }
 
-  // 3. Initialize Core Services (Prefs & Downloads)
+  // 2. Initialize Core Services (Prefs & Downloads)
   final prefs = await SharedPreferences.getInstance();
   final PreferencesService preferencesService = PreferencesService(prefs);
   final isFirstRun = preferencesService.getFirstRun();
@@ -78,7 +75,7 @@ Future<void> main(List<String> args) async {
     nextScreen: isFirstRun ? const OnboardingScreen() : const Mainscreen(),
   );
 
-  // 4. Launch the App
+  // 3. Launch the App
   runApp(
     ProviderScope(
       observers: [const MiraProviderObserver()],
@@ -91,6 +88,19 @@ Future<void> main(List<String> args) async {
       ),
     ),
   );
+
+  // Deferred to after the first frame: the cached UA is only consumed by the
+  // mobile "request desktop site" toggle (off by default, applied live via
+  // updateSettings), so it must not gate the first frame on a platform-channel
+  // round-trip.
+  unawaited(() async {
+    try {
+      final ua = await InAppWebViewEngine.fetchDefaultUserAgent();
+      setCachedDesktopUserAgent(ua);
+    } catch (e) {
+      debugPrint('MIRA: Failed to fetch default user agent: $e');
+    }
+  }());
 
   // Fire-and-forget weekly tracker-list refresh. Lands on disk and applies at
   // next launch; must not block startup or touch live webviews.

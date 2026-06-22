@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:mira/core/services/adblock_ota_service.dart';
 import 'package:mira/core/services/browser_engine_blueprints.dart';
@@ -17,7 +18,9 @@ class AdBlockService {
       return _cache!;
     }
     final raw = await rootBundle.loadString('assets/adblock/content_blockers.json');
-    _cache = _parse(raw);
+    // Decode the ~285KB / 2.5k-rule list off the main isolate so it never janks
+    // the splash animation (this runs unawaited during startup).
+    _cache = await compute(_parse, raw);
     return _cache!;
   }
 
@@ -25,7 +28,7 @@ class AdBlockService {
     try {
       final file = File(await AdBlockOtaService.rulesFilePath());
       if (!await file.exists()) return null;
-      return _parse(await file.readAsString());
+      return await compute(_parse, await file.readAsString());
     } catch (_) {
       return null;
     }
