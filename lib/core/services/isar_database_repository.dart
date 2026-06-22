@@ -7,16 +7,27 @@ import 'package:mira/core/services/local_database_repository.dart';
 /// Concrete implementation of [LocalDatabaseRepository] using Isar.
 class IsarHistoryRepository implements LocalDatabaseRepository<HistoryItemSchema> {
   Isar? _isar;
+  Future<void>? _initFuture;
 
+  // Guarded by a shared future so two concurrent first-callers don't both reach
+  // Isar.open (which throws on a duplicate instance name). Reset to null on
+  // failure so a transient error (e.g. a locked file) stays retryable rather
+  // than caching a permanently-failed future.
   @override
-  Future<void> init() async {
-    if (_isar != null) return;
-    final dir = await getApplicationDocumentsDirectory();
-    _isar = await Isar.open(
-      [HistoryItemSchemaSchema],
-      directory: dir.path,
-      name: 'history_db',
-    );
+  Future<void> init() => _initFuture ??= _open();
+
+  Future<void> _open() async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      _isar = await Isar.open(
+        [HistoryItemSchemaSchema],
+        directory: dir.path,
+        name: 'history_db',
+      );
+    } catch (_) {
+      _initFuture = null;
+      rethrow;
+    }
   }
 
   @override
@@ -128,16 +139,25 @@ class IsarHistoryRepository implements LocalDatabaseRepository<HistoryItemSchema
 /// Concrete implementation of [LocalDatabaseRepository] using Isar.
 class IsarBookmarkRepository implements LocalDatabaseRepository<BookmarkSchema> {
   Isar? _isar;
+  Future<void>? _initFuture;
 
+  // See IsarHistoryRepository.init — shared-future guard against the concurrent
+  // double-open race; reset on failure so transient errors stay retryable.
   @override
-  Future<void> init() async {
-    if (_isar != null) return;
-    final dir = await getApplicationDocumentsDirectory();
-    _isar = await Isar.open(
-      [BookmarkSchemaSchema],
-      directory: dir.path,
-      name: 'bookmarks_db',
-    );
+  Future<void> init() => _initFuture ??= _open();
+
+  Future<void> _open() async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      _isar = await Isar.open(
+        [BookmarkSchemaSchema],
+        directory: dir.path,
+        name: 'bookmarks_db',
+      );
+    } catch (_) {
+      _initFuture = null;
+      rethrow;
+    }
   }
 
   @override
@@ -213,15 +233,24 @@ class IsarBookmarkRepository implements LocalDatabaseRepository<BookmarkSchema> 
 
 class IsarDownloadRepository {
   Isar? _isar;
+  Future<void>? _initFuture;
 
-  Future<void> init() async {
-    if (_isar != null) return;
-    final dir = await getApplicationSupportDirectory();
-    _isar = await Isar.open(
-      [DownloadRecordSchemaSchema],
-      directory: dir.path,
-      name: 'downloads_db',
-    );
+  // See IsarHistoryRepository.init — shared-future guard against the concurrent
+  // double-open race; reset on failure so transient errors stay retryable.
+  Future<void> init() => _initFuture ??= _open();
+
+  Future<void> _open() async {
+    try {
+      final dir = await getApplicationSupportDirectory();
+      _isar = await Isar.open(
+        [DownloadRecordSchemaSchema],
+        directory: dir.path,
+        name: 'downloads_db',
+      );
+    } catch (_) {
+      _initFuture = null;
+      rethrow;
+    }
   }
 
   Future<void> saveAll(List<MiraDownloadTask> tasks) async {
