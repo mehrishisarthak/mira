@@ -96,10 +96,18 @@ final activeTabIdProvider = Provider<String>((ref) {
 
 final desktopFindBarVisibleProvider = StateProvider<bool>((ref) => false);
 
-/// Screenshot of the active webview, captured when a Flutter overlay (the tab
-/// sheet) opens over the live page. While non-null, [BrowserView] Offstages the
-/// live Hybrid-Composition surface and paints this image instead — removing the
-/// platform-view from the composite so the overlay animates without the HC tax,
-/// while keeping the native view alive (no reload on restore). Null = show the
-/// live webview (default, or capture unsupported/failed).
-final webViewSnapshotProvider = StateProvider<Uint8List?>((ref) => null);
+/// Screenshot of a specific tab's webview, captured when a Flutter overlay (the
+/// tab sheet) opens over the live page. While set, [BrowserView] Offstages that
+/// tab's live Hybrid-Composition surface and paints this image instead —
+/// dropping the platform-view from the composite so the overlay animates
+/// without the HC tax, while keeping the native view alive (no reload on
+/// restore). Scoped by [tabId] so switching tabs from the sheet shows the new
+/// tab live, not this stale screenshot. Null = show the live webview.
+@immutable
+class WebViewSnapshot {
+  const WebViewSnapshot({required this.tabId, required this.bytes});
+  final String tabId;
+  final Uint8List bytes;
+}
+
+final webViewSnapshotProvider = StateProvider<WebViewSnapshot?>((ref) => null);

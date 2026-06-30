@@ -97,7 +97,12 @@ class _BrowserViewState extends ConsumerState<BrowserView>
           // out of the composite so the overlay animates without the
           // platform-view tax, while keeping the native view alive (no reload
           // on restore). Same offstage-but-alive pattern as inactive tabs.
-          final snapshot = isShowing ? webViewSnapshot : null;
+          // Scoped to the captured tab so switching tabs from the sheet shows
+          // the new tab live, not the previous tab's screenshot.
+          final snapshotBytes =
+              (isShowing && webViewSnapshot?.tabId == tab.id)
+                  ? webViewSnapshot!.bytes
+                  : null;
 
           return Positioned.fill(
             key: ValueKey('vis_${tab.id}'),
@@ -108,13 +113,13 @@ class _BrowserViewState extends ConsumerState<BrowserView>
                 fit: StackFit.expand,
                 children: [
                   Offstage(
-                    offstage: snapshot != null,
+                    offstage: snapshotBytes != null,
                     child:
                         engine.buildWidget(tabId: tab.id, initialUrl: tab.url),
                   ),
-                  if (snapshot != null)
+                  if (snapshotBytes != null)
                     Image.memory(
-                      snapshot,
+                      snapshotBytes,
                       fit: BoxFit.fill,
                       gaplessPlayback: true,
                     ),

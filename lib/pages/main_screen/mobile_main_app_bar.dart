@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mira/constants/app_fonts.dart';
@@ -154,10 +156,17 @@ Widget buildMobileBottomBar({
                 // BrowserView (which Offstages the webview) so the sheet
                 // animates without the Hybrid-Composition compositing tax.
                 // A null capture falls back to the live webview — no regression.
-                final shot =
-                    await ref.read(activeBrowserEngineProvider)?.takeSnapshot();
+                final engine = ref.read(activeBrowserEngineProvider);
+                final shot = await engine?.takeSnapshot();
                 if (!context.mounted) return;
-                ref.read(webViewSnapshotProvider.notifier).state = shot;
+                if (shot != null) {
+                  ref.read(webViewSnapshotProvider.notifier).state =
+                      WebViewSnapshot(tabId: activeTab.id, bytes: shot);
+                }
+                // The snapshot stops the page *compositing*; hibernate() (native
+                // pause) also stops it *producing* frames, so a video page
+                // doesn't burn CPU/battery behind the sheet.
+                unawaited(engine?.hibernate());
                 await showModalBottomSheet(
                   context: context,
                   isScrollControlled: true,
@@ -165,6 +174,7 @@ Widget buildMobileBottomBar({
                   builder: (_) => const FractionallySizedBox(
                       heightFactor: 0.8, child: TabsSheet()),
                 );
+                unawaited(engine?.wake());
                 if (!context.mounted) return;
                 ref.read(webViewSnapshotProvider.notifier).state = null;
               },
