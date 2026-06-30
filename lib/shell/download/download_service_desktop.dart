@@ -221,6 +221,10 @@ class DesktopDownloadService implements DownloadService {
       );
 
       final client = HttpClient();
+      // Bound the connect time so a server that never accepts can't stall the
+      // task forever (O-18). The per-chunk idle timeout below covers a server
+      // that connects then goes silent (slow-loris).
+      client.connectionTimeout = const Duration(seconds: 30);
       t.client = client;
 
       final request = await client.getUrl(Uri.parse(t.url));
@@ -237,7 +241,8 @@ class DesktopDownloadService implements DownloadService {
         });
       }
 
-      final response = await request.close();
+      final response =
+          await request.close().timeout(const Duration(seconds: 30));
 
       if (t.cancelRequested) {
         await _abortTransfer(taskId, t, deletePartial: true);
@@ -273,7 +278,9 @@ class DesktopDownloadService implements DownloadService {
       final sink = file.openWrite();
       t.sink = sink;
 
-      await for (final chunk in response) {
+      // Per-chunk idle timeout: if a connected server stops sending for 60s,
+      // abort instead of holding the socket + file handle open (O-18).
+      await for (final chunk in response.timeout(const Duration(seconds: 60))) {
         if (t.cancelRequested) {
           await _abortTransfer(taskId, t, deletePartial: true);
           onTaskUpdated(
@@ -318,6 +325,14 @@ class DesktopDownloadService implements DownloadService {
       );
       debugPrint('MIRA_DOWNLOAD: Complete -> ${t.savePath}');
     } catch (e) {
+      // Release the file + socket handles — critical on a timeout, where the
+      // whole point is to stop a slow server from holding resources (O-18).
+      try {
+        await t.sink?.close();
+      } catch (_) {}
+      try {
+        t.client?.close(force: true);
+      } catch (_) {}
       _removeActive(taskId);
       onTaskUpdated(
         taskId,
