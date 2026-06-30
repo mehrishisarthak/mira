@@ -61,6 +61,7 @@ class _BrowserViewState extends ConsumerState<BrowserView>
 
     final awakeTabIds = ref.watch(hibernationProvider);
     final webError = ref.watch(browserChromeProvider.select((s) => s.webError));
+    final webViewSnapshot = ref.watch(webViewSnapshotProvider);
     final activeUrl = tabs.isNotEmpty ? tabs[activeIndex].url : '';
 
     return Stack(
@@ -91,13 +92,34 @@ class _BrowserViewState extends ConsumerState<BrowserView>
           }
 
           final engine = ref.watch(browserEngineProvider(tab.id));
+          // While an overlay (tab sheet) is open, swap the active page for its
+          // screenshot and Offstage the live webview: this drops the HC surface
+          // out of the composite so the overlay animates without the
+          // platform-view tax, while keeping the native view alive (no reload
+          // on restore). Same offstage-but-alive pattern as inactive tabs.
+          final snapshot = isShowing ? webViewSnapshot : null;
 
           return Positioned.fill(
             key: ValueKey('vis_${tab.id}'),
             child: Visibility(
               visible: isShowing,
               maintainState: true,
-              child: engine.buildWidget(tabId: tab.id, initialUrl: tab.url),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Offstage(
+                    offstage: snapshot != null,
+                    child:
+                        engine.buildWidget(tabId: tab.id, initialUrl: tab.url),
+                  ),
+                  if (snapshot != null)
+                    Image.memory(
+                      snapshot,
+                      fit: BoxFit.fill,
+                      gaplessPlayback: true,
+                    ),
+                ],
+              ),
             ),
           );
         }),

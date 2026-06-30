@@ -4,6 +4,7 @@ import 'package:mira/constants/app_fonts.dart';
 
 import 'package:mira/core/entities/tab_entity.dart';
 import 'package:mira/core/notifiers/bookmarks_notifier.dart';
+import 'package:mira/pages/browser_chrome_providers.dart';
 import 'package:mira/pages/mira_drawer.dart';
 import 'package:mira/pages/main_screen/browser_progress_bar.dart';
 import 'package:mira/pages/main_screen/main_screen_haptics.dart';
@@ -147,15 +148,25 @@ Widget buildMobileBottomBar({
 
             // ── Tab count ────────────────────────────────────────────────────
             InkWell(
-              onTap: () {
+              onTap: () async {
                 triggerHaptic(MainScreenHapticKind.selection);
-                showModalBottomSheet(
+                // Snapshot-swap: capture the live page and hand it to
+                // BrowserView (which Offstages the webview) so the sheet
+                // animates without the Hybrid-Composition compositing tax.
+                // A null capture falls back to the live webview — no regression.
+                final shot =
+                    await ref.read(activeBrowserEngineProvider)?.takeSnapshot();
+                if (!context.mounted) return;
+                ref.read(webViewSnapshotProvider.notifier).state = shot;
+                await showModalBottomSheet(
                   context: context,
                   isScrollControlled: true,
                   backgroundColor: Colors.transparent,
                   builder: (_) => const FractionallySizedBox(
                       heightFactor: 0.8, child: TabsSheet()),
                 );
+                if (!context.mounted) return;
+                ref.read(webViewSnapshotProvider.notifier).state = null;
               },
               child: Container(
                 margin: const EdgeInsets.symmetric(horizontal: 6),
