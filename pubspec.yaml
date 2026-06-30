@@ -15,6 +15,7 @@ dependencies:
   flutter_downloader: ^1.12.0
   flutter_inappwebview: ^6.1.5
   flutter_riverpod: ^2.6.1
+  flutter_secure_storage: ^10.3.1
   google_fonts: ^6.3.3
   http: ^1.6.0
   isar: ^3.1.0+1

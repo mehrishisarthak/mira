@@ -1,14 +1,19 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:mira/core/services/secure_tab_store.dart';
 
 class PreferencesService {
   final SharedPreferences _prefs;
 
-  PreferencesService(this._prefs);
+  /// Tab JSON list pre-loaded (and migrated off plaintext) from encrypted
+  /// storage in `main()`, so `getSavedTabs()` stays synchronous (O-04).
+  final List<String> _cachedTabs;
+
+  PreferencesService(this._prefs, {List<String> cachedTabs = const []})
+      : _cachedTabs = cachedTabs;
 
   // --- KEYS ---
   static const _keySearchEngine = 'selected_search_engine';
-  static const _keySavedTabs = 'saved_tabs';     
   static const _keyActiveTabIndex = 'active_tab_index';
   
   // Security Keys
@@ -32,16 +37,16 @@ class PreferencesService {
   Future<void> setSearchEngine(String engineKey) async => await _prefs.setString(_keySearchEngine, engineKey);
 
   // --- TABS PERSISTENCE ---
-  List<String> getSavedTabs() {
-    return _prefs.getStringList(_keySavedTabs) ?? [];
-  }
+  // Tab URLs/titles are encrypted at rest via SecureTabStore (O-04); the active
+  // index is not sensitive and stays in SharedPreferences.
+  List<String> getSavedTabs() => _cachedTabs;
 
   int getActiveTabIndex() {
     return _prefs.getInt(_keyActiveTabIndex) ?? 0;
   }
 
   Future<void> saveTabs(List<String> tabsJson, int activeIndex) async {
-    await _prefs.setStringList(_keySavedTabs, tabsJson);
+    await SecureTabStore.save(tabsJson);
     await _prefs.setInt(_keyActiveTabIndex, activeIndex);
   }
 

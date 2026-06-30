@@ -14,6 +14,7 @@ import 'package:mira/pages/onboarding_screen.dart';
 import 'package:mira/pages/splashscreen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mira/core/services/preferences_service.dart';
+import 'package:mira/core/services/secure_tab_store.dart';
 import 'package:mira/core/observers/provider_observer.dart';
 import 'package:http/http.dart' as http;
 
@@ -66,7 +67,12 @@ Future<void> main(List<String> args) async {
 
   // 2. Initialize Core Services (Prefs & Downloads)
   final prefs = await SharedPreferences.getInstance();
-  final PreferencesService preferencesService = PreferencesService(prefs);
+  // Load normal tabs from encrypted storage (migrating any legacy plaintext
+  // list) so the rest of the app keeps its synchronous tab API (O-04). One
+  // bounded Keystore read, well inside the splash buffer.
+  final cachedTabs = await SecureTabStore.load(prefs);
+  final PreferencesService preferencesService =
+      PreferencesService(prefs, cachedTabs: cachedTabs);
   final isFirstRun = preferencesService.getFirstRun();
 
   await DownloadManager.init();
