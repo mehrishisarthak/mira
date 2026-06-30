@@ -5,7 +5,7 @@
 > (`audit_report.md`, `definitive_audit_report.md`, `MIRA_DEFINITIVE_AUDIT.md`,
 > `ISSUES_AUDIT.md`, `FULL_CODEBASE_VALIDATOR_REPORT.md`), all now deleted.
 >
-> **Last updated:** 2026-06-22
+> **Last updated:** 2026-06-30
 > **Legend:** 🔴 high · 🟠 medium · 🟡 low · ⚪ info/cosmetic · ✅ done · ❌ rejected
 
 ---
@@ -23,20 +23,32 @@
 ### Performance
 | ID | Sev | Issue | Location | Notes |
 |----|----|-------|----------|-------|
-| O-08 | 🟡 | Desktop find bar re-injects a 175-line JS library on every keystroke / Next. | `desktop_find_bar.dart:193` | Inject the library once on open (flag), then only the command. Desktop only. |
 | — | ℹ️ | **Perf caveat:** O-06/O-07 must be judged in `--profile`/release on Android, **not** debug (`flutter run`). Debug jank is an artifact; profile the specific interaction (perf overlay → UI vs raster thread) before optimizing the hot path. | — | Profile first. |
+
+#### Mobile platform-view / rendering audit (2026-06-24)
+UI-shell rendering pass focused on the Flutter↔native WebView bridge.
+
+> **PROFILED 2026-06-24** (`--profile`, 60 Hz device, DevTools `flutterFrames` + `dumpsys meminfo` + logcat; traces in `profile test reports/`). Verdicts below are now **measured**, not estimated. Headline: the jank is **raster-thread / platform-view-bound**, not Dart-build-bound — the Riverpod rebuild work (O-06/O-07/D-29) was already clean. Root cause across O-42/O-48 (and O-49 — since corroborated by its *content-independent* tab-sheet lag and fixed via snapshot-swap, D-32) is the **Hybrid-Composition tax**: creating an `InAppWebView`, or animating Flutter content *over* a live one, stalls the UI/raster threads. **Device RAM still unknown — needed to finalize O-47 severity.**
+
+| ID | Sev | Issue | Location | Notes |
+|----|----|-------|----------|-------|
+| O-42 | 🔴 | **CONFIRMED (profile + logcat).** Hibernation wake = full native WebView teardown + reload, not a real pause. A tab evicted past the live cap (4 on mobile) is swapped for `HibernatedTabPlaceholder`, which **unmounts the `InAppWebView`** → native view disposed. Waking rebuilds a fresh `InAppWebView` with `initialUrlRequest`, so the page **re-fetches and re-renders from byte 0** — scroll/form/JS state lost. `engine.hibernate()/pause()/wake()/resume()` are effectively **dead code**. Mobile. | `browser_view.dart:83-102`, `hibernation_notifier.dart`, `in_app_webview_engine.dart:150-157` | **Evidence (Test A, 768 frames, 60Hz):** 258 over budget (34%); switch-back UI-thread **build stalls 77–141 ms** (synchronous platform-view creation) + a **224 ms raster** hitch; `Test_A_Logcat.txt` shows YouTube/Google **re-loading** on switch-back. Bumped 🟠→🔴. Fix: (a) accept reload + delete dead pause path, or (b) keep evicted views offstage-alive longer / snapshot scroll. (b) is the real win. |
+| O-43 | 🟠❔ | **INCONCLUSIVE — likely NOT EXERCISED, must re-run.** Test B showed no jank, but the resize path only runs if a **heavy page was loaded** during the capture, and the evidence suggests it wasn't. **Do not reject yet; do not build the fix yet.** | `Test_B_Performance.json`, `AndroidManifest.xml:32` | **Evidence (Test B, 54 frames):** 0 build-janky, 1/54 raster-janky, **raster p50 4.1 ms** — vs **10–13 ms** in both webview-present traces. That low raster baseline implies the active `InAppWebView` was **not compositing** during the test (start page / no page), so the keyboard-resize-over-live-HC path was never triggered. **Re-run: load a heavy page, THEN focus the omnibox**, and confirm page state via logcat. Only then confirm-or-reject. |
+| O-46 | 🟠 | **Edge-swipe back vs web horizontal scroll + predictive back.** `PopScope(canPop:false)` consumes the Android system back gesture for app/page nav; on Android 13+ the back gesture is an **edge swipe** that collides with horizontal scroll/carousels at the screen edge inside the page. With `targetSdk 35` (R-02) the predictive-back animation is also suppressed by `canPop:false`. Mobile gesture. | `mainscreen.dart:396-401`, `_handlePop` | Audit on-device with a horizontally-scrollable page. Consider predictive-back-aware `PopScope` once on SDK 35; evaluate gesture-exclusion at edges. |
+| O-47 | 🟡 | **Quantified (meminfo) — real cost, NOT a confirmed kill yet.** Up to 4 live Hybrid-Composition surfaces held simultaneously (cap from D-06). Cap is a fixed constant, not RAM-adaptive. Mobile. | `hibernation_limits_io.dart`, `hibernation_notifier.dart` | **Evidence (Test C):** 4 webviews → **359 MB PSS**, **69 MB EGL/graphics** foreground (~17 MB/surface); backgrounding dropped to 298 MB / 39 MB graphics; **same PID survived backgrounding + a live camera app → no OS kill.** Stays 🟡. **Blocked on device RAM** to judge low-end risk; consider tying the cap to `ActivityManager` memory class. |
+| O-48 | 🟠 | **CONFIRMED (profile, 2 traces) — cold WebView creation stalls the UI thread.** Native `InAppWebView` instantiation initializes the HC pipeline synchronously on the UI thread, dropping frames on first build and on every wake past the cap. No warm-up / keep-alive pool. Mobile. | `browser_view.dart:100`, `database_providers.dart:22` | **Evidence — (1) cold-boot tab restore (`opening_pre_existing_tabs.json`, 205 frames):** 76 over budget (37%); the first restored webview mount = **build stalls 129 ms + 90 ms** at frames #88–89, then a **225 ms raster** hitch (#91, vsyncOverhead ~1014 ms) — i.e. cold start with a restored page is visibly janky. **(2) Test A switch-back:** 77–141 ms build spikes (same cold-create on wake). Build is otherwise ~0.9 ms, so the stall is the platform-view create, **not** Dart (attribution **inferred** from the clean Dart baseline, not decoded from the Perfetto binary). Bumped 🟡→🟠. Fix: pre-warm one engine during the splash buffer; folds into the O-42 keep-alive decision. |
+| O-44 | 🟡 | **No `RepaintBoundary` around the active platform-view webview.** Best-practice isolation is missing, but the marginal win is **small** here: an Android HC webview is already its own `PlatformViewLayer`, and the mobile progress/skeleton/chrome are in sibling subtrees (separate Column branches), so cross-repaint is mostly already bounded. Honest low. | `browser_view.dart:95-102` | Wrap each `Positioned.fill` webview child in `RepaintBoundary` only if a profile trace shows the Stack's other children (skeleton overlay, ghost flash) repainting on page paint. Don't add speculatively. |
+| O-45 | ⚪ | **DEPRIORITIZED by profile.** Mainscreen shell full-rebuilds on active-tab url/title tick — residual after D-29. Profiling shows **build time is not the bottleneck** (p50 ~0.9 ms; jank is raster/platform-view-bound), so this is now a micro-cleanup, not a perf fix — and it isn't the safe one-liner first thought: desktop's address field reads `activeTab.url` in 5 places and both bars need `activeTab.title` for bookmark callbacks. | `mainscreen.dart:327`, `currentActiveTabProvider` | Only worth doing as hygiene: `select((t) => t.url)` + read `title` fresh in the bookmark callbacks. No measurable frame win expected. |
 
 ### Memory / Lifecycle
 | ID | Sev | Issue | Location | Notes |
 |----|----|-------|----------|-------|
-| O-11 | 🟡 | Force-kill tab loss: 500 ms save debounce + only `resumed` lifecycle handled → pending tab state lost on OS kill. *(unverified)* | `tab_notifier.dart`, `mainscreen.dart:122` | Flush `saved_tabs` on `paused`/`detached`. |
 | O-12 | 🟡 | Unawaited prefs setters can silently swallow write failures → in-memory vs disk divergence. *(unverified)* | `*_notifier.dart`, `preferences_service.dart` | Low; consider surfacing/logging write errors. |
 
 ### Bugs
 | ID | Sev | Issue | Location | Notes |
 |----|----|-------|----------|-------|
 | O-17 | 🟡 | Desktop "resume"/"retry" deletes the partial and restarts from byte 0 (no HTTP `Range`). | `download_service_desktop.dart:127-130` | Rename to "restart" or implement range-resume. Desktop. |
-| O-18 | 🟡 | Desktop download has no timeout — a slow-loris server holds the handle indefinitely. *(unverified)* | `download_service_desktop.dart` | Add `.timeout(...)`. Desktop. |
 | O-36 | 🟠 | **Desktop: address bar can't be focused/clicked once a page is loaded.** Loaded+unfocused renders the domain as `Text`+`GestureDetector`; tapping `requestFocus()`s the field but native WebView2 retains OS keyboard focus, so it never becomes editable. *(found in runtime pass — Windows)* | `desktop_browser_chrome.dart:234` | Likely `flutter_inappwebview_windows` limitation (see O-39). Force OS focus back to the Flutter view on tap; needs on-Windows iteration. |
 | O-37 | 🟠 | **Desktop: back/forward buttons do nothing.** MIRA calls the correct API (`engine.goBack()/goForward()` → `_controller?.goBack()/goForward()`); the no-op is in the Windows webview backend. *(runtime pass — Windows)* | `desktop_browser_chrome.dart:67-80` | See O-39. Optionally gate buttons on `canGoBack/canGoForward` for an honest disabled state. |
 | O-38 | 🟠 | **Desktop: trackpad scroll & pinch-zoom don't reach the page.** Standard `InAppWebView`, no gesture suppression in MIRA; trackpad gestures aren't forwarded to the native WebView2. *(runtime pass — Windows)* | `in_app_webview_engine.dart:292` | See O-39. Investigate gesture forwarding / `gestureRecognizers`; may be upstream. |
@@ -114,6 +126,17 @@ fixes add zero features; these are the second leg of the path. Severity here =
 | D-10 | Extracted `BrowserProgressBar`; `Mainscreen` no longer full-rebuilds on every progress tick |
 | D-11 | Firebase-free speed-dial plan doc |
 
+### Merged to `master` — 2026-06-30 perf / lifecycle pass
+Found in the Claude Council platform-view audit (mobile-first). Approaches recorded for each.
+
+| ID | Item (issue → approach taken) |
+|----|-------------------------------|
+| D-30 | **Opaque WebView surface (was O-50, new finding).** Audit found every `InAppWebView` created with `transparentBackground: true`, forcing the Hybrid-Composition surface to alpha-blend every frame though nothing renders behind the active webview (branding is a sibling shown only on empty url; the skeleton is an opaque overlay on top). **Approach:** removed the flag so the surface composites opaque (default). Emulator-verified no white/dark-page flash; raster win still to confirm on physical hardware. `in_app_webview_engine.dart`. |
+| D-31 | **Scoped the desktop find-bar chrome watch + documented the notify footgun (was O-51, new finding).** `desktop_find_bar` watched `browserChromeProvider` unscoped, rebuilding on every progress tick. Root cause is general: `BrowserChromeNotifier` allocates a fresh state per setter and `StateNotifier` notifies by `identical()`, so the hand-written `==` never suppresses a notification — *any* unscoped watch is a per-tick rebuild. **Approach:** `.select((s) => s.engine)` at the call site + a comment on `BrowserChromeState.==` that it is consulted only by `.select`. `desktop_find_bar.dart`, `browser_chrome_providers.dart`. |
+| D-32 | **Snapshot-swap the webview while the tab sheet is open (was O-49).** The lag was content-independent (static and video pages stutter equally) → not the page producing frames, but the HC compositing tax: a live platform-view surface composited under the animating sheet every frame. `TabsSheet` itself is cheap (verified), so not the sheet build. **Approach:** on tab-count tap, `takeSnapshot()` the active page into `webViewSnapshotProvider` (scoped `WebViewSnapshot{tabId,bytes}`); `BrowserView` Offstages that tab's live webview and paints the screenshot, dropping the surface out of the composite while keeping the native view alive (no reload — same offstage-but-alive pattern as inactive tabs). Tab-scoped so switching tabs from the sheet renders the new tab live, not a stale shot. `hibernate()` (native pause) on open / `wake()` on close so a video page stops producing frames behind the sheet. Null capture → live-view fallback (no regression). `mobile_main_app_bar.dart`, `browser_view.dart`, `browser_chrome_providers.dart`. **Pending:** physical-device confirmation (lag was user-reported, never profiled). |
+| D-33 | **Flush pending tab save on app pause/detach (was O-11).** Tab url/title persist through a 500 ms debounce and the lifecycle observer only handled `resumed`, so a change inside the debounce window was lost on OS kill while backgrounded. **Approach:** added `TabsNotifier.flush()` (cancel pending debounce + write immediately, no-op if nothing pending) called from `didChangeAppLifecycleState` on `paused`/`detached`. Ghost tabs are intentionally ephemeral and not flushed. `tab_notifier.dart`, `mainscreen.dart`. |
+| D-34 | **Timeouts on desktop downloads (was O-18).** The desktop `HttpClient` download had no timeout, so a server that connected then stalled held the socket + file handle open indefinitely. **Approach:** `connectionTimeout` (30 s) for the connect phase, `request.close().timeout(30 s)` for the header wait, `response.timeout(60 s)` per-chunk idle timeout for a connected-then-silent (slow-loris) server, and the `catch` now closes the sink + force-closes the client so a timeout actually releases the handles. Desktop preview path (gated by O-39). `download_service_desktop.dart`. |
+
 ### Fixed, PR open — `chore/cleanup-batch`
 | ID | Item |
 |----|------|
@@ -137,6 +160,7 @@ fixes add zero features; these are the second leg of the path. Severity here =
 | D-29 | Rebuild-scope hygiene (was O-06/O-07): `BrowserView` now `.select`s a structural signature (ids + url-empty + activeIndex) so the webview `Stack` no longer rebuilds on every url/title tick; `Mainscreen` swapped its full `tabsProvider`/`ghostTabsProvider`/`bookmarksProvider` watches for derived `tabCountProvider` + `isCurrentUrlBookmarkedProvider`. *(Reduces UI-thread rebuilds; impact to be confirmed by an Android `--profile` pass, per the perf caveat.)* |
 
 ### Verified already-fixed (found resolved during audit triage — no action)
+- O-08: desktop find bar already injects its JS library **once per open** behind the `_libraryInjected` flag (`desktop_find_bar.dart:197`), then sends only the command per keystroke; `_close()` resets the flag. The issue text pointed at a stale line (193) — no per-keystroke re-injection occurs.
 - O-25: `mainscreen` no longer imports `history_notifier` (orphaned import already gone).
 - `CustomErrorScreen` is rendered on `webError` (`browser_view.dart`).
 - `HistoryNotifier` & `BookmarksNotifier` cancel their stream subscriptions in `dispose()`.
@@ -147,7 +171,7 @@ fixes add zero features; these are the second leg of the path. Severity here =
 - Ad-block toggle updates live WebViews (`updateSettings` sets `contentBlockers`).
 - Location/camera flags applied to the WebView (`geolocationEnabled`, `onPermissionRequest`).
 - `_performSearch` already guards whitespace-only input via `value.trim().isEmpty` (was O-16).
-- O-09: `tab_notifier` does **not** persist on every url/title event — `updateUrl`/`updateTitle` route through a 500 ms `_scheduleSave()` debounce; only discrete actions (`addTab`/`closeTab`/`switchTab`/`reorderTab`/`nuke`) write immediately. Resolved by existing design. (The same debounce is the *risk* tracked by O-11 — pending write lost on OS kill.)
+- O-09: `tab_notifier` does **not** persist on every url/title event — `updateUrl`/`updateTitle` route through a 500 ms `_scheduleSave()` debounce; only discrete actions (`addTab`/`closeTab`/`switchTab`/`reorderTab`/`nuke`) write immediately. Resolved by existing design. (The same debounce was the *risk* tracked by O-11 — pending write lost on OS kill — now fixed, D-33.)
 
 ---
 
