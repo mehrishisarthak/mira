@@ -18,6 +18,11 @@ class BrowserChromeState {
   final int loadingProgress;
   final String? webError;
 
+  // NOTE: consulted only by `.select` consumers. The StateNotifier itself
+  // notifies by identical(), and every setter allocates a fresh instance, so
+  // this == never suppresses a notification — any *unscoped*
+  // watch(browserChromeProvider) rebuilds on every progress tick. Always
+  // `.select` the field you need.
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||

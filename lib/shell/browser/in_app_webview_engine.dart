@@ -297,7 +297,6 @@ class InAppWebViewEngine implements BrowserEngine {
           : null,
       initialSettings: InAppWebViewSettings(
         incognito: _isPrivate,
-        transparentBackground: true,
         useShouldOverrideUrlLoading: true,
         useOnDownloadStart: true,
         geolocationEnabled: !_isLocationBlocked,

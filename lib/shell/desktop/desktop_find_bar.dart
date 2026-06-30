@@ -226,7 +226,10 @@ class _DesktopFindBarState extends ConsumerState<DesktopFindBar> {
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
-    final engine = ref.watch(browserChromeProvider).engine;
+    // .select so the find bar doesn't rebuild on every progress tick — an
+    // unscoped watch(browserChromeProvider) notifies on each setter (see the
+    // == note in browser_chrome_providers.dart).
+    final engine = ref.watch(browserChromeProvider.select((s) => s.engine));
     final canSearch = engine != null;
     final isLight = theme.mode == ThemeMode.light;
     final bg = theme.surfaceColor;
