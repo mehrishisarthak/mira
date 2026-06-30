@@ -108,6 +108,15 @@ class TabsNotifier extends StateNotifier<TabsState> {
     _saveDebounce = Timer(const Duration(milliseconds: 500), () => unawaited(_saveToPrefs()));
   }
 
+  /// Force an immediate write of any pending debounced save. Called on app
+  /// pause/detach so a url/title change still inside the 500 ms debounce window
+  /// isn't lost if the OS kills the process before the timer fires (O-11).
+  Future<void> flush() async {
+    if (!(_saveDebounce?.isActive ?? false)) return;
+    _saveDebounce?.cancel();
+    await _saveToPrefs();
+  }
+
   // --- ACTIONS ---
 
   void addTab({String url = ''}) {

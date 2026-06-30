@@ -135,6 +135,11 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
         final engine = ref.read(browserChromeProvider).engine;
         engine?.reload();
       }
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      // Flush any pending debounced tab save before the OS can kill the
+      // process, so a recent url/title change isn't lost (O-11).
+      unawaited(ref.read(tabsProvider.notifier).flush());
     }
   }
 
