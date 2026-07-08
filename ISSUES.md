@@ -1,8 +1,8 @@
-# MIRA — Issue Tracker
+# MERIS — Issue Tracker
 
 > **Living document.** Single source of truth for known issues, fixes, and
 > dismissed findings. Supersedes and replaces the prior scattered audit files
-> (`audit_report.md`, `definitive_audit_report.md`, `MIRA_DEFINITIVE_AUDIT.md`,
+> (`audit_report.md`, `definitive_audit_report.md`, `MERIS_DEFINITIVE_AUDIT.md`,
 > `ISSUES_AUDIT.md`, `FULL_CODEBASE_VALIDATOR_REPORT.md`), all now deleted.
 >
 > **Last updated:** 2026-06-30
@@ -38,6 +38,11 @@ UI-shell rendering pass focused on the Flutter↔native WebView bridge.
 | O-48 | 🟠 | **CONFIRMED (profile, 2 traces) — cold WebView creation stalls the UI thread.** Native `InAppWebView` instantiation initializes the HC pipeline synchronously on the UI thread, dropping frames on first build and on every wake past the cap. No warm-up / keep-alive pool. Mobile. | `browser_view.dart:100`, `database_providers.dart:22` | **Evidence — (1) cold-boot tab restore (`opening_pre_existing_tabs.json`, 205 frames):** 76 over budget (37%); the first restored webview mount = **build stalls 129 ms + 90 ms** at frames #88–89, then a **225 ms raster** hitch (#91, vsyncOverhead ~1014 ms) — i.e. cold start with a restored page is visibly janky. **(2) Test A switch-back:** 77–141 ms build spikes (same cold-create on wake). Build is otherwise ~0.9 ms, so the stall is the platform-view create, **not** Dart (attribution **inferred** from the clean Dart baseline, not decoded from the Perfetto binary). Bumped 🟡→🟠. Fix: pre-warm one engine during the splash buffer; folds into the O-42 keep-alive decision. |
 | O-44 | 🟡 | **No `RepaintBoundary` around the active platform-view webview.** Best-practice isolation is missing, but the marginal win is **small** here: an Android HC webview is already its own `PlatformViewLayer`, and the mobile progress/skeleton/chrome are in sibling subtrees (separate Column branches), so cross-repaint is mostly already bounded. Honest low. | `browser_view.dart:95-102` | Wrap each `Positioned.fill` webview child in `RepaintBoundary` only if a profile trace shows the Stack's other children (skeleton overlay, ghost flash) repainting on page paint. Don't add speculatively. |
 | O-45 | ⚪ | **DEPRIORITIZED by profile.** Mainscreen shell full-rebuilds on active-tab url/title tick — residual after D-29. Profiling shows **build time is not the bottleneck** (p50 ~0.9 ms; jank is raster/platform-view-bound), so this is now a micro-cleanup, not a perf fix — and it isn't the safe one-liner first thought: desktop's address field reads `activeTab.url` in 5 places and both bars need `activeTab.title` for bookmark callbacks. | `mainscreen.dart:327`, `currentActiveTabProvider` | Only worth doing as hygiene: `select((t) => t.url)` + read `title` fresh in the bookmark callbacks. No measurable frame win expected. |
+| O-52 | 🔴 | **IPC Navigation Tax (shouldOverrideUrlLoading).** Overriding all navigations blocks the Flutter UI thread for 70ms+ per tap. | `in_app_webview_engine.dart` | Fix: Filter by scheme (only intercept non-http/https) or migrate to a native Kotlin/Swift filter. |
+| O-53 | 🔴 | **AdBlock Serialization Jank.** Pushing 2,500+ rules synchronously during WebView creation blocks the UI thread for 77-140ms. | `in_app_webview_engine.dart` | Fix: Asynchronous Lazy-Injection of `ContentBlocker` rules after `onWebViewCreated` fires. |
+| O-54 | 🟠 | **Keyboard Resize Thrashing.** The `resizeToAvoidBottomInset` triggers heavy Hybrid Composition rebuilds when the keyboard appears. | `mainscreen.dart` | Fix: Disable `resizeToAvoidBottomInset` conditionally when a WebView is active. |
+| O-55 | 🟠 | **Widget Tree Bloat (Hibernated Tabs).** Offstage tabs still carry heavy widget tree overhead for native views. | `browser_view.dart` | Fix: Replace with simple snapshot `Image` widgets while offstage. |
+| O-56 | 🟡 | **Permission Blindspot.** Missing graceful handling of denied permissions in Ghost Mode or when downloading. | `security_provider.dart` | Fix: Audit permission flows to handle persistent OS denials smoothly. |
 
 ### Memory / Lifecycle
 | ID | Sev | Issue | Location | Notes |
@@ -49,8 +54,8 @@ UI-shell rendering pass focused on the Flutter↔native WebView bridge.
 |----|----|-------|----------|-------|
 | O-17 | 🟡 | Desktop "resume"/"retry" deletes the partial and restarts from byte 0 (no HTTP `Range`). | `download_service_desktop.dart:127-130` | Rename to "restart" or implement range-resume. Desktop. |
 | O-36 | 🟠 | **Desktop: address bar can't be focused/clicked once a page is loaded.** Loaded+unfocused renders the domain as `Text`+`GestureDetector`; tapping `requestFocus()`s the field but native WebView2 retains OS keyboard focus, so it never becomes editable. *(found in runtime pass — Windows)* | `desktop_browser_chrome.dart:234` | Likely `flutter_inappwebview_windows` limitation (see O-39). Force OS focus back to the Flutter view on tap; needs on-Windows iteration. |
-| O-37 | 🟠 | **Desktop: back/forward buttons do nothing.** MIRA calls the correct API (`engine.goBack()/goForward()` → `_controller?.goBack()/goForward()`); the no-op is in the Windows webview backend. *(runtime pass — Windows)* | `desktop_browser_chrome.dart:67-80` | See O-39. Optionally gate buttons on `canGoBack/canGoForward` for an honest disabled state. |
-| O-38 | 🟠 | **Desktop: trackpad scroll & pinch-zoom don't reach the page.** Standard `InAppWebView`, no gesture suppression in MIRA; trackpad gestures aren't forwarded to the native WebView2. *(runtime pass — Windows)* | `in_app_webview_engine.dart:292` | See O-39. Investigate gesture forwarding / `gestureRecognizers`; may be upstream. |
+| O-37 | 🟠 | **Desktop: back/forward buttons do nothing.** MERIS calls the correct API (`engine.goBack()/goForward()` → `_controller?.goBack()/goForward()`); the no-op is in the Windows webview backend. *(runtime pass — Windows)* | `desktop_browser_chrome.dart:67-80` | See O-39. Optionally gate buttons on `canGoBack/canGoForward` for an honest disabled state. |
+| O-38 | 🟠 | **Desktop: trackpad scroll & pinch-zoom don't reach the page.** Standard `InAppWebView`, no gesture suppression in MERIS; trackpad gestures aren't forwarded to the native WebView2. *(runtime pass — Windows)* | `in_app_webview_engine.dart:292` | See O-39. Investigate gesture forwarding / `gestureRecognizers`; may be upstream. |
 | O-39 | 🔴 | **Root cause: `flutter_inappwebview_windows` is materially incomplete** vs Android/iOS — proven by the boot-time `MissingPluginException` for `getDefaultUserAgent`. O-36/37/38 are symptoms. **Desktop is a tech-preview gated by this plugin; Android/iOS is the mature path.** | — (dependency) | **DECIDED (2026-06-22): defer.** Build a **custom desktop engine API** — our own bindings to a real browser engine (e.g. CEF/Chromium), *not* an existing plugin — behind the existing `BrowserEngine` abstraction. **Sequencing: only AFTER the Android stable build is live on the Play Store.** Until then desktop stays a preview and O-36/37/38 are accepted preview limitations. |
 
 ### Code health / Cleanup
@@ -126,7 +131,7 @@ fixes add zero features; these are the second leg of the path. Severity here =
 | D-11 | Firebase-free speed-dial plan doc |
 
 ### Merged to `master` — 2026-06-30 perf / lifecycle pass
-Found in the Claude Council platform-view audit (mobile-first). Approaches recorded for each.
+Found in the platform-view audit (mobile-first). Approaches recorded for each.
 
 | ID | Item (issue → approach taken) |
 |----|-------------------------------|

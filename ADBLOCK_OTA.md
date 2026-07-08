@@ -107,5 +107,3 @@ These are **not done** and require your action:
 
 - `lib/pages/onboarding_screen.dart` has an uncommitted fix from earlier — commit
   it separately when ready.
-- The agent worktrees under `.claude/worktrees/` can be removed with
-  `git worktree remove` once you no longer need them.
