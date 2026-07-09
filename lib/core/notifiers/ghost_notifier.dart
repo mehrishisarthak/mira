@@ -76,10 +76,13 @@ class GhostTabsNotifier extends StateNotifier<TabsState> {
 
   void updateUrl(String url) {
     if (state.tabs.isEmpty) return;
+    if (state.tabs[state.activeIndex].url == url) return;
     _updateActiveTab((tab) => tab.copyWith(url: url));
   }
 
   void updateUrlForTab(String tabId, String url) {
+    final index = state.tabs.indexWhere((tab) => tab.id == tabId);
+    if (index == -1 || state.tabs[index].url == url) return;
     _updateTabById(
       tabId,
       (tab) => tab.copyWith(url: url),
@@ -88,10 +91,13 @@ class GhostTabsNotifier extends StateNotifier<TabsState> {
 
   void updateTitle(String title) {
     if (state.tabs.isEmpty) return;
+    if (state.tabs[state.activeIndex].title == title) return;
     _updateActiveTab((tab) => tab.copyWith(title: title));
   }
 
   void updateTitleForTab(String tabId, String title) {
+    final index = state.tabs.indexWhere((tab) => tab.id == tabId);
+    if (index == -1 || state.tabs[index].title == title) return;
     _updateTabById(
       tabId,
       (tab) => tab.copyWith(title: title),

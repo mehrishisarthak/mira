@@ -152,28 +152,36 @@ Widget buildMobileBottomBar({
             InkWell(
               onTap: () async {
                 triggerHaptic(MainScreenHapticKind.selection);
-                // Snapshot-swap: capture the live page and hand it to
-                // BrowserView (which Offstages the webview) so the sheet
-                // animates without the Hybrid-Composition compositing tax.
-                // A null capture falls back to the live webview — no regression.
                 final engine = ref.read(activeBrowserEngineProvider);
-                final shot = await engine?.takeSnapshot();
-                if (!context.mounted) return;
-                if (shot != null) {
-                  ref.read(webViewSnapshotProvider.notifier).state =
-                      WebViewSnapshot(tabId: activeTab.id, bytes: shot);
-                }
-                // The snapshot stops the page *compositing*; hibernate() (native
-                // pause) also stops it *producing* frames, so a video page
-                // doesn't burn CPU/battery behind the sheet.
-                unawaited(engine?.hibernate());
+
+                // 1. Snapshot-swap: capture the live page in parallel
+                unawaited(() async {
+                  final shot = await engine?.takeSnapshot();
+                  if (!context.mounted) return;
+                  if (shot != null) {
+                    ref.read(webViewSnapshotProvider.notifier).state =
+                        WebViewSnapshot(tabId: activeTab.id, bytes: shot);
+                  }
+                  // The snapshot stops the page *compositing*; hibernate() (native
+                  // pause) also stops it *producing* frames.
+                  unawaited(engine?.hibernate());
+                }());
+
+                // 2. Custom transition controller
+                final animationController = BottomSheet.createAnimationController(Navigator.of(context));
+                animationController.duration = const Duration(milliseconds: 250);
+                animationController.reverseDuration = const Duration(milliseconds: 200);
+
                 await showModalBottomSheet(
                   context: context,
                   isScrollControlled: true,
                   backgroundColor: Colors.transparent,
+                  transitionAnimationController: animationController,
                   builder: (_) => const FractionallySizedBox(
                       heightFactor: 0.8, child: TabsSheet()),
                 );
+
+                animationController.dispose();
                 unawaited(engine?.wake());
                 if (!context.mounted) return;
                 ref.read(webViewSnapshotProvider.notifier).state = null;

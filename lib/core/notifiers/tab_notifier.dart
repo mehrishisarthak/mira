@@ -202,18 +202,26 @@ class TabsNotifier extends StateNotifier<TabsState> {
   }
 
   void updateUrl(String newUrl) {
+    if (state.tabs.isEmpty) return;
+    if (state.tabs[state.activeIndex].url == newUrl) return;
     _updateActiveTab((tab) => tab.copyWith(url: newUrl), debounce: true);
   }
 
   void updateUrlForTab(String tabId, String newUrl) {
+    final index = state.tabs.indexWhere((tab) => tab.id == tabId);
+    if (index == -1 || state.tabs[index].url == newUrl) return;
     _updateTabById(tabId, (tab) => tab.copyWith(url: newUrl), debounce: true);
   }
 
   void updateTitle(String newTitle) {
+    if (state.tabs.isEmpty) return;
+    if (state.tabs[state.activeIndex].title == newTitle) return;
     _updateActiveTab((tab) => tab.copyWith(title: newTitle), debounce: true);
   }
 
   void updateTitleForTab(String tabId, String newTitle) {
+    final index = state.tabs.indexWhere((tab) => tab.id == tabId);
+    if (index == -1 || state.tabs[index].title == newTitle) return;
     _updateTabById(tabId, (tab) => tab.copyWith(title: newTitle), debounce: true);
   }
 

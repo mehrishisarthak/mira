@@ -40,6 +40,7 @@ class BrowserChromeNotifier extends StateNotifier<BrowserChromeState> {
   BrowserChromeNotifier() : super(const BrowserChromeState());
 
   void setEngine(BrowserEngine? e) {
+    if (state.engine == e) return;
     state = BrowserChromeState(
       engine: e,
       loadingProgress: state.loadingProgress,
@@ -48,6 +49,7 @@ class BrowserChromeNotifier extends StateNotifier<BrowserChromeState> {
   }
 
   void setLoadingProgress(int value) {
+    if (state.loadingProgress == value) return;
     state = BrowserChromeState(
       engine: state.engine,
       loadingProgress: value,
@@ -56,6 +58,7 @@ class BrowserChromeNotifier extends StateNotifier<BrowserChromeState> {
   }
 
   void setWebError(String? value) {
+    if (state.webError == value) return;
     state = BrowserChromeState(
       engine: state.engine,
       loadingProgress: state.loadingProgress,
@@ -64,6 +67,7 @@ class BrowserChromeNotifier extends StateNotifier<BrowserChromeState> {
   }
 
   void clearWebError() {
+    if (state.webError == null) return;
     state = BrowserChromeState(
       engine: state.engine,
       loadingProgress: state.loadingProgress,

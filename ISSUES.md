@@ -38,11 +38,25 @@ UI-shell rendering pass focused on the Flutter↔native WebView bridge.
 | O-48 | 🟠 | **CONFIRMED (profile, 2 traces) — cold WebView creation stalls the UI thread.** Native `InAppWebView` instantiation initializes the HC pipeline synchronously on the UI thread, dropping frames on first build and on every wake past the cap. No warm-up / keep-alive pool. Mobile. | `browser_view.dart:100`, `database_providers.dart:22` | **Evidence — (1) cold-boot tab restore (`opening_pre_existing_tabs.json`, 205 frames):** 76 over budget (37%); the first restored webview mount = **build stalls 129 ms + 90 ms** at frames #88–89, then a **225 ms raster** hitch (#91, vsyncOverhead ~1014 ms) — i.e. cold start with a restored page is visibly janky. **(2) Test A switch-back:** 77–141 ms build spikes (same cold-create on wake). Build is otherwise ~0.9 ms, so the stall is the platform-view create, **not** Dart (attribution **inferred** from the clean Dart baseline, not decoded from the Perfetto binary). Bumped 🟡→🟠. Fix: pre-warm one engine during the splash buffer; folds into the O-42 keep-alive decision. |
 | O-44 | 🟡 | **No `RepaintBoundary` around the active platform-view webview.** Best-practice isolation is missing, but the marginal win is **small** here: an Android HC webview is already its own `PlatformViewLayer`, and the mobile progress/skeleton/chrome are in sibling subtrees (separate Column branches), so cross-repaint is mostly already bounded. Honest low. | `browser_view.dart:95-102` | Wrap each `Positioned.fill` webview child in `RepaintBoundary` only if a profile trace shows the Stack's other children (skeleton overlay, ghost flash) repainting on page paint. Don't add speculatively. |
 | O-45 | ⚪ | **DEPRIORITIZED by profile.** Mainscreen shell full-rebuilds on active-tab url/title tick — residual after D-29. Profiling shows **build time is not the bottleneck** (p50 ~0.9 ms; jank is raster/platform-view-bound), so this is now a micro-cleanup, not a perf fix — and it isn't the safe one-liner first thought: desktop's address field reads `activeTab.url` in 5 places and both bars need `activeTab.title` for bookmark callbacks. | `mainscreen.dart:327`, `currentActiveTabProvider` | Only worth doing as hygiene: `select((t) => t.url)` + read `title` fresh in the bookmark callbacks. No measurable frame win expected. |
-| O-52 | 🔴 | **IPC Navigation Tax (shouldOverrideUrlLoading).** Overriding all navigations blocks the Flutter UI thread for 70ms+ per tap. | `in_app_webview_engine.dart` | Fix: Filter by scheme (only intercept non-http/https) or migrate to a native Kotlin/Swift filter. |
-| O-53 | 🔴 | **AdBlock Serialization Jank.** Pushing 2,500+ rules synchronously during WebView creation blocks the UI thread for 77-140ms. | `in_app_webview_engine.dart` | Fix: Asynchronous Lazy-Injection of `ContentBlocker` rules after `onWebViewCreated` fires. |
-| O-54 | 🟠 | **Keyboard Resize Thrashing.** The `resizeToAvoidBottomInset` triggers heavy Hybrid Composition rebuilds when the keyboard appears. | `mainscreen.dart` | Fix: Disable `resizeToAvoidBottomInset` conditionally when a WebView is active. |
 | O-55 | 🟠 | **Widget Tree Bloat (Hibernated Tabs).** Offstage tabs still carry heavy widget tree overhead for native views. | `browser_view.dart` | Fix: Replace with simple snapshot `Image` widgets while offstage. |
 | O-56 | 🟡 | **Permission Blindspot.** Missing graceful handling of denied permissions in Ghost Mode or when downloading. | `security_provider.dart` | Fix: Audit permission flows to handle persistent OS denials smoothly. |
+
+#### State-management & rebuild audit (2026-07-09)
+Riverpod rebuild-scope audit focused on high-frequency state cascades from native WebView callbacks.
+
+| ID | Sev | Issue | Location | Notes |
+|----|----|-------|----------|-------|
+| O-57 | 🟠 | **`Mainscreen.build()` watches `currentActiveTabProvider` unscoped — full scaffold rebuild on every url/title tick.** `currentActiveTabProvider` returns a new `BrowserTab` on every `updateUrl`/`updateTitle`, and `Mainscreen` watches it without `.select`. The entire scaffold (including the bottom bar function call) rebuilds ~10-20× per page load. Profile shows build time is low (~0.9ms), but the cascade is unnecessary and compounds with all other items below. | `mainscreen.dart:332`, `ghost_notifier.dart:138` | Fix: `.select` only the fields needed in `build()` (url for security icon, id for identity). Read title fresh in bookmark callbacks. Subsumes O-45. |
+| O-61 | 🟠 | **No `gestureRecognizers` on `InAppWebView` — gesture arena conflicts.** The platform view is built without declaring gesture ownership. Edge-swipe back (Android 13+) conflicts with horizontal web content scrolling; vertical scroll can be stolen by parent Column on some devices. | `in_app_webview_engine.dart:293` | Fix: Pass `gestureRecognizers` with `VerticalDragGestureRecognizer` and `HorizontalDragGestureRecognizer` to claim touch events explicitly. Supplements O-46. |
+| O-65 | 🟡 | **`buildMobileBottomBar` / `buildDesktopToolbar` are functions, not widgets — no rebuild isolation.** Called from `Mainscreen.build()`, they don't create separate `Element` boundaries. Every Mainscreen rebuild reconstructs the entire bar widget tree. | `mobile_main_app_bar.dart:16`, `desktop_browser_chrome.dart:39` | Fix: Convert to `ConsumerWidget` classes. |
+| O-66 | 🟡 | **`activeBrowserEngineProvider` watches `browserChromeProvider` unscoped.** Re-evaluates on every progress tick (new `BrowserChromeState` per P-02). Engine identity is stable, so consumers don't rebuild, but evaluation is wasted work. | `browser_chrome_providers.dart:87-89` | Fix: `.select((s) => s.engine)`. |
+| O-67 | 🟡 | **`activeTabIdProvider` and `currentTabListProvider` watch full `TabsState`.** Re-evaluate on every url/title tick. Should `.select` only the fields they need (tab list / active index). | `browser_chrome_providers.dart:91-95`, `ghost_notifier.dart:133-136` | Fix: Scope with `.select`. |
+| O-72 | 🟠 | **`currentActiveTabProvider` watches `tabsProvider` even in ghost mode — wasted work.** Line 139 unconditionally watches normal tab state. In ghost mode, any normal-tab URL/title update cascades through this provider and all downstream consumers. | `ghost_notifier.dart:138-141` | Fix: Conditionally watch based on `isGhostModeProvider`. |
+| O-74 | 🟡 | **`_DesktopAddressBar` stores `BuildContext` and `WidgetRef` as widget fields.** Anti-pattern — the context can become stale if the parent rebuilds. Should be a `ConsumerStatefulWidget`. | `desktop_browser_chrome.dart:237-238` | Fix: Refactor to `ConsumerStatefulWidget` with its own `ref`. |
+| O-75 | 🟡 | **`TabsSheet` SliverList items missing `ValueKey(tab.id)` — inefficient diffing on tab close/reorder.** Without keys, Flutter can't reuse existing elements and may rebuild all items. | `tab_screen.dart:78, 155` | Fix: Add `key: ValueKey(tab.id)` to each `_TabRow`. |
+| O-76 | 🟡 | **Desktop sidebar uses eager `ListView` instead of `ListView.builder` for tab items.** All tab widgets are built upfront, even when scrolled out of view. For users with 20+ tabs, this builds all items eagerly. | `desktop_sidebar.dart:59-101` | Fix: Use `ListView.builder` with `itemCount`/`itemBuilder`. |
+| O-77 | 🟡 | **`_onControllerChange` in `_DesktopAddressBar` calls unconditional `setState`.** The `TextEditingController` listener fires on every programmatic URL update, calling `setState` even when the displayed domain hasn't changed. | `desktop_browser_chrome.dart:281-283` | Fix: Compare new domain with previous before calling `setState`. |
+| O-78 | ⚪ | **`activeUrlProvider` watches full `TabsState` — should `.select` active tab url only.** | `tab_notifier.dart:257-262` | Fix: `.select((s) => s.safeActiveTab?.url ?? '')`. |
 
 ### Memory / Lifecycle
 | ID | Sev | Issue | Location | Notes |
@@ -130,6 +144,21 @@ fixes add zero features; these are the second leg of the path. Severity here =
 | D-10 | Extracted `BrowserProgressBar`; `Mainscreen` no longer full-rebuilds on every progress tick |
 | D-11 | Firebase-free speed-dial plan doc |
 
+### Merged to `master` — 2026-07-09 state-management & perf pass
+| ID | Item (issue → approach taken) |
+|----|-------------------------------|
+| O-52 | **O-52**: Disabled `useShouldOverrideUrlLoading` natively. Dart was intercepting every single navigation request just to return `ALLOW`. Turning this off drops the IPC cost entirely, letting the OS handle routing. |
+| O-58 | **O-58**: Added strict `.select((s) => s.activeTab)` scoping to `currentActiveTabProvider` to prevent amplifier cascade. |
+| O-59 | **O-59**: Added same-value guard (`if (url == state.activeTab.url) return;`) to prevent generating identical `TabsState` instances. |
+| O-60 | **O-60**: Parallelized `takeSnapshot()` with the UI animation. The sheet now opens instantly without blocking the UI thread waiting for the engine capture. |
+| O-62 | **O-62**: Added `if (value == state.loadingProgress) return;` early return to skip identical `BrowserChromeState` allocations. |
+| O-63 | **O-63**: Added same-value guard to `GhostTabsNotifier` to stop redundant mutations on ghost navigations. |
+| O-68 | **O-68**: Added custom `AnimationController` with `Curves.easeOutQuint` over 250ms for a snappier 120Hz feel. |
+| O-69 | **O-69**: Added `@immutable`, `operator ==`, and `hashCode` to `MiraTheme`. Fixed a massive rebuild storm where Riverpod falsely dirtied the tree for identical theme states. |
+| O-70 | **O-70**: Throttled `onProgressChanged` bridge events via a 5% delta rule (`abs() >= 5` or 0/100 bounds). Shielded the Dart bridge from 100+ micro-updates per load. |
+| O-71 | **O-71**: Refactored `DesktopSidebar` to use a custom `_SidebarTabScope` for `.select` watchers, completely preventing global sidebar rebuilds on URL/title ticks. |
+| O-73 | **O-73**: Added `_popInProgress` boolean lock to `_handlePop()` to prevent double-back-gesture race conditions. |
+
 ### Merged to `master` — 2026-06-30 perf / lifecycle pass
 Found in the platform-view audit (mobile-first). Approaches recorded for each.
 
@@ -193,3 +222,7 @@ Found in the platform-view audit (mobile-first). Approaches recorded for each.
 | `_lastAutoHealAt` resets on rebuild | **False.** `State` fields survive rebuilds |
 | `_isValidUrl` routing spaced input to search is a bug | **Correct behavior** (Chrome/Firefox do the same) |
 | Cleartext traffic enabled = HIGH vuln | **Necessary** for a browser to load HTTP sites; Dart-level OTA/update calls are already HTTPS + sha256-verified |
+| O-53 (AdBlock Serialization Jank) | **FALSE ALARM / INTENTIONAL. The synchronous `initialSettings` injection is necessary to guarantee 100% ad-blocking on byte zero. Deferring it asynchronously caused ad-leaks and introduced an artificial 300ms TTFB delay. The 70ms initialization cost is an intentional security/privacy tradeoff.** |
+| O-54 (Keyboard Resize Thrashing) | **FALSE ALARM. Setting `resizeToAvoidBottomInset = false` destroys core browser UX. The OS keyboard would paint over the webview, making text fields invisible and breaking scrollability. We must eat the Hybrid Composition rebuild cost here.** |
+| O-64 (MRU Set Equality) | **ALREADY FIXED. Code review verified that `if (_mruSet.isNotEmpty && _mruSet.last == tabId) return;` was already natively present in the `HibernationNotifier` codebase. No action needed.** |
+

@@ -13,6 +13,27 @@ import 'package:mira/pages/main_screen/desktop_browser_chrome.dart' show showDes
 
 final desktopSidebarExpandedProvider = StateProvider<bool>((ref) => true);
 
+class _SidebarTabScope {
+  final TabsState state;
+  _SidebarTabScope(this.state);
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    if (other is! _SidebarTabScope) return false;
+    final a = state;
+    final b = other.state;
+    if (a.activeIndex != b.activeIndex || a.tabs.length != b.tabs.length) return false;
+    for (int i = 0; i < a.tabs.length; i++) {
+      if (a.tabs[i].id != b.tabs[i].id || a.tabs[i].title != b.tabs[i].title) return false;
+    }
+    return true;
+  }
+
+  @override
+  int get hashCode => state.activeIndex.hashCode ^ state.tabs.length.hashCode;
+}
+
 class DesktopSidebar extends ConsumerWidget {
   const DesktopSidebar({super.key});
 
@@ -21,8 +42,8 @@ class DesktopSidebar extends ConsumerWidget {
     final expanded = ref.watch(desktopSidebarExpandedProvider);
     final isGhost = ref.watch(isGhostModeProvider);
     final theme = ref.watch(themeProvider);
-    final tabState = ref.watch(tabsProvider);
-    final ghostState = ref.watch(ghostTabsProvider);
+    final tabState = ref.watch(tabsProvider.select((s) => _SidebarTabScope(s))).state;
+    final ghostState = ref.watch(ghostTabsProvider.select((s) => _SidebarTabScope(s))).state;
     final normalTabs = tabState.tabs;
     final normalActive = tabState.activeIndex;
     final ghostTabs = ghostState.tabs;

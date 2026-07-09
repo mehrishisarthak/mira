@@ -38,6 +38,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
   DateTime? _lastExitTime;
   DateTime? _lastAutoHealAt;
   Timer? _titleSyncDebounce;
+  bool _popInProgress = false;
 
   late final TextEditingController _urlController;
   late final FocusNode _urlFocusNode;
@@ -207,52 +208,58 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
   }
 
   void _handlePop() async {
-    final chrome = ref.read(browserChromeProvider);
-    final engine = chrome.engine;
-    final errorMessage = chrome.webError;
-    final activeUrl = ref.read(currentActiveTabProvider).url;
-    final isGhost = ref.read(isGhostModeProvider);
-    final appTheme = ref.read(themeProvider);
+    if (_popInProgress) return;
+    _popInProgress = true;
+    try {
+      final chrome = ref.read(browserChromeProvider);
+      final engine = chrome.engine;
+      final errorMessage = chrome.webError;
+      final activeUrl = ref.read(currentActiveTabProvider).url;
+      final isGhost = ref.read(isGhostModeProvider);
+      final appTheme = ref.read(themeProvider);
 
-    if (engine != null && await engine.canGoBack()) {
-      if (errorMessage != null) {
+      if (engine != null && await engine.canGoBack()) {
+        if (errorMessage != null) {
+          ref.read(browserChromeProvider.notifier).clearWebError();
+        }
+        engine.goBack();
+        return;
+      }
+
+      if (activeUrl.isNotEmpty) {
+        _triggerHaptic(MainScreenHapticKind.light);
+        if (isGhost) {
+          ref.read(ghostTabsProvider.notifier).updateUrl('');
+        } else {
+          ref.read(tabsProvider.notifier).updateUrl('');
+        }
         ref.read(browserChromeProvider.notifier).clearWebError();
+        return;
       }
-      engine.goBack();
-      return;
-    }
 
-    if (activeUrl.isNotEmpty) {
-      _triggerHaptic(MainScreenHapticKind.light);
-      if (isGhost) {
-        ref.read(ghostTabsProvider.notifier).updateUrl('');
-      } else {
-        ref.read(tabsProvider.notifier).updateUrl('');
-      }
-      ref.read(browserChromeProvider.notifier).clearWebError();
-      return;
-    }
-
-    if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
-      final now = DateTime.now();
-      if (_lastExitTime == null ||
-          now.difference(_lastExitTime!) > const Duration(seconds: 2)) {
-        _lastExitTime = now;
-        if (mounted) {
-          _triggerHaptic(MainScreenHapticKind.selection);
-          ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: const Text("Press back again to exit MIRA"),
-                backgroundColor: isGhost ? Colors.redAccent : appTheme.primaryColor,
-                duration: const Duration(seconds: 2),
-              )
-          );
+      if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+        final now = DateTime.now();
+        if (_lastExitTime == null ||
+            now.difference(_lastExitTime!) > const Duration(seconds: 2)) {
+          _lastExitTime = now;
+          if (mounted) {
+            _triggerHaptic(MainScreenHapticKind.selection);
+            ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text("Press back again to exit MIRA"),
+                  backgroundColor: isGhost ? Colors.redAccent : appTheme.primaryColor,
+                  duration: const Duration(seconds: 2),
+                )
+            );
+          }
+        } else {
+          SystemNavigator.pop();
         }
       } else {
         SystemNavigator.pop();
       }
-    } else {
-      SystemNavigator.pop();
+    } finally {
+      _popInProgress = false;
     }
   }
 

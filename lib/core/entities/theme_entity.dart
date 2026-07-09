@@ -20,6 +20,7 @@ enum MiraStyle {
   crimsonRed     
 }
 
+@immutable
 class MiraTheme {
   final MiraStyle style;
   final ThemeMode mode;
@@ -54,6 +55,31 @@ class MiraTheme {
       accentColor: primary,
       backgroundColor: mode == ThemeMode.light ? Colors.white : kMiraMatteBlack,
       surfaceColor: mode == ThemeMode.light ? Colors.grey[100]! : kMiraMatteSurface,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+  
+    return other is MiraTheme &&
+      other.style == style &&
+      other.mode == mode &&
+      other.primaryColor == primaryColor &&
+      other.accentColor == accentColor &&
+      other.backgroundColor == backgroundColor &&
+      other.surfaceColor == surfaceColor;
+  }
+
+  @override
+  int get hashCode {
+    return Object.hash(
+      style,
+      mode,
+      primaryColor,
+      accentColor,
+      backgroundColor,
+      surfaceColor,
     );
   }
 }

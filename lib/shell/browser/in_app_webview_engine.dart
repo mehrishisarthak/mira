@@ -290,6 +290,7 @@ class InAppWebViewEngine implements BrowserEngine {
       _pendingUrl = null;
       _pendingHeaders = null;
     }
+
     return InAppWebView(
       key: ObjectKey(tabId),
       initialUrlRequest: (initialUrl != null && initialUrl.isNotEmpty)
@@ -297,14 +298,11 @@ class InAppWebViewEngine implements BrowserEngine {
           : null,
       initialSettings: InAppWebViewSettings(
         incognito: _isPrivate,
-        useShouldOverrideUrlLoading: true,
+        useShouldOverrideUrlLoading: false,
         useOnDownloadStart: true,
         geolocationEnabled: !_isLocationBlocked,
         contentBlockers: _contentBlockers,
       ),
-      shouldOverrideUrlLoading: (controller, navigationAction) async {
-        return NavigationActionPolicy.ALLOW;
-      },
       onWebViewCreated: (controller) {
         setController(controller);
       },
@@ -369,11 +367,13 @@ class InAppWebViewEngine implements BrowserEngine {
   }
 
   void handleProgressChanged(int progress) {
-    _lastProgress = progress;
-    _eventController.add(BrowserPageEvent(
-      type: BrowserPageEventType.progressChanged,
-      progress: progress,
-    ));
+    if (progress == 100 || progress == 0 || (progress - _lastProgress).abs() >= 5) {
+      _lastProgress = progress;
+      _eventController.add(BrowserPageEvent(
+        type: BrowserPageEventType.progressChanged,
+        progress: progress,
+      ));
+    }
   }
 
   void handleTitleChanged(String? title) {

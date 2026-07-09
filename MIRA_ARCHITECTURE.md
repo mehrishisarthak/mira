@@ -574,3 +574,15 @@ Speed dial was unaffected because it only uses `initialUrlRequest` (set at widge
 **Fix 1:** Add `shouldOverrideUrlLoading: (controller, navigationAction) async => NavigationActionPolicy.ALLOW` so all intercepted navigations are immediately resolved and allowed to proceed.
 
 **Fix 2:** Clear `_pendingUrl` in `buildWidget()` when it equals `initialUrl`, preventing a second `controller.loadUrl()` call from racing with `initialUrlRequest` on new-tab navigation.
+
+### Bug 3 — State Management Rebuild Amplifiers (Riverpod Footguns)
+
+**Root cause:** The `StateNotifier` class (legacy Riverpod) uses `identical()` rather than `==` to determine if a new state should notify listeners. This caused three pervasive issues in the initial architecture:
+1. **Redundant Allocations:** Notifiers like `BrowserChromeNotifier` or `TabsNotifier` called `state = ...` even when the underlying value (like loading progress or the URL) had not changed. This allocated a new object in memory (which fails `identical()`), triggering a rebuild cascade to all watchers.
+2. **Missing `==` Overrides:** The `MiraTheme` entity was a plain class. Widgets using `.select((s) => s)` fell back to object identity for the selected field, causing rebuilds even if the theme structurally hadn't changed.
+3. **Unscoped `ref.watch`:** The `Mainscreen` and `DesktopSidebar` watched full `TabsState` objects (e.g., `ref.watch(currentActiveTabProvider)`) without `.select`. A URL update from a background network request would trigger a full-screen or full-sidebar rebuild, causing micro-stutters during heavy loads.
+
+**Fix:** 
+1. **Early Returns:** Added same-value guards at the entry points of all setters (e.g., `if (value == state.loadingProgress) return;` or checking list structural equality before emitting).
+2. **Equality Operators:** Added `operator ==` and `hashCode` to `MiraTheme` so that `.select` can properly memoize it.
+3. **Targeted Watches:** Replaced `ref.watch(provider)` with `ref.watch(provider.select((s) => s.targetField))` in the root layout widgets to ensure they only rebuild when structurally necessary. Converts of top-level function builders like `buildMobileBottomBar` to `ConsumerWidget` classes isolated these scopes.
