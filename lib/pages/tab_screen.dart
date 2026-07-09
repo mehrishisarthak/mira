@@ -76,6 +76,7 @@ class TabsSheet extends ConsumerWidget {
                     sliver: SliverList(
                       delegate: SliverChildBuilderDelegate(
                         (_, i) => _TabRow(
+                          key: ValueKey(ghostState.tabs[i].id),
                           tab: ghostState.tabs[i],
                           isActive: isGhostActive &&
                               ghostState.tabs[i].id ==
@@ -153,6 +154,7 @@ class TabsSheet extends ConsumerWidget {
                     sliver: SliverList(
                       delegate: SliverChildBuilderDelegate(
                         (_, i) => _TabRow(
+                          key: ValueKey(normalState.tabs[i].id),
                           tab: normalState.tabs[i],
                           isActive: !isGhostActive &&
                               normalState.tabs[i].id ==
@@ -282,6 +284,7 @@ class _TabRow extends StatelessWidget {
   final VoidCallback onClose;
 
   const _TabRow({
+    super.key,
     required this.tab,
     required this.isActive,
     required this.isGhost,

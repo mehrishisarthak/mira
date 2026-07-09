@@ -5,6 +5,8 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:mira/core/services/browser_engine_blueprints.dart'; // BrowserEngine, BrowserEngineConfig, AdBlockRule
 import 'package:mira/core/config/desktop_user_agent.dart';
+import 'package:flutter/gestures.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// The concrete implementation of [BrowserEngine] using the flutter_inappwebview plugin.
 class InAppWebViewEngine implements BrowserEngine {
@@ -298,11 +300,49 @@ class InAppWebViewEngine implements BrowserEngine {
           : null,
       initialSettings: InAppWebViewSettings(
         incognito: _isPrivate,
-        useShouldOverrideUrlLoading: false,
+        useShouldOverrideUrlLoading: true,
         useOnDownloadStart: true,
         geolocationEnabled: !_isLocationBlocked,
         contentBlockers: _contentBlockers,
       ),
+      shouldOverrideUrlLoading: (controller, navigationAction) async {
+        final url = navigationAction.request.url;
+        if (url == null) return NavigationActionPolicy.ALLOW;
+        
+        final scheme = url.scheme.toLowerCase();
+        
+        // Fast path: http/https — 99.9% of navigations.
+        if (scheme == 'https' || scheme == 'http') {
+          return NavigationActionPolicy.ALLOW;
+        }
+        
+        // Hand off to OS: mailto, tel, sms
+        if (scheme == 'mailto' || scheme == 'tel' || scheme == 'sms') {
+          try {
+            if (await canLaunchUrl(url)) {
+              await launchUrl(url);
+            }
+          } catch (_) {}
+          return NavigationActionPolicy.CANCEL;
+        }
+        
+        // Allow about:blank (used internally by some pages)
+        if (scheme == 'about' || scheme == 'blob') {
+          return NavigationActionPolicy.ALLOW;
+        }
+        
+        // Block everything else: file://, javascript:, data:, intent://, 
+        // custom app schemes (market://, whatsapp://, etc.)
+        return NavigationActionPolicy.CANCEL;
+      },
+      gestureRecognizers: <Factory<OneSequenceGestureRecognizer>>{
+        Factory<VerticalDragGestureRecognizer>(
+          () => VerticalDragGestureRecognizer(),
+        ),
+        Factory<HorizontalDragGestureRecognizer>(
+          () => HorizontalDragGestureRecognizer(),
+        ),
+      },
       onWebViewCreated: (controller) {
         setController(controller);
       },

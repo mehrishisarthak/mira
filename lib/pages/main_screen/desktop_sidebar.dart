@@ -77,48 +77,64 @@ class DesktopSidebar extends ConsumerWidget {
               _NewTabButton(expanded: isExpanded, isGhost: isGhost, theme: theme, fg: fg),
               const SizedBox(height: 8),
               Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  children: [
-                    if (normalTabs.isNotEmpty) ...[
-                      if (isExpanded && ghostTabs.isNotEmpty)
-                        _SectionLabel(label: 'TABS', color: muted),
-                      ...normalTabs.asMap().entries.map((e) => _SidebarTabItem(
-                        tab: e.value,
-                        index: e.key,
-                        isGhost: false,
-                        isActive: !isGhost && e.key == normalActive,
-                        expanded: isExpanded,
-                        accent: theme.primaryColor,
-                        fg: fg,
-                        muted: muted,
-                      )),
-                    ],
-                    if (ghostTabs.isNotEmpty) ...[
-                      if (isExpanded)
-                        _SectionLabel(
-                          label: 'GHOST',
-                          color: Colors.redAccent.withValues(alpha: 0.7),
-                        )
-                      else
-                        Divider(
-                          color: Colors.redAccent.withValues(alpha: 0.3),
-                          height: 12,
-                          indent: 8,
-                          endIndent: 8,
-                        ),
-                      ...ghostTabs.asMap().entries.map((e) => _SidebarTabItem(
-                        tab: e.value,
-                        index: e.key,
-                        isGhost: true,
-                        isActive: isGhost && e.key == ghostActive,
-                        expanded: isExpanded,
-                        accent: Colors.redAccent,
-                        fg: fg,
-                        muted: muted,
-                      )),
-                    ],
-                  ],
+                child: Builder(
+                  builder: (context) {
+                    final items = <Widget Function()>[];
+
+                    if (normalTabs.isNotEmpty) {
+                      if (isExpanded && ghostTabs.isNotEmpty) {
+                        items.add(() => _SectionLabel(label: 'TABS', color: muted));
+                      }
+                      for (int i = 0; i < normalTabs.length; i++) {
+                        final tab = normalTabs[i];
+                        items.add(() => _SidebarTabItem(
+                              tab: tab,
+                              index: i,
+                              isGhost: false,
+                              isActive: !isGhost && i == normalActive,
+                              expanded: isExpanded,
+                              accent: theme.primaryColor,
+                              fg: fg,
+                              muted: muted,
+                            ));
+                      }
+                    }
+
+                    if (ghostTabs.isNotEmpty) {
+                      if (isExpanded) {
+                        items.add(() => _SectionLabel(
+                              label: 'GHOST',
+                              color: Colors.redAccent.withValues(alpha: 0.7),
+                            ));
+                      } else {
+                        items.add(() => Divider(
+                              color: Colors.redAccent.withValues(alpha: 0.3),
+                              height: 12,
+                              indent: 8,
+                              endIndent: 8,
+                            ));
+                      }
+                      for (int i = 0; i < ghostTabs.length; i++) {
+                        final tab = ghostTabs[i];
+                        items.add(() => _SidebarTabItem(
+                              tab: tab,
+                              index: i,
+                              isGhost: true,
+                              isActive: isGhost && i == ghostActive,
+                              expanded: isExpanded,
+                              accent: Colors.redAccent,
+                              fg: fg,
+                              muted: muted,
+                            ));
+                      }
+                    }
+
+                    return ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      itemCount: items.length,
+                      itemBuilder: (context, index) => items[index](),
+                    );
+                  },
                 ),
               ),
               Divider(height: 1, color: fg.withValues(alpha: 0.08)),

@@ -89,13 +89,15 @@ final browserChromeProvider =
 /// Same as [BrowserChromeState.engine] — the live [BrowserEngine]
 /// for the **current** tab.
 final activeBrowserEngineProvider = Provider<BrowserEngine?>((ref) {
-  return ref.watch(browserChromeProvider).engine;
+  return ref.watch(browserChromeProvider.select((s) => s.engine));
 });
 
 final activeTabIdProvider = Provider<String>((ref) {
   final isGhost = ref.watch(isGhostModeProvider);
-  final state = isGhost ? ref.watch(ghostTabsProvider) : ref.watch(tabsProvider);
-  return state.tabs.isNotEmpty ? state.tabs[state.activeIndex].id : '';
+  final tab = isGhost
+      ? ref.watch(ghostTabsProvider.select((s) => s.safeActiveTab))
+      : ref.watch(tabsProvider.select((s) => s.safeActiveTab));
+  return tab?.id ?? '';
 });
 
 final desktopFindBarVisibleProvider = StateProvider<bool>((ref) => false);

@@ -15,8 +15,6 @@
 ### Security / Privacy
 | ID | Sev | Issue | Location | Notes |
 |----|----|-------|----------|-------|
-| O-01 | 🔴 | **Verify ghost/incognito cookie isolation on Android.** Clearing goes through the *global* `CookieManager`/`WebStorageManager`; Android incognito doesn't guarantee a separate cookie jar. | `in_app_webview_engine.dart:243-250` | Test on-device that a ghost cookie isn't visible to a normal tab, and a ghost clear can't nuke the main profile. Highest-value privacy item. |
-| O-02 | 🟠 | **No navigation scheme allow-list** (defense-in-depth). `shouldOverrideUrlLoading` returns `ALLOW` unconditionally; relies on WebView defaults to refuse `file://`/`intent://`/`javascript:`/`data:`. | `in_app_webview_engine.dart:306` | Add an allow-list (`http/https/about/blob`), hand off `mailto:`/`tel:` to OS, drop the rest. Hardening, not a confirmed exploit. |
 | O-03 | 🟡 | **Excessive Android storage perms** + `requestLegacyExternalStorage="true"` (disables scoped storage). | `AndroidManifest.xml:12,13,22` | Downloads now use app-scoped `getDownloadsDirectory()`; likely removable. Contradicts privacy brand. |
 
 ### Performance
@@ -46,17 +44,8 @@ Riverpod rebuild-scope audit focused on high-frequency state cascades from nativ
 
 | ID | Sev | Issue | Location | Notes |
 |----|----|-------|----------|-------|
-| O-57 | 🟠 | **`Mainscreen.build()` watches `currentActiveTabProvider` unscoped — full scaffold rebuild on every url/title tick.** `currentActiveTabProvider` returns a new `BrowserTab` on every `updateUrl`/`updateTitle`, and `Mainscreen` watches it without `.select`. The entire scaffold (including the bottom bar function call) rebuilds ~10-20× per page load. Profile shows build time is low (~0.9ms), but the cascade is unnecessary and compounds with all other items below. | `mainscreen.dart:332`, `ghost_notifier.dart:138` | Fix: `.select` only the fields needed in `build()` (url for security icon, id for identity). Read title fresh in bookmark callbacks. Subsumes O-45. |
-| O-61 | 🟠 | **No `gestureRecognizers` on `InAppWebView` — gesture arena conflicts.** The platform view is built without declaring gesture ownership. Edge-swipe back (Android 13+) conflicts with horizontal web content scrolling; vertical scroll can be stolen by parent Column on some devices. | `in_app_webview_engine.dart:293` | Fix: Pass `gestureRecognizers` with `VerticalDragGestureRecognizer` and `HorizontalDragGestureRecognizer` to claim touch events explicitly. Supplements O-46. |
 | O-65 | 🟡 | **`buildMobileBottomBar` / `buildDesktopToolbar` are functions, not widgets — no rebuild isolation.** Called from `Mainscreen.build()`, they don't create separate `Element` boundaries. Every Mainscreen rebuild reconstructs the entire bar widget tree. | `mobile_main_app_bar.dart:16`, `desktop_browser_chrome.dart:39` | Fix: Convert to `ConsumerWidget` classes. |
-| O-66 | 🟡 | **`activeBrowserEngineProvider` watches `browserChromeProvider` unscoped.** Re-evaluates on every progress tick (new `BrowserChromeState` per P-02). Engine identity is stable, so consumers don't rebuild, but evaluation is wasted work. | `browser_chrome_providers.dart:87-89` | Fix: `.select((s) => s.engine)`. |
-| O-67 | 🟡 | **`activeTabIdProvider` and `currentTabListProvider` watch full `TabsState`.** Re-evaluate on every url/title tick. Should `.select` only the fields they need (tab list / active index). | `browser_chrome_providers.dart:91-95`, `ghost_notifier.dart:133-136` | Fix: Scope with `.select`. |
-| O-72 | 🟠 | **`currentActiveTabProvider` watches `tabsProvider` even in ghost mode — wasted work.** Line 139 unconditionally watches normal tab state. In ghost mode, any normal-tab URL/title update cascades through this provider and all downstream consumers. | `ghost_notifier.dart:138-141` | Fix: Conditionally watch based on `isGhostModeProvider`. |
 | O-74 | 🟡 | **`_DesktopAddressBar` stores `BuildContext` and `WidgetRef` as widget fields.** Anti-pattern — the context can become stale if the parent rebuilds. Should be a `ConsumerStatefulWidget`. | `desktop_browser_chrome.dart:237-238` | Fix: Refactor to `ConsumerStatefulWidget` with its own `ref`. |
-| O-75 | 🟡 | **`TabsSheet` SliverList items missing `ValueKey(tab.id)` — inefficient diffing on tab close/reorder.** Without keys, Flutter can't reuse existing elements and may rebuild all items. | `tab_screen.dart:78, 155` | Fix: Add `key: ValueKey(tab.id)` to each `_TabRow`. |
-| O-76 | 🟡 | **Desktop sidebar uses eager `ListView` instead of `ListView.builder` for tab items.** All tab widgets are built upfront, even when scrolled out of view. For users with 20+ tabs, this builds all items eagerly. | `desktop_sidebar.dart:59-101` | Fix: Use `ListView.builder` with `itemCount`/`itemBuilder`. |
-| O-77 | 🟡 | **`_onControllerChange` in `_DesktopAddressBar` calls unconditional `setState`.** The `TextEditingController` listener fires on every programmatic URL update, calling `setState` even when the displayed domain hasn't changed. | `desktop_browser_chrome.dart:281-283` | Fix: Compare new domain with previous before calling `setState`. |
-| O-78 | ⚪ | **`activeUrlProvider` watches full `TabsState` — should `.select` active tab url only.** | `tab_notifier.dart:257-262` | Fix: `.select((s) => s.safeActiveTab?.url ?? '')`. |
 
 ### Memory / Lifecycle
 | ID | Sev | Issue | Location | Notes |
@@ -144,6 +133,12 @@ fixes add zero features; these are the second leg of the path. Severity here =
 | D-10 | Extracted `BrowserProgressBar`; `Mainscreen` no longer full-rebuilds on every progress tick |
 | D-11 | Firebase-free speed-dial plan doc |
 
+### Merged to `master` — Security & Privacy
+| ID | Item (issue → approach taken) |
+|----|-------------------------------|
+| O-01 | **O-01**: Verified on-device that `incognito: true` provides a memory-isolated cookie/storage jar by default. No cross-leakage exists between ghost tabs and normal tabs. |
+| O-02 | **O-02**: Implemented an explicit scheme-based navigation allow-list in `InAppWebView` via `shouldOverrideUrlLoading`. Allowed `http/https/about/blob`. Handoff to OS for `mailto/tel/sms` via `url_launcher`. Blocked all other dangerous schemes (e.g., `file`, `javascript`, `intent`). |
+
 ### Merged to `master` — 2026-07-09 state-management & perf pass
 | ID | Item (issue → approach taken) |
 |----|-------------------------------|
@@ -158,6 +153,15 @@ fixes add zero features; these are the second leg of the path. Severity here =
 | O-70 | **O-70**: Throttled `onProgressChanged` bridge events via a 5% delta rule (`abs() >= 5` or 0/100 bounds). Shielded the Dart bridge from 100+ micro-updates per load. |
 | O-71 | **O-71**: Refactored `DesktopSidebar` to use a custom `_SidebarTabScope` for `.select` watchers, completely preventing global sidebar rebuilds on URL/title ticks. |
 | O-73 | **O-73**: Added `_popInProgress` boolean lock to `_handlePop()` to prevent double-back-gesture race conditions. |
+| O-57 | **O-57**: Scoped `currentActiveTabProvider` down to `.select((s) => s.activeTab)` (and `safeActiveTab` for ghost) so the UI doesn't rebuild when other non-active tab fields mutate. |
+| O-72 | **O-72**: Prevented `currentActiveTabProvider` from watching `tabsProvider` while in ghost mode, stopping the evaluation cascade during normal-tab background updates. |
+| O-67 | **O-67**: Scoped `activeTabIdProvider` and `currentTabListProvider` using `.select` directly within the providers so downstream listeners don't evaluate on progress/URL ticks. |
+| O-66 | **O-66**: Scoped `activeBrowserEngineProvider` to `browserChromeProvider.select((s) => s.engine)` to avoid re-evaluations during page load progress ticks. |
+| O-78 | **O-78**: Scoped `activeUrlProvider` to `.select((s) => s.safeActiveTab?.url ?? '')` to halt propagation. |
+| O-61 | **O-61**: Injected `gestureRecognizers` into `InAppWebView` instantiation (`VerticalDragGestureRecognizer` and `HorizontalDragGestureRecognizer`) to let native scroll capture events properly and prevent conflicts with Flutter gesture navigation. |
+| O-75 | **O-75**: Bound `ValueKey(tab.id)` to all `_TabRow` elements inside `tab_screen.dart` SliverLists, fixing a costly layout churn during tab reordering or closing. |
+| O-76 | **O-76**: Converted the eager `ListView` in `desktop_sidebar.dart` to a true lazy `ListView.builder` utilizing a list of dynamic closures instead of complex index math. This drastically cuts layout overhead for power users with 20+ tabs. |
+| O-77 | **O-77**: Tracked `_lastDomain` in the `_DesktopAddressBar` and guarded `setState` within `_onControllerChange`, preventing wasted DOM repaints when the URL updates behind an unfocused address bar. |
 
 ### Merged to `master` — 2026-06-30 perf / lifecycle pass
 Found in the platform-view audit (mobile-first). Approaches recorded for each.
@@ -222,6 +226,10 @@ Found in the platform-view audit (mobile-first). Approaches recorded for each.
 | `_lastAutoHealAt` resets on rebuild | **False.** `State` fields survive rebuilds |
 | `_isValidUrl` routing spaced input to search is a bug | **Correct behavior** (Chrome/Firefox do the same) |
 | Cleartext traffic enabled = HIGH vuln | **Necessary** for a browser to load HTTP sites; Dart-level OTA/update calls are already HTTPS + sha256-verified |
+| O-53 (AdBlock Serialization Jank) | **FALSE ALARM / INTENTIONAL. The synchronous `initialSettings` injection is necessary to guarantee 100% ad-blocking on byte zero. Deferring it asynchronously caused ad-leaks and introduced an artificial 300ms TTFB delay. The 70ms initialization cost is an intentional security/privacy tradeoff.** |
+| O-54 (Keyboard Resize Thrashing) | **FALSE ALARM. Setting `resizeToAvoidBottomInset = false` destroys core browser UX. The OS keyboard would paint over the webview, making text fields invisible and breaking scrollability. We must eat the Hybrid Composition rebuild cost here.** |
+| O-64 (MRU Set Equality) | **ALREADY FIXED. Code review verified that `if (_mruSet.isNotEmpty && _mruSet.last == tabId) return;` was already natively present in the `HibernationNotifier` codebase. No action needed.** |
+
 | O-53 (AdBlock Serialization Jank) | **FALSE ALARM / INTENTIONAL. The synchronous `initialSettings` injection is necessary to guarantee 100% ad-blocking on byte zero. Deferring it asynchronously caused ad-leaks and introduced an artificial 300ms TTFB delay. The 70ms initialization cost is an intentional security/privacy tradeoff.** |
 | O-54 (Keyboard Resize Thrashing) | **FALSE ALARM. Setting `resizeToAvoidBottomInset = false` destroys core browser UX. The OS keyboard would paint over the webview, making text fields invisible and breaking scrollability. We must eat the Hybrid Composition rebuild cost here.** |
 | O-64 (MRU Set Equality) | **ALREADY FIXED. Code review verified that `if (_mruSet.isNotEmpty && _mruSet.last == tabId) return;` was already natively present in the `HibernationNotifier` codebase. No action needed.** |

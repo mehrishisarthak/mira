@@ -138,17 +138,19 @@ final isGhostModeProvider = StateProvider<bool>((ref) => false);
 
 final currentTabListProvider = Provider<List<BrowserTab>>((ref) {
   final isGhost = ref.watch(isGhostModeProvider);
-  return isGhost ? ref.watch(ghostTabsProvider).tabs : ref.watch(tabsProvider).tabs;
+  return isGhost
+      ? ref.watch(ghostTabsProvider.select((s) => s.tabs))
+      : ref.watch(tabsProvider.select((s) => s.tabs));
 });
 
 final currentActiveTabProvider = Provider<BrowserTab>((ref) {
-  final normal = ref.watch(tabsProvider);
   final isGhost = ref.watch(isGhostModeProvider);
-  if (!isGhost) return normal.activeTab;
-  final ghost = ref.watch(ghostTabsProvider);
-  final g = ghost.safeActiveTab;
-  if (g != null) return g;
-  return normal.activeTab;
+  if (!isGhost) {
+    return ref.watch(tabsProvider.select((s) => s.activeTab));
+  }
+  final ghost = ref.watch(ghostTabsProvider.select((s) => s.safeActiveTab));
+  if (ghost != null) return ghost;
+  return ref.watch(tabsProvider.select((s) => s.activeTab));
 });
 
 /// Active-session tab count only. `.select`s the length so watchers rebuild on

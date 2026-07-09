@@ -259,6 +259,7 @@ class _DesktopAddressBar extends StatefulWidget {
 
 class _DesktopAddressBarState extends State<_DesktopAddressBar> {
   bool _hasFocus = false;
+  String _lastDomain = '';
 
   @override
   void initState() {
@@ -280,7 +281,13 @@ class _DesktopAddressBarState extends State<_DesktopAddressBar> {
 
   void _onControllerChange() {
     // Rebuild domain text when URL changes while unfocused.
-    if (mounted && !_hasFocus) setState(() {});
+    if (mounted && !_hasFocus) {
+      final newDomain = _domain;
+      if (newDomain != _lastDomain) {
+        _lastDomain = newDomain;
+        setState(() {});
+      }
+    }
   }
 
   String get _domain {
