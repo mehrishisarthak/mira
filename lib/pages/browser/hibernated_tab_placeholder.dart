@@ -1,14 +1,17 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:mira/core/entities/tab_entity.dart';
 import 'package:mira/core/entities/theme_entity.dart';
 import 'package:mira/core/notifiers/theme_notifier.dart';
+import 'package:mira/pages/browser_chrome_providers.dart';
 
 class HibernatedTabPlaceholder extends ConsumerWidget {
-  const HibernatedTabPlaceholder({super.key, required this.tab});
+  const HibernatedTabPlaceholder({super.key, required this.tab, this.snapshot});
 
   final BrowserTab tab;
+  final TabSnapshotData? snapshot;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -22,6 +25,47 @@ class HibernatedTabPlaceholder extends ConsumerWidget {
         ? kMiraInkPrimary.withAlpha(80)
         : Colors.white30;
 
+    if (snapshot != null) {
+      Widget? imageWidget;
+      if (snapshot!.bytes != null) {
+        imageWidget = Image.memory(
+          snapshot!.bytes!,
+          fit: BoxFit.fill,
+          gaplessPlayback: true,
+          cacheWidth: 400,
+        );
+      } else if (snapshot!.diskPath != null) {
+        imageWidget = Image.file(
+          File(snapshot!.diskPath!),
+          fit: BoxFit.fill,
+          gaplessPlayback: true,
+          cacheWidth: 400,
+          errorBuilder: (context, error, stackTrace) => _buildFallback(bg, mutedColor, textColor),
+        );
+      }
+
+      if (imageWidget != null) {
+        return Container(
+          color: bg,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              imageWidget,
+              // Semi-transparent overlay to indicate it's paused/hibernated
+              Container(color: Colors.black.withOpacity(0.2)),
+              const Center(
+                child: Icon(Icons.refresh_rounded, size: 48, color: Colors.white70),
+              ),
+            ],
+          ),
+        );
+      }
+    }
+
+    return _buildFallback(bg, mutedColor, textColor);
+  }
+
+  Widget _buildFallback(Color bg, Color mutedColor, Color textColor) {
     return Container(
       color: bg,
       child: Center(

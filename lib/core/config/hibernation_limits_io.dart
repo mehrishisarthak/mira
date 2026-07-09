@@ -1,4 +1,25 @@
 import 'dart:io';
+import 'package:flutter/services.dart';
+
+int _cachedMobileCap = 4;
+
+Future<void> initHibernationLimits() async {
+  if (Platform.isAndroid) {
+    try {
+      final memoryClass = await const MethodChannel('mira/system')
+          .invokeMethod<int>('getMemoryClass');
+      if (memoryClass == null || memoryClass >= 256) {
+        _cachedMobileCap = 4;
+      } else if (memoryClass >= 128) {
+        _cachedMobileCap = 2;
+      } else {
+        _cachedMobileCap = 1;
+      }
+    } catch (e) {
+      _cachedMobileCap = 4;
+    }
+  }
+}
 
 /// Desktop: keep several WebViews warm (Chrome-like). Mobile: small LRU to save RAM.
 int maxAliveWebViewTabs() {
@@ -15,5 +36,5 @@ int maxAliveWebViewTabs() {
   // content-blocker list. Keep a small LRU working set so memory/CPU don't
   // creep up as tabs accumulate; older tabs hibernate to a lightweight
   // placeholder and reload on focus.
-  return 4;
+  return _cachedMobileCap;
 }

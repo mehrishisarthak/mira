@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import 'package:mira/core/entities/tab_entity.dart';
 import 'package:mira/core/services/preferences_service.dart';
+import 'package:mira/core/services/snapshot_service.dart';
 
 // --- 1. THE STATE CLASS ---
 class TabsState {
@@ -41,9 +42,12 @@ class TabsState {
 // --- 2. THE NOTIFIER ---
 class TabsNotifier extends StateNotifier<TabsState> {
   final PreferencesService _prefsService;
+  final SnapshotService? _snapshotService;
   Timer? _saveDebounce;
 
-  TabsNotifier(this._prefsService) : super(TabsState(tabs: [BrowserTab()], activeIndex: 0)) {
+  TabsNotifier(this._prefsService, {SnapshotService? snapshotService}) 
+      : _snapshotService = snapshotService,
+        super(TabsState(tabs: [BrowserTab()], activeIndex: 0)) {
     _loadTabs();
   }
 
@@ -138,6 +142,8 @@ class TabsNotifier extends StateNotifier<TabsState> {
   }
 
   void closeTab(String tabId) {
+    _snapshotService?.deleteSnapshot(tabId);
+    
     if (state.tabs.length == 1) {
       _updateActiveTab(
         (tab) => tab.copyWith(url: '', title: 'New Tab'),
@@ -227,6 +233,11 @@ class TabsNotifier extends StateNotifier<TabsState> {
 
   // This resets the persistent tabs to a single blank tab
   void nuke() {
+    if (_snapshotService != null) {
+      for (final tab in state.tabs) {
+        _snapshotService!.deleteSnapshot(tab.id);
+      }
+    }
     final newTabs = [BrowserTab()];
     state = TabsState(tabs: newTabs, activeIndex: 0);
     unawaited(_saveToPrefs());
@@ -257,8 +268,9 @@ class TabsNotifier extends StateNotifier<TabsState> {
 
 // --- 3. THE PROVIDER ---
 final tabsProvider = StateNotifierProvider<TabsNotifier, TabsState>((ref) {
-  final prefsService = ref.read(preferencesServiceProvider);
-  return TabsNotifier(prefsService);
+  final prefsService = ref.watch(preferencesServiceProvider);
+  final snapshotService = ref.watch(snapshotServiceProvider);
+  return TabsNotifier(prefsService, snapshotService: snapshotService);
 });
 
 // --- 4. HELPER ---

@@ -117,3 +117,15 @@ class WebViewSnapshot {
 }
 
 final webViewSnapshotProvider = StateProvider<WebViewSnapshot?>((ref) => null);
+
+/// Cache of snapshots for hibernated tabs and the grid view. 
+/// Uses a hybrid approach: ephemeral/ghost tabs use [bytes] (RAM),
+/// while normal tabs use [diskPath] to prevent OOM crashes.
+@immutable
+class TabSnapshotData {
+  final Uint8List? bytes;
+  final String? diskPath;
+  const TabSnapshotData({this.bytes, this.diskPath});
+}
+
+final tabSnapshotCacheProvider = StateProvider<Map<String, TabSnapshotData>>((ref) => {});

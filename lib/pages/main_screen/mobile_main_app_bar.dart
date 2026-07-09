@@ -12,6 +12,7 @@ import 'package:mira/pages/main_screen/browser_progress_bar.dart';
 import 'package:mira/pages/main_screen/main_screen_haptics.dart';
 import 'package:mira/pages/main_screen/main_screen_security.dart';
 import 'package:mira/pages/tab_screen.dart';
+import 'package:mira/core/services/snapshot_service.dart';
 
 Widget buildMobileBottomBar({
   required BuildContext context,
@@ -161,28 +162,44 @@ Widget buildMobileBottomBar({
                   if (shot != null) {
                     ref.read(webViewSnapshotProvider.notifier).state =
                         WebViewSnapshot(tabId: activeTab.id, bytes: shot);
+                    // Also cache it instantly in memory for the transition
+                    ref.read(tabSnapshotCacheProvider.notifier).update((state) => {
+                      ...state,
+                      activeTab.id: TabSnapshotData(bytes: shot),
+                    });
+
+                    // Background disk write for normal tabs
+                    if (!isGhost) {
+                      unawaited(ref.read(snapshotServiceProvider).writeSnapshot(activeTab.id, shot));
+                    }
                   }
-                  // The snapshot stops the page *compositing*; hibernate() (native
+                  // The snapshot stops the page *compositing*; pauseRendering() (native
                   // pause) also stops it *producing* frames.
-                  unawaited(engine?.hibernate());
+                  unawaited(engine?.pauseRendering());
                 }());
 
                 // 2. Custom transition controller
-                final animationController = BottomSheet.createAnimationController(Navigator.of(context));
-                animationController.duration = const Duration(milliseconds: 250);
-                animationController.reverseDuration = const Duration(milliseconds: 200);
-
-                await showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  backgroundColor: Colors.transparent,
-                  transitionAnimationController: animationController,
-                  builder: (_) => const FractionallySizedBox(
-                      heightFactor: 0.8, child: TabsSheet()),
+                await Navigator.push(
+                  context,
+                  PageRouteBuilder(
+                    pageBuilder: (context, animation, secondaryAnimation) => const TabsSheet(),
+                    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                      return FadeTransition(
+                        opacity: animation,
+                        child: ScaleTransition(
+                          scale: Tween<double>(begin: 0.95, end: 1.0).animate(
+                            CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+                          ),
+                          child: child,
+                        ),
+                      );
+                    },
+                    transitionDuration: const Duration(milliseconds: 250),
+                    reverseTransitionDuration: const Duration(milliseconds: 200),
+                  ),
                 );
 
-                animationController.dispose();
-                unawaited(engine?.wake());
+                unawaited(engine?.resumeRendering());
                 if (!context.mounted) return;
                 ref.read(webViewSnapshotProvider.notifier).state = null;
               },

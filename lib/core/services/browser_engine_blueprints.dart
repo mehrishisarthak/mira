@@ -82,8 +82,8 @@ abstract class BrowserEngine {
   Future<void> init();
   Future<void> updateSettings(BrowserEngineConfig config);
   Future<void> dispose();
-  Future<void> hibernate();
-  Future<void> wake();
+  Future<void> pauseRendering();
+  Future<void> resumeRendering();
 
   // --- Navigation ---
 

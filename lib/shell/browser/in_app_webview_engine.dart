@@ -21,6 +21,7 @@ class InAppWebViewEngine implements BrowserEngine {
 
   InAppWebViewController? _controller;
   final bool _isPrivate;
+  final GlobalKey _webViewKey = GlobalKey();
 
   // Mutable permission flags — updated live via updateSettings()
   bool _isCameraBlocked = true;
@@ -149,12 +150,12 @@ class InAppWebViewEngine implements BrowserEngine {
   }
 
   @override
-  Future<void> hibernate() async {
+  Future<void> pauseRendering() async {
     await _controller?.pause();
   }
 
   @override
-  Future<void> wake() async {
+  Future<void> resumeRendering() async {
     await _controller?.resume();
   }
 
@@ -294,7 +295,7 @@ class InAppWebViewEngine implements BrowserEngine {
     }
 
     return InAppWebView(
-      key: ObjectKey(tabId),
+      key: _webViewKey,
       initialUrlRequest: (initialUrl != null && initialUrl.isNotEmpty)
           ? URLRequest(url: WebUri(initialUrl))
           : null,

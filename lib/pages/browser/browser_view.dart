@@ -82,11 +82,12 @@ class _BrowserViewState extends ConsumerState<BrowserView>
           }
 
           if (!awakeTabIds.contains(tab.id)) {
+            final cachedSnapshot = ref.watch(tabSnapshotCacheProvider)[tab.id];
             return Positioned.fill(
               key: ValueKey('hib_${tab.id}'),
               child: Visibility(
                 visible: isShowing,
-                child: HibernatedTabPlaceholder(tab: tab),
+                child: HibernatedTabPlaceholder(tab: tab, snapshot: cachedSnapshot),
               ),
             );
           }

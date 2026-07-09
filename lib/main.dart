@@ -20,6 +20,7 @@ import 'package:http/http.dart' as http;
 
 import 'package:mira/core/services/adblock_service.dart';
 import 'package:mira/core/services/adblock_ota_service.dart';
+import 'package:mira/core/config/hibernation_limits.dart';
 import 'package:mira/shell/browser/in_app_webview_engine.dart';
 
 Future<void> main(List<String> args) async {
@@ -76,6 +77,7 @@ Future<void> main(List<String> args) async {
   final isFirstRun = preferencesService.getFirstRun();
 
   await DownloadManager.init();
+  await initHibernationLimits();
 
   final Widget home = SplashScreen(
     nextScreen: isFirstRun ? const OnboardingScreen() : const Mainscreen(),

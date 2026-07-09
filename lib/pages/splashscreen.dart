@@ -8,6 +8,9 @@ import 'package:http/http.dart' as http;
 
 import 'package:mira/core/entities/theme_entity.dart';
 import 'package:mira/core/services/update_service.dart';
+import 'package:mira/core/services/database_providers.dart';
+import 'package:mira/core/services/snapshot_service.dart';
+import 'package:mira/shell/browser/in_app_webview_engine.dart';
 import 'package:mira/pages/update_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -48,6 +51,12 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void initState() {
     super.initState();
+    // Clear any orphaned snapshots from previous sessions
+    unawaited(SnapshotService.clearStaleSnapshots());
+    
+    // Pre-warm the WebView engine during splash
+    globalPreWarmedEngine = InAppWebViewEngine(isPrivate: false);
+
     _buildAnimations();
     _runAnimation();
     _runUpdateCheck();
@@ -184,7 +193,7 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
-    return AnnotatedRegion<SystemUiOverlayStyle>(
+    final mainSplash = AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
         backgroundColor: kMiraMatteBlack,
@@ -240,6 +249,22 @@ class _SplashScreenState extends State<SplashScreen>
         ),
       ),
     );
+
+    // If pre-warmed engine exists, mount it offstage to pay the cold-boot penalty
+    if (globalPreWarmedEngine != null) {
+      return Stack(
+        children: [
+          Offstage(
+            child: globalPreWarmedEngine!.buildWidget(
+              tabId: 'prewarm', 
+              initialUrl: 'about:blank',
+            ),
+          ),
+          mainSplash,
+        ],
+      );
+    }
+    return mainSplash;
   }
 
   Widget _buildLetter(int i) {
