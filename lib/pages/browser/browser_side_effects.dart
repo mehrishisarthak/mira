@@ -23,8 +23,20 @@ import 'package:mira/pages/main_screen/main_screen_security.dart';
 /// across tab churn even though the onDispose teardown below was already correct.
 final _engineEventsSubscriptionProvider =
     Provider.autoDispose.family<void, BrowserEngine>((ref, engine) {
-  final subscription = engine.pageEvents.listen((event) {
+  final subscription = engine.pageEvents.listen((event) async {
     handleEnginePageEvent(ref, event);
+    
+    if (event.type == BrowserPageEventType.loadStop || 
+        event.type == BrowserPageEventType.loadStart ||
+        event.type == BrowserPageEventType.updateVisitedHistory) {
+      final canGoBack = await engine.canGoBack();
+      final isGhost = ref.read(isGhostModeProvider);
+      if (isGhost) {
+        ref.read(ghostTabsProvider.notifier).updateActiveTabCanGoBack(canGoBack);
+      } else {
+        ref.read(tabsProvider.notifier).updateActiveTabCanGoBack(canGoBack);
+      }
+    }
   });
 
   ref.onDispose(() {
@@ -41,9 +53,22 @@ void handleEnginePageEvent(Ref ref, BrowserPageEvent event) {
   switch (event.type) {
     case BrowserPageEventType.loadStart:
       notifier.clearWebError();
+      final isGhost = ref.read(isGhostModeProvider);
+      final activeTabId = ref.read(currentActiveTabProvider).id;
+      if (isGhost) {
+        ref.read(ghostTabsProvider.notifier).setWebError(activeTabId, null);
+      } else {
+        ref.read(tabsProvider.notifier).setWebError(activeTabId, null);
+      }
       notifier.setLoadingProgress(0);
       if (event.url != null) {
         _updateTabUrl(ref, event.url!);
+      }
+      break;
+    case BrowserPageEventType.updateVisitedHistory:
+      if (event.url != null) {
+        _updateTabUrl(ref, event.url!);
+        _recordHistory(ref, event.url!);
       }
       break;
     case BrowserPageEventType.loadStop:
@@ -68,7 +93,13 @@ void handleEnginePageEvent(Ref ref, BrowserPageEvent event) {
       }
       break;
     case BrowserPageEventType.error:
-      notifier.setWebError(event.errorDescription);
+      final isGhost = ref.read(isGhostModeProvider);
+      final activeTabId = ref.read(currentActiveTabProvider).id;
+      if (isGhost) {
+        ref.read(ghostTabsProvider.notifier).setWebError(activeTabId, event.errorDescription);
+      } else {
+        ref.read(tabsProvider.notifier).setWebError(activeTabId, event.errorDescription);
+      }
       break;
     case BrowserPageEventType.downloadRequested:
       if (event.downloadRequest != null) {

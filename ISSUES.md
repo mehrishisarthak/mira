@@ -15,7 +15,6 @@
 ### Security / Privacy
 | ID | Sev | Issue | Location | Notes |
 |----|----|-------|----------|-------|
-| O-03 | 🟡 | **Excessive Android storage perms** + `requestLegacyExternalStorage="true"` (disables scoped storage). | `AndroidManifest.xml:12,13,22` | Downloads now use app-scoped `getDownloadsDirectory()`; likely removable. Contradicts privacy brand. |
 
 ### Performance
 | ID | Sev | Issue | Location | Notes |
@@ -33,7 +32,6 @@ UI-shell rendering pass focused on the Flutter↔native WebView bridge.
 | O-46 | 🟠 | **Edge-swipe back vs web horizontal scroll + predictive back.** `PopScope(canPop:false)` consumes the Android system back gesture for app/page nav; on Android 13+ the back gesture is an **edge swipe** that collides with horizontal scroll/carousels at the screen edge inside the page. With `targetSdk 35` (R-02) the predictive-back animation is also suppressed by `canPop:false`. Mobile gesture. | `mainscreen.dart:396-401`, `_handlePop` | Audit on-device with a horizontally-scrollable page. Consider predictive-back-aware `PopScope` once on SDK 35; evaluate gesture-exclusion at edges. |
 | O-44 | 🟡 | **No `RepaintBoundary` around the active platform-view webview.** Best-practice isolation is missing, but the marginal win is **small** here: an Android HC webview is already its own `PlatformViewLayer`, and the mobile progress/skeleton/chrome are in sibling subtrees (separate Column branches), so cross-repaint is mostly already bounded. Honest low. | `browser_view.dart:95-102` | Wrap each `Positioned.fill` webview child in `RepaintBoundary` only if a profile trace shows the Stack's other children (skeleton overlay, ghost flash) repainting on page paint. Don't add speculatively. |
 | O-45 | ⚪ | **DEPRIORITIZED by profile.** Mainscreen shell full-rebuilds on active-tab url/title tick — residual after D-29. Profiling shows **build time is not the bottleneck** (p50 ~0.9 ms; jank is raster/platform-view-bound), so this is now a micro-cleanup, not a perf fix — and it isn't the safe one-liner first thought: desktop's address field reads `activeTab.url` in 5 places and both bars need `activeTab.title` for bookmark callbacks. | `mainscreen.dart:327`, `currentActiveTabProvider` | Only worth doing as hygiene: `select((t) => t.url)` + read `title` fresh in the bookmark callbacks. No measurable frame win expected. |
-| O-56 | 🟡 | **Permission Blindspot.** Missing graceful handling of denied permissions in Ghost Mode or when downloading. | `security_provider.dart` | Fix: Audit permission flows to handle persistent OS denials smoothly. |
 
 #### State-management & rebuild audit (2026-07-09)
 Riverpod rebuild-scope audit focused on high-frequency state cascades from native WebView callbacks.
@@ -74,7 +72,6 @@ Files carrying too many responsibilities; split for testability and readability 
 | ID | Sev | File | Lines | Responsibilities to split out |
 |----|----|------|------:|-------------------------------|
 | O-32 | 🟡 | `lib/pages/mainscreen.dart` | 560 | Lifecycle observer, desktop hotkeys, window-title sync, `_performSearch`/URL parsing, pop handling, and the `isDesktop ? … : …` layout branches. Extract `DesktopMainScaffold` / `MobileMainScaffold` + a `MainScreenController` for search/hotkey logic. (Partially done — heavy helpers already in `main_screen/`.) |
-| O-33 | 🟡 | `lib/pages/mira_drawer.dart` | 557 | Theme picker, search-engine picker, security toggles, ad-block toggle, Nuke, update check, and bookmark/history/download sheet launchers all in one `MiraMenuPage`. Split into per-section widgets. |
 | O-27 | 🟡 | `lib/core/notifiers/ghost_notifier.dart` | 146 | *(see O-27 above)* — kitchen sink of 7 providers incl. engine lifecycle; split into ghost-state / active-tab / engine-factory files. |
 
 ### Release — Google Play Store readiness
@@ -84,7 +81,6 @@ Compliance/release gates, **separate from the code defects above**. Closing ever
 |----|----|------|----------|-------|
 | R-01 | 🔴 | **Release build is signed with the *debug* keystore.** Play rejects anything signed with the debug key. | `android/app/build.gradle.kts:37` | Create a real upload keystore, add a `release` signingConfig, enroll in Play App Signing. **Hard blocker.** |
 | R-02 | 🔴 | **`targetSdk = 34`.** Since 2025-08-31 Play requires new apps *and updates* to target **API 35** (Android 15); a 34 submission is rejected. | `android/app/build.gradle.kts:29` | Bump `targetSdk` to 35, re-test (esp. permissions/back-gesture behavior). **Hard blocker.** |
-| R-03 | 🟠 | **Broad storage perms** (`WRITE/READ_EXTERNAL_STORAGE` + `requestLegacyExternalStorage="true"`) trigger a Play storage-permissions review; likely unnecessary since downloads use app-scoped `getDownloadsDirectory()`. | `AndroidManifest.xml:12,13,22` | Remove, or file the storage-permission declaration. *(Same root as O-03.)* |
 | R-04 | 🟠 | **Sensitive perms undeclared to Play:** `ACCESS_FINE_LOCATION`/`CAMERA`/`RECORD_AUDIO` (exist to grant *web pages* access) need a Permissions Declaration / prominent disclosure; location triggers a review form. | `AndroidManifest.xml:6,8,9` | Complete Play declaration + in-app prominent disclosure, or drop perms not actually required. |
 | R-05 | 🟠 | **No published Privacy Policy URL and no Data Safety form** — both mandatory to submit (more so with the sensitive perms above and a privacy-branded listing). | — (Play Console) | Publish a privacy policy; complete Data Safety accurately to match real data behavior. |
 | R-06 | 🟡 | **`store_url` must point to the Play listing**, not a GitHub APK — otherwise the force-update flow pushes users to off-Play distribution. Mechanically the app only `launchUrl`s it (no APK sideload), so this is config, not code. | `update_service.dart`, `mira-updates/version.json`, `update_screen.dart:86-94` | Point `store_url` at the Play listing; reconsider hard force-update UX. |
@@ -200,6 +196,17 @@ Found in the platform-view audit (mobile-first). Approaches recorded for each.
 | D-27 | Bundled JetBrains Mono (OFL) as a Flutter font asset behind a `jetBrainsMono()` helper; migrated all 36 `GoogleFonts.jetBrainsMono()` call sites (12 files) off the runtime network fetch → no per-screen first-paint flicker, works offline (was O-40). |
 | D-28 | Fixed the 4 stale smoke tests (assertion drift, not a network issue): updated `TabsSheet` labels (`TABS`/`GHOST`/`No open tabs`/`CustomScrollView`) and splash wordmark assertions, and added a frame-by-frame `_drainSplash` helper so the mixed timer+animation splash flow drains cleanly. Full suite now **25/25 green** (was +21/−4) (was O-41). |
 | D-29 | Rebuild-scope hygiene (was O-06/O-07): `BrowserView` now `.select`s a structural signature (ids + url-empty + activeIndex) so the webview `Stack` no longer rebuilds on every url/title tick; `Mainscreen` swapped its full `tabsProvider`/`ghostTabsProvider`/`bookmarksProvider` watches for derived `tabCountProvider` + `isCurrentUrlBookmarkedProvider`. *(Reduces UI-thread rebuilds; impact to be confirmed by an Android `--profile` pass, per the perf caveat.)* |
+
+
+### Merged to `master` — Settings & Downloads Redesign
+| ID | Item (issue → approach taken) |
+|----|-------------------------------|
+| O-03 / R-03 | **O-03 / R-03**: Resolved excessive Android storage permissions. Configured `flutter_downloader` to use `saveInPublicStorage: true` for Android 10+ (using MediaStore), and capped `WRITE_EXTERNAL_STORAGE` to `maxSdkVersion="28"`. Users can find their files without the app demanding broad storage permissions. |
+| O-56 | **O-56**: Handled permission blindspots for downloads. Configured downloads to silently fall back and continue seamlessly even if the user denies notification permissions, preventing broken UX. |
+| O-33 | **O-33**: Resolved the bloated `mira_drawer.dart` by implementing a dedicated, dual-pane `SettingsScreen` (native Flutter overlay). Migrated Theme, Search Engine, and Privacy settings out of the drawer. |
+| D-36 | **Download UI Performance**: Implemented `cacheWidth: 100` trick for image thumbnails in the `DownloadsScreen` `ListView.builder`, keeping the list buttery smooth without memory overhead. |
+| D-37 | **Downloads Orphan Trap**: Plugged the `savePage` storage leak. Offline HTML pages bypassing the download manager are now manually tracked and deleted during a "Clear History (with files)" operation. |
+| D-38 | **Native DB Lock Guardrail**: `flutter_downloader` `remove()` calls are now chunked in batches of 25 during `clearHistory` to prevent DDOS-ing the native SQLite lock queue. |
 
 ### Verified already-fixed (found resolved during audit triage — no action)
 - O-08: desktop find bar already injects its JS library **once per open** behind the `_libraryInjected` flag (`desktop_find_bar.dart:197`), then sends only the command per keystroke; `_close()` resets the flag. The issue text pointed at a stale line (193) — no per-keystroke re-injection occurs.

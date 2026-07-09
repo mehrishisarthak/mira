@@ -16,8 +16,8 @@ abstract class DownloadService {
   /// Opens the downloaded file with the system default handler.
   Future<void> openTask(MiraDownloadTask task);
 
-  /// Removes the task from the platform download backend and deletes the file.
-  Future<void> deleteTask(String taskId, String savePath);
+  /// Removes the task from the platform download backend and optionally deletes the file.
+  Future<void> deleteTask(String taskId, String savePath, {bool deleteFile = false});
 
   /// Retries a failed task. Implementations decide whether to resume an
   /// existing platform task or enqueue a fresh one.
@@ -28,4 +28,6 @@ abstract class DownloadService {
   );
 
   void dispose();
+
+  Future<void> clearHistory({bool deleteFiles = false});
 }

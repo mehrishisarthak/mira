@@ -13,6 +13,8 @@ class MiraDownloadTask {
   final MiraDownloadStatus status;
   final int progress; // 0-100
   final String? error;
+  final DateTime? timestamp;
+  final String? fileSizeString;
 
   const MiraDownloadTask({
     required this.id,
@@ -22,6 +24,8 @@ class MiraDownloadTask {
     required this.status,
     this.progress = 0,
     this.error,
+    this.timestamp,
+    this.fileSizeString,
   });
 
   MiraDownloadTask copyWith({
@@ -29,6 +33,8 @@ class MiraDownloadTask {
     int? progress,
     String? error,
     bool clearError = false,
+    DateTime? timestamp,
+    String? fileSizeString,
   }) {
     return MiraDownloadTask(
       id: id,
@@ -38,6 +44,8 @@ class MiraDownloadTask {
       status: status ?? this.status,
       progress: progress ?? this.progress,
       error: clearError ? null : (error ?? this.error),
+      timestamp: timestamp ?? this.timestamp,
+      fileSizeString: fileSizeString ?? this.fileSizeString,
     );
   }
 
@@ -69,6 +77,7 @@ class MiraDownloadTask {
       savePath: p.join(task.savedDir, safeFilename), // Now safely uses the fallback
       status: status,
       progress: task.progress,
+      timestamp: DateTime.fromMillisecondsSinceEpoch(task.timeCreated),
     );
   }
 
@@ -80,6 +89,8 @@ class MiraDownloadTask {
         'status': status.name,
         'progress': progress,
         'error': error,
+        'timestamp': timestamp?.millisecondsSinceEpoch,
+        'fileSizeString': fileSizeString,
       };
 
   static MiraDownloadTask fromJson(Map<String, dynamic> m) {
@@ -97,6 +108,8 @@ class MiraDownloadTask {
       status: MiraDownloadStatus.values.byName(m['status'] as String? ?? 'pending'),
       progress: (m['progress'] as num?)?.toInt() ?? 0,
       error: m['error'] as String?,
+      timestamp: m['timestamp'] != null ? DateTime.fromMillisecondsSinceEpoch(m['timestamp'] as int) : null,
+      fileSizeString: m['fileSizeString'] as String?,
     );
   }
 }

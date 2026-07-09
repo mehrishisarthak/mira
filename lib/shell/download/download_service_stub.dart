@@ -40,7 +40,7 @@ class StubDownloadService implements DownloadService {
   }
 
   @override
-  Future<void> deleteTask(String taskId, String savePath) {
+  Future<void> deleteTask(String taskId, String savePath, {bool deleteFile = false}) {
     throw UnimplementedError(
         'DownloadService is not supported on this platform.');
   }
@@ -57,4 +57,8 @@ class StubDownloadService implements DownloadService {
 
   @override
   void dispose() {}
+  @override
+  Future<void> clearHistory({bool deleteFiles = false}) async {
+    // Stub
+  }
 }

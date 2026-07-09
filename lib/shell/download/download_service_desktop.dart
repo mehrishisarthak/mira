@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 import 'package:mira/core/entities/download_entity.dart';
+import 'package:mira/core/services/isar_database_repository.dart';
 import 'package:mira/core/services/download_service.dart';
 
 class _DesktopTransfer {
@@ -154,16 +155,20 @@ class DesktopDownloadService implements DownloadService {
   }
 
   @override
-  Future<void> deleteTask(String taskId, String savePath) async {
-    final t = _active[taskId];
-    if (t != null) {
-      await _abortTransfer(taskId, t, deletePartial: true);
+  Future<void> deleteTask(String taskId, String savePath, {bool deleteFile = false}) async {
+    final session = _active[taskId];
+    if (session != null) {
+      session.cancelRequested = true;
+      _active.remove(taskId);
     }
-    try {
-      final file = File(savePath);
-      if (await file.exists()) await file.delete();
-    } catch (e) {
-      debugPrint('MIRA_DOWNLOAD: Delete error -> $e');
+    
+    if (deleteFile) {
+      try {
+        final f = File(savePath);
+        if (await f.exists()) await f.delete();
+      } catch (e) {
+        debugPrint('MIRA_DOWNLOAD: Error deleting file: $e');
+      }
     }
     _urlByTaskId.remove(taskId);
     _pathByTaskId.remove(taskId);
@@ -351,5 +356,14 @@ class DesktopDownloadService implements DownloadService {
       entry.value.cancelRequested = true;
     }
     _active.clear();
+  }
+  @override
+  Future<void> clearHistory({bool deleteFiles = false}) async {
+    try {
+      final isarRepo = IsarDownloadRepository();
+      await isarRepo.saveAll([]);
+    } catch (e) {
+      debugPrint('MIRA_DOWNLOAD: clearHistory failed -> $e');
+    }
   }
 }

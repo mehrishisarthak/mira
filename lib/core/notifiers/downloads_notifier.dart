@@ -78,9 +78,29 @@ class DownloadsNotifier extends StateNotifier<List<MiraDownloadTask>> {
     await _service.openTask(task);
   }
 
-  Future<void> deleteTask(MiraDownloadTask task) async {
-    await _service.deleteTask(task.id, task.savePath);
+  Future<void> deleteTask(MiraDownloadTask task, {bool deleteFile = false}) async {
+    await _service.deleteTask(task.id, task.savePath, deleteFile: deleteFile);
     if (mounted) state = state.where((t) => t.id != task.id).toList();
+    _schedulePersistDesktopCatalog();
+  }
+
+  Future<void> clearHistory({bool deleteFiles = false}) async {
+    if (deleteFiles) {
+      // Plug the savePage orphan trap: manually delete files that bypass flutter_downloader
+      for (final task in state) {
+        try {
+          final file = File(task.savePath);
+          if (await file.exists()) {
+            await file.delete();
+          }
+        } catch (e) {
+          debugPrint('MIRA_DOWNLOAD: Orphan cleanup failed for ${task.savePath} -> $e');
+        }
+      }
+    }
+    
+    await _service.clearHistory(deleteFiles: deleteFiles);
+    if (mounted) state = [];
     _schedulePersistDesktopCatalog();
   }
 

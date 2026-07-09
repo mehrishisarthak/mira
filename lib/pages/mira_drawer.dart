@@ -75,7 +75,7 @@ class MiraMenuPage extends ConsumerWidget {
         backgroundColor: theme.surfaceColor,
         leading: IconButton(
           icon: Icon(
-            desktopOverlay ? Icons.close : Icons.arrow_back,
+            desktopOverlay ? Icons.close : desktopOverlay ? Icons.close : Icons.arrow_back,
             color: appTextColor,
           ),
           onPressed: () => Navigator.pop(context),
@@ -101,7 +101,7 @@ class MiraMenuPage extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
 
-            // ── NAVIGATION ──────────────────────────────────────────────────
+            // â”€â”€ NAVIGATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             _sectionLabel("NAVIGATE", primaryAccent),
 
             ListTile(
@@ -179,7 +179,7 @@ class MiraMenuPage extends ConsumerWidget {
 
             Divider(color: appTextColor.withAlpha(51)),
 
-            // ── PAGE ACTIONS ────────────────────────────────────────────────
+            // â”€â”€ PAGE ACTIONS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             _sectionLabel("PAGE ACTIONS", primaryAccent),
 
             ListTile(
@@ -287,7 +287,7 @@ class MiraMenuPage extends ConsumerWidget {
 
             Divider(color: appTextColor.withAlpha(51)),
 
-            // ── SECURITY ────────────────────────────────────────────────────
+            // â”€â”€ SECURITY â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             _sectionLabel(
                 "SECURITY PROTOCOLS",
                 isGhost ? Colors.redAccent : Colors.greenAccent),
@@ -463,7 +463,7 @@ class MiraMenuPage extends ConsumerWidget {
                 padding: const EdgeInsets.all(16.0),
                 child: Center(
                   child: Text(
-                    "Ghost mode — new visits are not saved to history",
+                    "Ghost mode â€” new visits are not saved to history",
                     textAlign: TextAlign.center,
                     style: TextStyle(
                         color: Colors.redAccent.withAlpha(128),

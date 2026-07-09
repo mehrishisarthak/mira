@@ -2,18 +2,25 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart' show immutable;
 import 'package:uuid/uuid.dart';
 
+class Sentinel { const Sentinel(); }
+const clearWebError = Sentinel();
+
 @immutable
 class BrowserTab {
   final String id;
   final String url;
   final String title;
   final bool isLoading;
+  final bool canGoBack;
+  final String? webError;
 
   BrowserTab({
     String? id,
     this.url = '',
     this.title = 'New Tab',
     this.isLoading = false,
+    this.canGoBack = false,
+    this.webError,
   }) : id = id ?? const Uuid().v4();
 
   BrowserTab copyWith({
@@ -21,12 +28,16 @@ class BrowserTab {
     String? url,
     String? title,
     bool? isLoading,
+    bool? canGoBack,
+    Object? webError = const Sentinel(),
   }) {
     return BrowserTab(
       id: id ?? this.id,
       url: url ?? this.url,
       title: title ?? this.title,
       isLoading: isLoading ?? this.isLoading,
+      canGoBack: canGoBack ?? this.canGoBack,
+      webError: webError is Sentinel ? this.webError : webError as String?,
     );
   }
 
@@ -37,16 +48,19 @@ class BrowserTab {
           other.id == id &&
           other.url == url &&
           other.title == title &&
-          other.isLoading == isLoading);
+          other.isLoading == isLoading &&
+          other.canGoBack == canGoBack &&
+          other.webError == webError);
 
   @override
-  int get hashCode => Object.hash(id, url, title, isLoading);
+  int get hashCode => Object.hash(id, url, title, isLoading, canGoBack, webError);
 
   Map<String, dynamic> toMap() {
     return {
       'id': id,
       'url': url,
       'title': title,
+      'canGoBack': canGoBack,
     };
   }
 
@@ -55,6 +69,7 @@ class BrowserTab {
       id: map['id'] as String? ?? const Uuid().v4(),
       url: map['url'] as String? ?? '',
       title: map['title'] as String? ?? 'New Tab',
+      canGoBack: map['canGoBack'] as bool? ?? false,
     );
   }
 

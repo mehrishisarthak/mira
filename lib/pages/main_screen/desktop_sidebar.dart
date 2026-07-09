@@ -6,10 +6,12 @@ import 'package:mira/core/entities/tab_entity.dart';
 import 'package:mira/core/notifiers/ghost_notifier.dart';
 import 'package:mira/core/notifiers/tab_notifier.dart';
 import 'package:mira/core/notifiers/theme_notifier.dart';
-import 'package:mira/core/entities/theme_entity.dart' show MiraTheme, kMiraInkPrimary;
 import 'package:mira/pages/downloads_screen.dart';
 import 'package:mira/pages/history_screen.dart';
+import 'package:mira/core/entities/theme_entity.dart' show MiraTheme, kMiraInkPrimary;
 import 'package:mira/pages/main_screen/desktop_browser_chrome.dart' show showDesktopMiraMenuPopup;
+import 'package:mira/pages/mira_drawer.dart';
+import 'package:mira/shell/desktop/open_private_browser_window.dart';
 
 final desktopSidebarExpandedProvider = StateProvider<bool>((ref) => true);
 
@@ -517,11 +519,16 @@ class _BottomNav extends ConsumerWidget {
           ),
         ),
         _NavItem(
-          icon: Icons.more_horiz,
+          icon: Icons.settings,
           label: 'Settings',
           color: muted,
           expanded: expanded,
-          onTap: () => showDesktopMiraMenuPopup(context),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const MiraMenuPage(desktopOverlay: true)),
+            );
+          },
         ),
       ],
     );

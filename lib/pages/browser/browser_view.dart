@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mira/core/notifiers/ghost_notifier.dart';
 import 'package:mira/core/notifiers/tab_notifier.dart';
+import 'package:mira/core/entities/tab_entity.dart';
 import 'package:mira/core/notifiers/hibernation_notifier.dart';
 import 'package:mira/core/services/database_providers.dart';
 import 'package:mira/pages/browser_chrome_providers.dart';
@@ -48,34 +49,56 @@ class _BrowserViewState extends ConsumerState<BrowserView>
 
     registerBrowserViewSideEffects(ref: ref);
 
-    final provider = isGhost ? ghostTabsProvider : tabsProvider;
-    // Rebuild only on structural change — add/remove/switch and the
-    // branding<->webview flip (a tab's url emptying/filling). A url/title tick
-    // during load must NOT rebuild this Stack: each webview is keyed by tabId
-    // and reads initialUrl once at creation (O-06).
-    ref.watch(provider.select((s) =>
+    // Watch both providers for structural changes to either stack
+    ref.watch(tabsProvider.select((s) =>
         '${s.activeIndex}|${s.tabs.map((t) => '${t.id}:${t.url.isEmpty}').join(',')}'));
-    final tabsState = ref.read(provider);
-    final tabs = tabsState.tabs;
-    final activeIndex = tabsState.activeIndex;
+    ref.watch(ghostTabsProvider.select((s) =>
+        '${s.activeIndex}|${s.tabs.map((t) => '${t.id}:${t.url.isEmpty}').join(',')}'));
+
+    final normalState = ref.read(tabsProvider);
+    final ghostState = ref.read(ghostTabsProvider);
+    
+    final normalTabs = normalState.tabs;
+    final normalActiveIndex = normalState.activeIndex;
+    
+    final ghostTabs = ghostState.tabs;
+    final ghostActiveIndex = ghostState.activeIndex;
 
     final awakeTabIds = ref.watch(hibernationProvider);
-    final webError = ref.watch(browserChromeProvider.select((s) => s.webError));
     final webViewSnapshot = ref.watch(webViewSnapshotProvider);
-    final activeUrl = tabs.isNotEmpty ? tabs[activeIndex].url : '';
+    
+    // The active tab whose custom error or URL we care about at the top level
+    final activeUrl = isGhost 
+      ? (ghostTabs.isNotEmpty ? ghostTabs[ghostActiveIndex].url : '') 
+      : (normalTabs.isNotEmpty ? normalTabs[normalActiveIndex].url : '');
+      
+    final activeTabWebError = isGhost
+      ? (ghostTabs.isNotEmpty ? ghostTabs[ghostActiveIndex].webError : null)
+      : (normalTabs.isNotEmpty ? normalTabs[normalActiveIndex].webError : null);
 
     return Stack(
       children: [
-        ...tabs.asMap().entries.map((entry) {
+        // Map over both lists simultaneously
+        ...[
+          ...normalTabs.asMap().entries.map((e) => MapEntry(e.key, {'tab': e.value, 'isGhost': false})),
+          ...ghostTabs.asMap().entries.map((e) => MapEntry(e.key, {'tab': e.value, 'isGhost': true}))
+        ].map((entry) {
           final index = entry.key;
-          final tab = entry.value;
-          final isShowing = index == activeIndex;
+          final tabData = entry.value;
+          final tab = tabData['tab'] as BrowserTab;
+          final isTabGhost = tabData['isGhost'] as bool;
+          
+          final isActiveMode = isTabGhost == isGhost;
+          final isShowing = isActiveMode && index == (isTabGhost ? ghostActiveIndex : normalActiveIndex);
 
+          // Inactive mode tabs get visibility: false, maintainState: true
+          
           if (tab.url.isEmpty) {
              return Positioned.fill(
               key: ValueKey('brand_${tab.id}'),
               child: Visibility(
                 visible: isShowing,
+                maintainState: true,
                 child: const BrandingScreen(),
               ),
             );
@@ -87,19 +110,14 @@ class _BrowserViewState extends ConsumerState<BrowserView>
               key: ValueKey('hib_${tab.id}'),
               child: Visibility(
                 visible: isShowing,
+                maintainState: true,
                 child: HibernatedTabPlaceholder(tab: tab, snapshot: cachedSnapshot),
               ),
             );
           }
 
           final engine = ref.watch(browserEngineProvider(tab.id));
-          // While an overlay (tab sheet) is open, swap the active page for its
-          // screenshot and Offstage the live webview: this drops the HC surface
-          // out of the composite so the overlay animates without the
-          // platform-view tax, while keeping the native view alive (no reload
-          // on restore). Same offstage-but-alive pattern as inactive tabs.
-          // Scoped to the captured tab so switching tabs from the sheet shows
-          // the new tab live, not the previous tab's screenshot.
+          
           final snapshotBytes =
               (isShowing && webViewSnapshot?.tabId == tab.id)
                   ? webViewSnapshot!.bytes
@@ -114,7 +132,7 @@ class _BrowserViewState extends ConsumerState<BrowserView>
                 fit: StackFit.expand,
                 children: [
                   Offstage(
-                    offstage: snapshotBytes != null,
+                    offstage: snapshotBytes != null || tab.webError != null,
                     child:
                         engine.buildWidget(tabId: tab.id, initialUrl: tab.url),
                   ),
@@ -130,13 +148,18 @@ class _BrowserViewState extends ConsumerState<BrowserView>
           );
         }),
         const WebViewSkeletonOverlay(),
-        if (webError != null && activeUrl.isNotEmpty)
+        if (activeTabWebError != null && activeUrl.isNotEmpty)
           Positioned.fill(
             child: CustomErrorScreen(
-              error: webError,
+              error: activeTabWebError,
               url: activeUrl,
               onRetry: () {
-                ref.read(browserChromeProvider.notifier).clearWebError();
+                final tabId = isGhost ? ghostTabs[ghostActiveIndex].id : normalTabs[normalActiveIndex].id;
+                if (isGhost) {
+                  ref.read(ghostTabsProvider.notifier).setWebError(tabId, null);
+                } else {
+                  ref.read(tabsProvider.notifier).setWebError(tabId, null);
+                }
                 ref.read(activeBrowserEngineProvider)?.reload();
               },
             ),

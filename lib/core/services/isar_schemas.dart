@@ -50,4 +50,9 @@ class DownloadRecordSchema {
 
   @Index()
   int sortOrder = 0;
+
+  @Index()
+  DateTime? timestamp;
+
+  String? fileSizeString;
 }

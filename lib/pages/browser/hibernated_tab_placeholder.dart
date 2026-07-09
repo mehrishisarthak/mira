@@ -52,7 +52,7 @@ class HibernatedTabPlaceholder extends ConsumerWidget {
             children: [
               imageWidget,
               // Semi-transparent overlay to indicate it's paused/hibernated
-              Container(color: Colors.black.withOpacity(0.2)),
+              Container(color: Colors.black.withValues(alpha: 0.2)),
               const Center(
                 child: Icon(Icons.refresh_rounded, size: 48, color: Colors.white70),
               ),

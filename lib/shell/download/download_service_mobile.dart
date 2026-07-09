@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_downloader/flutter_downloader.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:mira/core/services/isar_database_repository.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:mira/core/app_globals.dart';
 import 'package:mira/core/entities/download_entity.dart';
@@ -96,6 +97,7 @@ class MobileDownloadService implements DownloadService {
         headers: headers ?? {},
         showNotification: true,
         openFileFromNotification: true,
+        saveInPublicStorage: true,
       );
 
       onTasksReloaded(await loadExistingTasks());
@@ -133,9 +135,55 @@ class MobileDownloadService implements DownloadService {
 
   @override
   Future<List<MiraDownloadTask>> loadExistingTasks() async {
-    final tasks = await FlutterDownloader.loadTasks();
-    if (tasks == null) return [];
-    return tasks.reversed.map(MiraDownloadTask.fromFlutterTask).toList();
+    final fdTasks = await FlutterDownloader.loadTasks();
+    if (fdTasks == null) return [];
+    
+    final isarRepo = IsarDownloadRepository();
+    final cachedRecords = await isarRepo.loadAll();
+    final cachedMap = {for (var t in cachedRecords) t.id: t};
+
+    final results = <MiraDownloadTask>[];
+
+    for (final fdTask in fdTasks.reversed) {
+      var task = MiraDownloadTask.fromFlutterTask(fdTask);
+      final cached = cachedMap[task.id];
+      
+      task = task.copyWith(
+        timestamp: task.timestamp ?? cached?.timestamp,
+        fileSizeString: cached?.fileSizeString,
+      );
+
+      if (task.status == MiraDownloadStatus.completed && task.fileSizeString == null) {
+         _calculateSizeAsync(task, isarRepo);
+      }
+      
+      results.add(task);
+    }
+    
+    isarRepo.saveAll(results);
+    return results;
+  }
+
+  void _calculateSizeAsync(MiraDownloadTask task, IsarDownloadRepository repo) async {
+    try {
+      final file = File(task.savePath);
+      if (await file.exists()) {
+        final bytes = await file.length();
+        final sizeStr = _formatBytes(bytes);
+        
+        await repo.updateMetadata(task.id, fileSizeString: sizeStr);
+        onTaskUpdated(task.id, (oldTask) => oldTask.copyWith(fileSizeString: sizeStr));
+      }
+    } catch (e) {
+      debugPrint('Error calculating file size: $e');
+    }
+  }
+
+  static String _formatBytes(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    if (bytes < 1024 * 1024 * 1024) return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
   }
 
   @override
@@ -167,8 +215,8 @@ class MobileDownloadService implements DownloadService {
   }
 
   @override
-  Future<void> deleteTask(String taskId, String savePath) async {
-    await FlutterDownloader.remove(taskId: taskId, shouldDeleteContent: true);
+  Future<void> deleteTask(String taskId, String savePath, {bool deleteFile = false}) async {
+    await FlutterDownloader.remove(taskId: taskId, shouldDeleteContent: deleteFile);
     // Reload UI to remove the task from the screen
     onTasksReloaded(await loadExistingTasks());
   }
@@ -185,6 +233,27 @@ class MobileDownloadService implements DownloadService {
     onTasksReloaded(await loadExistingTasks());
   }
 
+  @override
+  Future<void> clearHistory({bool deleteFiles = false}) async {
+    try {
+      final tasks = await FlutterDownloader.loadTasks() ?? [];
+      
+      // Batch deletions in chunks of 25 to avoid locking the native SQLite DB
+      const chunkSize = 25;
+      for (var i = 0; i < tasks.length; i += chunkSize) {
+        final chunk = tasks.skip(i).take(chunkSize);
+        await Future.wait(chunk.map((t) => FlutterDownloader.remove(
+          taskId: t.taskId,
+          shouldDeleteContent: deleteFiles,
+        )));
+      }
+      
+      onTasksReloaded(await loadExistingTasks());
+    } catch (e) {
+      debugPrint('MIRA_DOWNLOAD: clearHistory failed -> $e');
+    }
+  }
+
   // ── Private helpers ────────────────────────────────────────────────────────
 
   static Future<bool> _checkPermission() async {
@@ -196,25 +265,22 @@ class MobileDownloadService implements DownloadService {
       // download. Request it, but never block the download on the result.
       final status = await Permission.notification.request();
       if (!status.isGranted) {
+        if (status.isPermanentlyDenied) {
+          // Graceful handling for persistent denial (O-56)
+          scaffoldMessengerKey.currentState?.showSnackBar(
+            const SnackBar(
+              content: Text('Notifications disabled. Downloads will run silently.'),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
         debugPrint('MIRA_DOWNLOAD: notification permission not granted — '
             'download will run without a progress notification');
       }
-      return true;
     }
-
-    var status = await Permission.storage.status;
-    if (status.isPermanentlyDenied) {
-      await openAppSettings();
-      return false;
-    }
-    if (!status.isGranted) {
-      status = await Permission.storage.request();
-      if (status.isGranted) return true;
-      if (status.isPermanentlyDenied) {
-        await openAppSettings();
-      }
-      return false;
-    }
+    
+    // We use app-scoped getDownloadsDirectory() which requires NO storage permissions 
+    // on Android 4.4+. We removed WRITE_EXTERNAL_STORAGE from the manifest.
     return true;
   }
 

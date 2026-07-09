@@ -7,6 +7,16 @@ import 'package:mira/core/entities/tab_entity.dart';
 class GhostTabsNotifier extends StateNotifier<TabsState> {
   GhostTabsNotifier() : super(TabsState(tabs: [], activeIndex: 0));
 
+    void setWebError(String tabId, String? error) {
+    final idx = state.tabs.indexWhere((t) => t.id == tabId);
+    if (idx != -1) {
+      final updatedTab = state.tabs[idx].copyWith(webError: error ?? clearWebError);
+      final newTabs = [...state.tabs];
+      newTabs[idx] = updatedTab;
+      state = TabsState(tabs: newTabs, activeIndex: state.activeIndex);
+    }
+  }
+
   void addTab({String url = ''}) {
     final newTab = BrowserTab(url: url, title: url.isEmpty ? 'New Tab' : 'Ghost Tab');
     final newTabs = [...state.tabs, newTab];
@@ -87,6 +97,13 @@ class GhostTabsNotifier extends StateNotifier<TabsState> {
       tabId,
       (tab) => tab.copyWith(url: url),
     );
+  }
+
+  
+  void updateActiveTabCanGoBack(bool canGoBack) {
+    if (state.tabs.isEmpty) return;
+    if (state.tabs[state.activeIndex].canGoBack == canGoBack) return;
+    _updateActiveTab((tab) => tab.copyWith(canGoBack: canGoBack));
   }
 
   void updateTitle(String title) {

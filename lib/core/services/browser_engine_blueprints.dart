@@ -10,6 +10,7 @@ enum BrowserPageEventType {
   titleChanged,
   error,
   downloadRequested,
+  updateVisitedHistory,
 }
 
 /// A wrapper class for broadcasting web page events through the [BrowserEngine].

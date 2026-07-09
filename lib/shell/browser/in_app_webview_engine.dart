@@ -2,9 +2,11 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:mira/core/services/browser_engine_blueprints.dart'; // BrowserEngine, BrowserEngineConfig, AdBlockRule
 import 'package:mira/core/config/desktop_user_agent.dart';
+import 'package:mira/core/app_globals.dart';
 import 'package:flutter/gestures.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -33,6 +35,7 @@ class InAppWebViewEngine implements BrowserEngine {
 
   int _lastProgress = 100;
   String? _currentUrl;
+  final Set<String> _alertedDomains = {};
 
   InAppWebViewEngine({
     bool isPrivate = false,
@@ -305,6 +308,10 @@ class InAppWebViewEngine implements BrowserEngine {
         useOnDownloadStart: true,
         geolocationEnabled: !_isLocationBlocked,
         contentBlockers: _contentBlockers,
+        cacheEnabled: true,
+        javaScriptEnabled: true,
+        domStorageEnabled: true,
+        databaseEnabled: true,
       ),
       shouldOverrideUrlLoading: (controller, navigationAction) async {
         final url = navigationAction.request.url;
@@ -352,25 +359,57 @@ class InAppWebViewEngine implements BrowserEngine {
             r == PermissionResourceType.CAMERA ||
             r == PermissionResourceType.MICROPHONE).toList();
         if (sensorRequested.isEmpty) return null;
+        
+        if (_isCameraBlocked) {
+          final host = request.origin.host;
+          if (!_alertedDomains.contains(host)) {
+            _alertedDomains.add(host);
+            scaffoldMessengerKey.currentState?.showSnackBar(
+              const SnackBar(
+                content: Text('Camera/Mic access blocked by Privacy Shields.'),
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+          return PermissionResponse(
+            resources: sensorRequested,
+            action: PermissionResponseAction.DENY,
+          );
+        }
+        
         return PermissionResponse(
           resources: sensorRequested,
-          action: _isCameraBlocked
-              ? PermissionResponseAction.DENY
-              : PermissionResponseAction.GRANT,
+          action: PermissionResponseAction.GRANT,
         );
       },
       onGeolocationPermissionsShowPrompt: (controller, origin) async {
+        if (_isLocationBlocked) {
+          final host = Uri.tryParse(origin)?.host ?? origin;
+          if (!_alertedDomains.contains(host)) {
+            _alertedDomains.add(host);
+            scaffoldMessengerKey.currentState?.showSnackBar(
+              const SnackBar(
+                content: Text('Location access blocked by Privacy Shields.'),
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+        }
         return GeolocationPermissionShowPromptResponse(
           origin: origin,
           allow: !_isLocationBlocked,
           retain: false,
         );
       },
+
       onLoadStart: (controller, url) {
         handleLoadStart(url);
       },
       onLoadStop: (controller, url) {
         handleLoadStop(url);
+      },
+      onUpdateVisitedHistory: (controller, url, isReload) {
+        handleUpdateVisitedHistory(url);
       },
       onProgressChanged: (controller, progress) {
         handleProgressChanged(progress);
@@ -390,10 +429,21 @@ class InAppWebViewEngine implements BrowserEngine {
   // --- Native Callback Mappings ---
 
   void handleLoadStart(WebUri? url) {
+    if (url != null) {
+      _alertedDomains.remove(url.host); // Reset debounce for this domain on new load
+    }
     _lastProgress = 0;
     _currentUrl = url?.toString();
     _eventController.add(BrowserPageEvent(
       type: BrowserPageEventType.loadStart,
+      url: url?.toString(),
+    ));
+  }
+
+  void handleUpdateVisitedHistory(WebUri? url) {
+    _currentUrl = url?.toString();
+    _eventController.add(BrowserPageEvent(
+      type: BrowserPageEventType.updateVisitedHistory,
       url: url?.toString(),
     ));
   }

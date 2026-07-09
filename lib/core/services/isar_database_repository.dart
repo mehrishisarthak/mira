@@ -256,9 +256,13 @@ class IsarDownloadRepository {
   Future<void> saveAll(List<MiraDownloadTask> tasks) async {
     if (_isar == null) await init();
     await _isar!.writeTxn(() async {
+      final existingRecords = await _isar!.collection<DownloadRecordSchema>().where().findAll();
+      final existingMap = {for (var r in existingRecords) r.taskId: r};
+
       await _isar!.collection<DownloadRecordSchema>().clear();
       await _isar!.collection<DownloadRecordSchema>().putAll(
         tasks.asMap().entries.map((e) {
+          final existing = existingMap[e.value.id];
           return DownloadRecordSchema()
             ..taskId = e.value.id
             ..url = e.value.url
@@ -267,7 +271,9 @@ class IsarDownloadRepository {
             ..statusName = e.value.status.name
             ..progress = e.value.progress
             ..error = e.value.error
-            ..sortOrder = e.key;
+            ..sortOrder = e.key
+            ..timestamp = e.value.timestamp ?? existing?.timestamp
+            ..fileSizeString = e.value.fileSizeString ?? existing?.fileSizeString;
         }).toList(),
       );
     });
@@ -288,6 +294,19 @@ class IsarDownloadRepository {
       ),
       progress: r.progress,
       error: r.error,
+      timestamp: r.timestamp,
+      fileSizeString: r.fileSizeString,
     )).toList();
+  }
+
+  Future<void> updateMetadata(String taskId, {String? fileSizeString}) async {
+    if (_isar == null) await init();
+    await _isar!.writeTxn(() async {
+      final record = await _isar!.collection<DownloadRecordSchema>().getByTaskId(taskId);
+      if (record != null) {
+        if (fileSizeString != null) record.fileSizeString = fileSizeString;
+        await _isar!.collection<DownloadRecordSchema>().put(record);
+      }
+    });
   }
 }

@@ -17,6 +17,7 @@ import 'package:mira/core/providers/adblock_provider.dart';
 import 'package:mira/core/services/browser_engine_blueprints.dart';
 import 'package:mira/core/services/database_providers.dart';
 import 'package:mira/pages/browser_chrome_providers.dart';
+import 'package:mira/core/services/snapshot_service.dart';
 import 'package:mira/pages/browser/browser_view.dart';
 import 'package:mira/pages/main_screen/desktop_browser_chrome.dart';
 import 'package:mira/pages/main_screen/desktop_platform_menus.dart';
@@ -49,7 +50,8 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     WidgetsBinding.instance.addObserver(this);
     final initialUrl = ref.read(currentActiveTabProvider).url;
     _urlController = TextEditingController(text: initialUrl);
-    _urlFocusNode = FocusNode();
+        _urlFocusNode = FocusNode();
+    _urlFocusNode.addListener(_onUrlFocusChanged);
     if (!kIsWeb &&
         (Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
       HardwareKeyboard.instance.addHandler(_handleDesktopHotkey);
@@ -57,6 +59,30 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
         if (!mounted) return;
         _syncDesktopWindowTitle(ref.read(currentActiveTabProvider));
       });
+    }
+  }
+
+    void _onUrlFocusChanged() {
+    final engine = ref.read(activeBrowserEngineProvider);
+    if (engine == null) return;
+    final tabId = ref.read(currentActiveTabProvider).id;
+
+    if (_urlFocusNode.hasFocus) {
+      final cached = ref.read(tabSnapshotCacheProvider)[tabId];
+      if (cached != null) {
+        ref.read(webViewSnapshotProvider.notifier).state = WebViewSnapshot(tabId: tabId, bytes: cached.bytes!);
+      }
+      engine.pauseRendering();
+      unawaited(() async {
+        final bytes = await engine.takeSnapshot();
+        if (bytes != null && mounted && _urlFocusNode.hasFocus) {
+          ref.read(webViewSnapshotProvider.notifier).state = WebViewSnapshot(tabId: tabId, bytes: bytes);
+          ref.read(tabSnapshotCacheProvider.notifier).update((s) => {...s, tabId: TabSnapshotData(bytes: bytes)});
+        }
+      }());
+    } else {
+      ref.read(webViewSnapshotProvider.notifier).state = null;
+      engine.resumeRendering();
     }
   }
 
@@ -335,6 +361,20 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(currentActiveTabProvider, (previous, next) {
+      if (previous != null && previous.id != next.id) {
+         final engine = ref.read(browserEngineProvider(previous.id));
+         unawaited(() async {
+            final bytes = await engine.takeSnapshot();
+            if (bytes != null && mounted) {
+                ref.read(tabSnapshotCacheProvider.notifier).update((s) => {...s, previous.id: TabSnapshotData(bytes: bytes)});
+            }
+            engine.pauseRendering();
+         }());
+      }
+    });
+
+    final canGoBack = ref.watch(currentActiveTabProvider.select((t) => t.canGoBack));
     final isGhost = ref.watch(isGhostModeProvider);
     final activeTab = ref.watch(currentActiveTabProvider);
 
@@ -406,10 +446,12 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     });
 
     Widget shell = PopScope(
-      canPop: false,
+      canPop: !canGoBack,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
-        _handlePop();
+        if (canGoBack) {
+          _handlePop();
+        }
       },
       child: Scaffold(
         backgroundColor: backgroundColor,
@@ -550,6 +592,20 @@ class _GhostModeFlashState extends ConsumerState<_GhostModeFlash>
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(currentActiveTabProvider, (previous, next) {
+      if (previous != null && previous.id != next.id) {
+         final engine = ref.read(browserEngineProvider(previous.id));
+         unawaited(() async {
+            final bytes = await engine.takeSnapshot();
+            if (bytes != null && mounted) {
+                ref.read(tabSnapshotCacheProvider.notifier).update((s) => {...s, previous.id: TabSnapshotData(bytes: bytes)});
+            }
+            engine.pauseRendering();
+         }());
+      }
+    });
+
+
     ref.listen<bool>(isGhostModeProvider, (prev, next) {
       if (prev == next) return;
       _color = next ? Colors.redAccent : Colors.black87;

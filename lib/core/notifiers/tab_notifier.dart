@@ -214,9 +214,29 @@ class TabsNotifier extends StateNotifier<TabsState> {
   }
 
   void updateUrlForTab(String tabId, String newUrl) {
-    final index = state.tabs.indexWhere((tab) => tab.id == tabId);
-    if (index == -1 || state.tabs[index].url == newUrl) return;
     _updateTabById(tabId, (tab) => tab.copyWith(url: newUrl), debounce: true);
+  }
+
+  void setWebError(String tabId, String? error) {
+    _updateTabById(tabId, (tab) => tab.copyWith(webError: error ?? clearWebError));
+  }
+
+  void updateActiveTabCanGoBack(bool canGoBack) {
+    if (state.tabs.isEmpty) return;
+    if (state.tabs[state.activeIndex].canGoBack == canGoBack) return;
+    _updateActiveTab((tab) => tab.copyWith(canGoBack: canGoBack));
+  }
+  
+  void updateCanGoBack(String tabId, bool canGoBack) {
+    final idx = state.tabs.indexWhere((t) => t.id == tabId);
+    if (idx != -1) {
+      final oldTab = state.tabs[idx];
+      if (oldTab.canGoBack == canGoBack) return; // avoid rebuilds if no change
+      
+      final updatedTab = oldTab.copyWith(canGoBack: canGoBack);
+      final newTabs = List<BrowserTab>.from(state.tabs)..[idx] = updatedTab;
+      state = TabsState(tabs: newTabs, activeIndex: state.activeIndex);
+    }
   }
 
   void updateTitle(String newTitle) {
