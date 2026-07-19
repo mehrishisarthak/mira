@@ -1,6 +1,6 @@
 import 'dart:collection';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mira/core/config/hibernation_limits.dart';
+import 'package:qyx/core/config/hibernation_limits.dart';
 
 /// Manages which tabs are currently 'awake' in memory.
 /// This decouples LRU logic from the BrowserView UI.

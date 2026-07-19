@@ -4,11 +4,11 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mira/constants/app_fonts.dart';
+import 'package:qyx/constants/app_fonts.dart';
 
-import 'package:mira/core/entities/theme_entity.dart';
-import 'package:mira/core/services/preferences_service.dart';
-import 'package:mira/pages/mainscreen.dart';
+import 'package:qyx/core/entities/theme_entity.dart';
+import 'package:qyx/core/services/preferences_service.dart';
+import 'package:qyx/pages/mainscreen.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});

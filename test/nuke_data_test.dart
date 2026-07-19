@@ -1,13 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mira/core/notifiers/ghost_notifier.dart';
-import 'package:mira/core/notifiers/history_notifier.dart';
-import 'package:mira/core/notifiers/tab_notifier.dart';
-import 'package:mira/core/services/database_providers.dart';
-import 'package:mira/core/services/isar_database_repository.dart';
-import 'package:mira/core/services/isar_schemas.dart';
-import 'package:mira/core/services/preferences_service.dart';
-import 'package:mira/pages/browser_chrome_providers.dart';
+import 'package:qyx/core/notifiers/ghost_notifier.dart';
+import 'package:qyx/core/notifiers/history_notifier.dart';
+import 'package:qyx/core/notifiers/tab_notifier.dart';
+import 'package:qyx/core/services/database_providers.dart';
+import 'package:qyx/core/services/isar_database_repository.dart';
+import 'package:qyx/core/services/isar_schemas.dart';
+import 'package:qyx/core/services/preferences_service.dart';
+import 'package:qyx/pages/browser_chrome_providers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Exercises the app-state half of "Nuke Data" (history / tabs / ghost tabs

@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.classified" "\0"
-            VALUE "FileDescription", "mira" "\0"
+            VALUE "FileDescription", "Qyx" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "mira" "\0"
+            VALUE "InternalName", "Qyx" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2025 com.classified. All rights reserved." "\0"
-            VALUE "OriginalFilename", "mira.exe" "\0"
-            VALUE "ProductName", "mira" "\0"
+            VALUE "OriginalFilename", "qyx.exe" "\0"
+            VALUE "ProductName", "Qyx" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

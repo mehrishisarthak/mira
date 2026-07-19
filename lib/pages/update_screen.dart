@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:mira/constants/app_fonts.dart';
-import 'package:mira/core/entities/theme_entity.dart';
-import 'package:mira/core/services/update_service.dart';
+import 'package:qyx/constants/app_fonts.dart';
+import 'package:qyx/core/entities/theme_entity.dart';
+import 'package:qyx/core/services/update_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class UpdateScreen extends StatelessWidget {

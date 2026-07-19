@@ -2,17 +2,17 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mira/constants/app_fonts.dart';
+import 'package:qyx/constants/app_fonts.dart';
 
-import 'package:mira/core/entities/tab_entity.dart';
-import 'package:mira/core/notifiers/bookmarks_notifier.dart';
-import 'package:mira/pages/browser_chrome_providers.dart';
-import 'package:mira/pages/mira_drawer.dart';
-import 'package:mira/pages/main_screen/browser_progress_bar.dart';
-import 'package:mira/pages/main_screen/main_screen_haptics.dart';
-import 'package:mira/pages/main_screen/main_screen_security.dart';
-import 'package:mira/pages/tab_screen.dart';
-import 'package:mira/core/services/snapshot_service.dart';
+import 'package:qyx/core/entities/tab_entity.dart';
+import 'package:qyx/core/notifiers/bookmarks_notifier.dart';
+import 'package:qyx/pages/browser_chrome_providers.dart';
+import 'package:qyx/pages/mira_drawer.dart';
+import 'package:qyx/pages/main_screen/browser_progress_bar.dart';
+import 'package:qyx/pages/main_screen/main_screen_haptics.dart';
+import 'package:qyx/pages/main_screen/main_screen_security.dart';
+import 'package:qyx/pages/tab_screen.dart';
+import 'package:qyx/core/services/snapshot_service.dart';
 
 Widget buildMobileTopBar({
   required BuildContext context,
@@ -195,6 +195,7 @@ Widget buildMobileTopBar({
                 await Navigator.push(
                   context,
                   PageRouteBuilder(
+                    opaque: false,
                     pageBuilder: (context, animation, secondaryAnimation) => const TabsSheet(),
                     transitionsBuilder: (context, animation, secondaryAnimation, child) {
                       return FadeTransition(
@@ -213,7 +214,8 @@ Widget buildMobileTopBar({
                 );
 
                 transitionActive = false;
-                unawaited(engine?.resumeRendering());
+                final currentEngine = ref.read(activeBrowserEngineProvider);
+                unawaited(currentEngine?.resumeRendering());
                 if (!context.mounted) return;
                 ref.read(webViewSnapshotProvider.notifier).state = null;
               },

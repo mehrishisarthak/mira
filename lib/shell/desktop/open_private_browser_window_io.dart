@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mira/core/notifiers/ghost_notifier.dart';
+import 'package:qyx/core/notifiers/ghost_notifier.dart';
 
 /// Transitions the single-window UI into the Private (Ghost) Workspace.
 void openMiraPrivateBrowserWindow(WidgetRef ref) {

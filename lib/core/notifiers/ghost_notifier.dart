@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mira/core/entities/tab_entity.dart';
-import 'package:mira/core/notifiers/tab_notifier.dart'; // To get NormalizedTabsState
+import 'package:qyx/core/entities/tab_entity.dart';
+import 'package:qyx/core/notifiers/tab_notifier.dart'; // To get NormalizedTabsState
 
 class GhostTabsNotifier extends StateNotifier<NormalizedTabsState> {
   GhostTabsNotifier() : super(const NormalizedTabsState(tabOrder: [], tabs: {}, activeIndex: 0));

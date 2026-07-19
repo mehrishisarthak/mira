@@ -8,9 +8,9 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:mira/core/services/adblock_ota_service.dart';
-import 'package:mira/core/services/adblock_service.dart';
-import 'package:mira/core/services/preferences_service.dart';
+import 'package:qyx/core/services/adblock_ota_service.dart';
+import 'package:qyx/core/services/adblock_service.dart';
+import 'package:qyx/core/services/preferences_service.dart';
 
 /// End-to-end exercise of the OTA client, serving the REAL bundled blocklist
 /// through a MockClient as if it were a fresh GitHub Release.

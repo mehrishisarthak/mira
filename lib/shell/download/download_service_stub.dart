@@ -1,5 +1,5 @@
-import 'package:mira/core/entities/download_entity.dart';
-import 'package:mira/core/services/download_service.dart';
+import 'package:qyx/core/entities/download_entity.dart';
+import 'package:qyx/core/services/download_service.dart';
 
 class StubDownloadService implements DownloadService {
   @override

@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mira/core/services/preferences_service.dart';
-import 'package:mira/constants/search_engines.dart';
+import 'package:qyx/core/services/preferences_service.dart';
+import 'package:qyx/constants/search_engines.dart';
 
 class SearchEngineNotifier extends StateNotifier<String> {
   final PreferencesService _prefsService;

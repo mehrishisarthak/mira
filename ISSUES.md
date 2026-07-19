@@ -1,4 +1,4 @@
-# MERIS — Issue Tracker
+# Qyx — Issue Tracker
 
 > **Living document.** Single source of truth for known issues, fixes, and
 > dismissed findings. Supersedes and replaces the prior scattered audit files
@@ -96,8 +96,8 @@ proves the raster delta.
 |----|----|-------|----------|-------|
 | O-17 | 🟡 | Desktop "resume"/"retry" deletes the partial and restarts from byte 0 (no HTTP `Range`). | `download_service_desktop.dart:127-130` | Rename to "restart" or implement range-resume. Desktop. |
 | O-36 | 🟠 | **Desktop: address bar can't be focused/clicked once a page is loaded.** Loaded+unfocused renders the domain as `Text`+`GestureDetector`; tapping `requestFocus()`s the field but native WebView2 retains OS keyboard focus, so it never becomes editable. *(found in runtime pass — Windows)* | `desktop_browser_chrome.dart:234` | Likely `flutter_inappwebview_windows` limitation (see O-39). Force OS focus back to the Flutter view on tap; needs on-Windows iteration. |
-| O-37 | 🟠 | **Desktop: back/forward buttons do nothing.** MERIS calls the correct API (`engine.goBack()/goForward()` → `_controller?.goBack()/goForward()`); the no-op is in the Windows webview backend. *(runtime pass — Windows)* | `desktop_browser_chrome.dart:67-80` | See O-39. Optionally gate buttons on `canGoBack/canGoForward` for an honest disabled state. |
-| O-38 | 🟠 | **Desktop: trackpad scroll & pinch-zoom don't reach the page.** Standard `InAppWebView`, no gesture suppression in MERIS; trackpad gestures aren't forwarded to the native WebView2. *(runtime pass — Windows)* | `in_app_webview_engine.dart:292` | See O-39. Investigate gesture forwarding / `gestureRecognizers`; may be upstream. |
+| O-37 | 🟠 | **Desktop: back/forward buttons do nothing.** Qyx calls the correct API (`engine.goBack()/goForward()` → `_controller?.goBack()/goForward()`); the no-op is in the Windows webview backend. *(runtime pass — Windows)* | `desktop_browser_chrome.dart:67-80` | See O-39. Optionally gate buttons on `canGoBack/canGoForward` for an honest disabled state. |
+| O-38 | 🟠 | **Desktop: trackpad scroll & pinch-zoom don't reach the page.** Standard `InAppWebView`, no gesture suppression in Qyx; trackpad gestures aren't forwarded to the native WebView2. *(runtime pass — Windows)* | `in_app_webview_engine.dart:292` | See O-39. Investigate gesture forwarding / `gestureRecognizers`; may be upstream. |
 | O-39 | 🔴 | **Root cause: `flutter_inappwebview_windows` is materially incomplete** vs Android/iOS — proven by the boot-time `MissingPluginException` for `getDefaultUserAgent`. O-36/37/38 are symptoms. **Desktop is a tech-preview gated by this plugin; Android/iOS is the mature path.** | — (dependency) | **DECIDED (2026-06-22): defer.** Build a **custom desktop engine API** — our own bindings to a real browser engine (e.g. CEF/Chromium), *not* an existing plugin — behind the existing `BrowserEngine` abstraction. **Sequencing: only AFTER the Android stable build is live on the Play Store.** Until then desktop stays a preview and O-36/37/38 are accepted preview limitations. |
 
 ### Code health / Cleanup

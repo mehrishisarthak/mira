@@ -1,20 +1,20 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mira/core/app_globals.dart';
-import 'package:mira/core/entities/tab_entity.dart';
-import 'package:mira/pages/downloads_screen.dart';
+import 'package:qyx/core/app_globals.dart';
+import 'package:qyx/core/entities/tab_entity.dart';
+import 'package:qyx/pages/downloads_screen.dart';
 
-import 'package:mira/core/notifiers/ghost_notifier.dart';
-import 'package:mira/core/notifiers/history_notifier.dart';
-import 'package:mira/core/notifiers/tab_notifier.dart';
-import 'package:mira/core/notifiers/hibernation_notifier.dart';
-import 'package:mira/core/notifiers/theme_notifier.dart';
-import 'package:mira/core/services/database_providers.dart';
-import 'package:mira/core/services/browser_engine_blueprints.dart';
-import 'package:mira/core/services/download_provider.dart';
-import 'package:mira/pages/browser_chrome_providers.dart';
-import 'package:mira/pages/main_screen/main_screen_security.dart';
+import 'package:qyx/core/notifiers/ghost_notifier.dart';
+import 'package:qyx/core/notifiers/history_notifier.dart';
+import 'package:qyx/core/notifiers/tab_notifier.dart';
+import 'package:qyx/core/notifiers/hibernation_notifier.dart';
+import 'package:qyx/core/notifiers/theme_notifier.dart';
+import 'package:qyx/core/services/database_providers.dart';
+import 'package:qyx/core/services/browser_engine_blueprints.dart';
+import 'package:qyx/core/services/download_provider.dart';
+import 'package:qyx/pages/browser_chrome_providers.dart';
+import 'package:qyx/pages/main_screen/main_screen_security.dart';
 
 /// Provider that manages the stream subscription for a given [BrowserEngine].
 /// autoDispose so the family entry — and its `pageEvents` subscription — is torn

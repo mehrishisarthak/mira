@@ -3,15 +3,15 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:mira/constants/app_fonts.dart';
+import 'package:qyx/constants/app_fonts.dart';
 import 'package:http/http.dart' as http;
 
-import 'package:mira/core/entities/theme_entity.dart';
-import 'package:mira/core/services/update_service.dart';
-import 'package:mira/core/services/database_providers.dart';
-import 'package:mira/core/services/snapshot_service.dart';
-import 'package:mira/shell/browser/in_app_webview_engine.dart';
-import 'package:mira/pages/update_screen.dart';
+import 'package:qyx/core/entities/theme_entity.dart';
+import 'package:qyx/core/services/update_service.dart';
+import 'package:qyx/core/services/database_providers.dart';
+import 'package:qyx/core/services/snapshot_service.dart';
+import 'package:qyx/shell/browser/in_app_webview_engine.dart';
+import 'package:qyx/pages/update_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   final Widget nextScreen;

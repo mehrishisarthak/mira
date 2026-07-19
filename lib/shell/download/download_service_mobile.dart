@@ -7,12 +7,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_downloader/flutter_downloader.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:mira/core/services/isar_database_repository.dart';
+import 'package:qyx/core/services/isar_database_repository.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:mira/core/app_globals.dart';
-import 'package:mira/core/entities/download_entity.dart';
-import 'package:mira/core/services/download_manager.dart';
-import 'package:mira/core/services/download_service.dart';
+import 'package:qyx/core/app_globals.dart';
+import 'package:qyx/core/entities/download_entity.dart';
+import 'package:qyx/core/services/download_manager.dart';
+import 'package:qyx/core/services/download_service.dart';
 
 class MobileDownloadService implements DownloadService {
   /// Reloads the entire list (useful when adding/deleting tasks)

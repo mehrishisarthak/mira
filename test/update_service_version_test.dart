@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:mira/core/services/update_service.dart';
+import 'package:qyx/core/services/update_service.dart';
 
 /// Serves a version manifest so [UpdateService.checkForUpdate] exercises the
 /// real version-comparison logic without a network call.

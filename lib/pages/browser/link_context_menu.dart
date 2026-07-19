@@ -6,11 +6,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import 'package:mira/core/entities/theme_entity.dart';
-import 'package:mira/core/notifiers/theme_notifier.dart';
-import 'package:mira/core/notifiers/ghost_notifier.dart';
-import 'package:mira/core/notifiers/tab_notifier.dart';
-import 'package:mira/core/services/download_provider.dart';
+import 'package:qyx/core/entities/theme_entity.dart';
+import 'package:qyx/core/notifiers/theme_notifier.dart';
+import 'package:qyx/core/notifiers/ghost_notifier.dart';
+import 'package:qyx/core/notifiers/tab_notifier.dart';
+import 'package:qyx/core/services/download_provider.dart';
 
 /// Link context UI (desktop popup + mobile bottom sheet).
 class BrowserLinkContextMenu {

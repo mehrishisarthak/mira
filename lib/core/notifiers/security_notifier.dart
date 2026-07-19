@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mira/core/entities/security_entity.dart';
-import 'package:mira/core/services/preferences_service.dart';
+import 'package:qyx/core/entities/security_entity.dart';
+import 'package:qyx/core/services/preferences_service.dart';
 
 class SecurityNotifier extends StateNotifier<SecurityState> {
   final PreferencesService _prefs;

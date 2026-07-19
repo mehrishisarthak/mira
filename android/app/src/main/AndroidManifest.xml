@@ -11,7 +11,7 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
 
     <application
-        android:label="mira"
+        android:label="Qyx"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon"
         

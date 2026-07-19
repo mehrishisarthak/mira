@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mira/constants/app_fonts.dart';
+import 'package:qyx/constants/app_fonts.dart';
 
-import 'package:mira/core/entities/theme_entity.dart';
-import 'package:mira/core/notifiers/ghost_notifier.dart';
-import 'package:mira/core/notifiers/tab_notifier.dart';
-import 'package:mira/core/notifiers/theme_notifier.dart';
-import 'package:mira/pages/browser_chrome_providers.dart';
+import 'package:qyx/core/entities/theme_entity.dart';
+import 'package:qyx/core/notifiers/ghost_notifier.dart';
+import 'package:qyx/core/notifiers/tab_notifier.dart';
+import 'package:qyx/core/notifiers/theme_notifier.dart';
+import 'package:qyx/pages/browser_chrome_providers.dart';
 
 class BrandingScreen extends ConsumerWidget {
   const BrandingScreen({super.key});

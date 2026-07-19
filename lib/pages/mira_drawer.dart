@@ -5,27 +5,27 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart'
     show CookieManager, WebStorageManager;
-import 'package:mira/pages/main_screen/main_screen_haptics.dart';
-import 'package:mira/constants/app_fonts.dart';
+import 'package:qyx/pages/main_screen/main_screen_haptics.dart';
+import 'package:qyx/constants/app_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:mira/core/notifiers/history_notifier.dart';
+import 'package:qyx/core/notifiers/history_notifier.dart';
 
 // Models
-import 'package:mira/core/entities/theme_entity.dart';
-import 'package:mira/core/notifiers/theme_notifier.dart';
-import 'package:mira/core/notifiers/security_notifier.dart';
-import 'package:mira/core/notifiers/ghost_notifier.dart';
-import 'package:mira/core/notifiers/tab_notifier.dart';
-import 'package:mira/core/services/download_provider.dart';
-import 'package:mira/pages/history_screen.dart';
-import 'package:mira/pages/book_marks_screen.dart';
-import 'package:mira/pages/downloads_screen.dart';
-import 'package:mira/pages/browser_sheet.dart';
+import 'package:qyx/core/entities/theme_entity.dart';
+import 'package:qyx/core/notifiers/theme_notifier.dart';
+import 'package:qyx/core/notifiers/security_notifier.dart';
+import 'package:qyx/core/notifiers/ghost_notifier.dart';
+import 'package:qyx/core/notifiers/tab_notifier.dart';
+import 'package:qyx/core/services/download_provider.dart';
+import 'package:qyx/pages/history_screen.dart';
+import 'package:qyx/pages/book_marks_screen.dart';
+import 'package:qyx/pages/downloads_screen.dart';
+import 'package:qyx/pages/browser_sheet.dart';
 
-import 'package:mira/pages/browser_chrome_providers.dart';
-import 'package:mira/core/notifiers/hibernation_notifier.dart';
-import 'package:mira/core/services/database_providers.dart';
-import 'package:mira/shell/desktop/open_private_browser_window.dart';
+import 'package:qyx/pages/browser_chrome_providers.dart';
+import 'package:qyx/core/notifiers/hibernation_notifier.dart';
+import 'package:qyx/core/services/database_providers.dart';
+import 'package:qyx/shell/desktop/open_private_browser_window.dart';
 
 /// Close the menu route, then push [page] on the root navigator (desktop popup).
 void _popMenuThenPush(BuildContext context, Widget page) {

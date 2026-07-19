@@ -5,23 +5,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
-import 'package:mira/core/app_globals.dart';
-import 'package:mira/core/config/desktop_user_agent.dart';
-import 'package:mira/core/services/download_manager.dart';
-import 'package:mira/pages/mainscreen.dart';
-import 'package:mira/core/notifiers/theme_notifier.dart';
-import 'package:mira/pages/onboarding_screen.dart';
-import 'package:mira/pages/splashscreen.dart';
+import 'package:qyx/core/app_globals.dart';
+import 'package:qyx/core/config/desktop_user_agent.dart';
+import 'package:qyx/core/services/download_manager.dart';
+import 'package:qyx/pages/mainscreen.dart';
+import 'package:qyx/core/notifiers/theme_notifier.dart';
+import 'package:qyx/pages/onboarding_screen.dart';
+import 'package:qyx/pages/splashscreen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:mira/core/services/preferences_service.dart';
-import 'package:mira/core/services/secure_tab_store.dart';
-import 'package:mira/core/observers/provider_observer.dart';
+import 'package:qyx/core/services/preferences_service.dart';
+import 'package:qyx/core/services/secure_tab_store.dart';
+import 'package:qyx/core/observers/provider_observer.dart';
 import 'package:http/http.dart' as http;
 
-import 'package:mira/core/services/adblock_service.dart';
-import 'package:mira/core/services/adblock_ota_service.dart';
-import 'package:mira/core/config/hibernation_limits.dart';
-import 'package:mira/shell/browser/in_app_webview_engine.dart';
+import 'package:qyx/core/services/adblock_service.dart';
+import 'package:qyx/core/services/adblock_ota_service.dart';
+import 'package:qyx/core/config/hibernation_limits.dart';
+import 'package:qyx/shell/browser/in_app_webview_engine.dart';
 
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();

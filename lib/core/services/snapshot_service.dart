@@ -2,7 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:mira/pages/browser_chrome_providers.dart';
+import 'package:qyx/pages/browser_chrome_providers.dart';
 
 final snapshotServiceProvider = Provider<SnapshotService>((ref) {
   return SnapshotService(ref);

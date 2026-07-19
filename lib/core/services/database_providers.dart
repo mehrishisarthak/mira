@@ -1,11 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mira/core/services/isar_database_repository.dart';
-import 'package:mira/core/services/browser_engine_blueprints.dart';
-import 'package:mira/core/services/adblock_service.dart';
-import 'package:mira/core/notifiers/security_notifier.dart';
-import 'package:mira/core/notifiers/theme_notifier.dart';
-import 'package:mira/shell/browser/in_app_webview_engine.dart';
-import 'package:mira/core/notifiers/ghost_notifier.dart';
+import 'package:qyx/core/services/isar_database_repository.dart';
+import 'package:qyx/core/services/browser_engine_blueprints.dart';
+import 'package:qyx/core/services/adblock_service.dart';
+import 'package:qyx/core/notifiers/security_notifier.dart';
+import 'package:qyx/core/notifiers/theme_notifier.dart';
+import 'package:qyx/shell/browser/in_app_webview_engine.dart';
+import 'package:qyx/core/notifiers/ghost_notifier.dart';
 import 'package:flutter/material.dart';
 
 /// Provider for the History Database Repository.

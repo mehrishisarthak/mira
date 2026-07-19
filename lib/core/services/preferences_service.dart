@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:mira/core/services/secure_tab_store.dart';
+import 'package:qyx/core/services/secure_tab_store.dart';
 
 class PreferencesService {
   final SharedPreferences _prefs;

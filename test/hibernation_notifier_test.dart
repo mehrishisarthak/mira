@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mira/core/config/hibernation_limits.dart';
-import 'package:mira/core/notifiers/hibernation_notifier.dart';
+import 'package:qyx/core/config/hibernation_limits.dart';
+import 'package:qyx/core/notifiers/hibernation_notifier.dart';
 
 /// Pure LRU behaviour of the hibernation set — no platform channels, no Isar.
 /// Cap is platform-derived, so assertions key off maxAliveWebViewTabs().

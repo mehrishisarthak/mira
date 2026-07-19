@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mira/core/notifiers/ghost_notifier.dart';
-import 'package:mira/core/notifiers/tab_notifier.dart';
-import 'package:mira/core/services/isar_database_repository.dart';
-import 'package:mira/core/services/isar_schemas.dart';
-import 'package:mira/core/services/database_providers.dart';
+import 'package:qyx/core/notifiers/ghost_notifier.dart';
+import 'package:qyx/core/notifiers/tab_notifier.dart';
+import 'package:qyx/core/services/isar_database_repository.dart';
+import 'package:qyx/core/services/isar_schemas.dart';
+import 'package:qyx/core/services/database_providers.dart';
 
 class BookmarksNotifier extends StateNotifier<List<BookmarkSchema>> {
   final IsarBookmarkRepository _repository;

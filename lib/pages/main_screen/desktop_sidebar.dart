@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mira/constants/app_fonts.dart';
+import 'package:qyx/constants/app_fonts.dart';
 
-import 'package:mira/core/entities/tab_entity.dart';
-import 'package:mira/core/notifiers/ghost_notifier.dart';
-import 'package:mira/core/notifiers/tab_notifier.dart';
-import 'package:mira/core/notifiers/theme_notifier.dart';
-import 'package:mira/pages/downloads_screen.dart';
-import 'package:mira/pages/history_screen.dart';
-import 'package:mira/core/entities/theme_entity.dart' show MiraTheme, kMiraInkPrimary;
-import 'package:mira/pages/mira_drawer.dart';
+import 'package:qyx/core/entities/tab_entity.dart';
+import 'package:qyx/core/notifiers/ghost_notifier.dart';
+import 'package:qyx/core/notifiers/tab_notifier.dart';
+import 'package:qyx/core/notifiers/theme_notifier.dart';
+import 'package:qyx/pages/downloads_screen.dart';
+import 'package:qyx/pages/history_screen.dart';
+import 'package:qyx/core/entities/theme_entity.dart' show MiraTheme, kMiraInkPrimary;
+import 'package:qyx/pages/mira_drawer.dart';
 
 final desktopSidebarExpandedProvider = StateProvider<bool>((ref) => true);
 

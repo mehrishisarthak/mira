@@ -2,9 +2,9 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
-import 'package:mira/core/entities/tab_entity.dart';
-import 'package:mira/core/services/preferences_service.dart';
-import 'package:mira/core/services/snapshot_service.dart';
+import 'package:qyx/core/entities/tab_entity.dart';
+import 'package:qyx/core/services/preferences_service.dart';
+import 'package:qyx/core/services/snapshot_service.dart';
 
 @immutable
 class NormalizedTabsState {

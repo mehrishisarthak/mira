@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mira/core/entities/theme_entity.dart';
-import 'package:mira/core/services/preferences_service.dart';
+import 'package:qyx/core/entities/theme_entity.dart';
+import 'package:qyx/core/services/preferences_service.dart';
 
 class ThemeNotifier extends StateNotifier<MiraTheme> {
   final PreferencesService _prefs;

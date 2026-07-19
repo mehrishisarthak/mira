@@ -1,4 +1,4 @@
-# MERIS — Verification & Profiling Guide (2026-06-30 changes)
+# Qyx — Verification & Profiling Guide (2026-06-30 changes)
 
 Covers the 10 commits from the performance pass: **O-50, O-51, O-49 (+hardening),
 O-11, O-18, O-04**. Two parts:

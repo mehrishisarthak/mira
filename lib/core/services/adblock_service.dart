@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:mira/core/services/adblock_ota_service.dart';
-import 'package:mira/core/services/browser_engine_blueprints.dart';
+import 'package:qyx/core/services/adblock_ota_service.dart';
+import 'package:qyx/core/services/browser_engine_blueprints.dart';
 
 class AdBlockService {
   static List<AdBlockRule>? _cache;
