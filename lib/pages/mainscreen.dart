@@ -66,6 +66,20 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     void _onUrlFocusChanged() {
     final engine = ref.read(activeBrowserEngineProvider);
     if (engine == null) return;
+
+    // Mobile only. The pause + snapshot-swap below exists to keep the soft
+    // keyboard from reflowing the viewport over a live Hybrid-Composition
+    // surface (D-32). Desktop has no soft keyboard and no HC reflow, so all it
+    // does there is freeze the page the moment you click the address bar — and
+    // when no snapshot is available to paint over it, the site just disappears.
+    //
+    // This only became reachable on desktop once the address bar was made
+    // focusable again (O-36); before that the focus never fired here.
+    if (!kIsWeb &&
+        (Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
+      return;
+    }
+
     final tabId = ref.read(tabsProvider).safeActiveTab?.id ?? '';
 
     if (_urlFocusNode.hasFocus) {
