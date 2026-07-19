@@ -2,8 +2,29 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart' show immutable;
 import 'package:uuid/uuid.dart';
 
-class Sentinel { const Sentinel(); }
-const clearWebError = Sentinel();
+/// Marks "[copyWith]'s webError parameter was not passed" so `null` can mean
+/// "explicitly clear" instead of colliding with "keep the current value".
+///
+/// Previously the same [Sentinel] value did both jobs: the parameter's
+/// default *and* the public `clearWebError` constant callers passed to
+/// request a clear. `webError is Sentinel` then matched both, so
+/// `copyWith(webError: clearWebError)` — what `setWebError(id, null)`
+/// actually sent — always fell into the "keep old value" branch. The clear
+/// silently never happened. Concretely: browser_side_effects fires
+/// `setWebError(tabId, null)` on every `loadStart`, so once a tab hit any
+/// error it stayed on [CustomErrorScreen] forever, regardless of how many
+/// later navigations succeeded — the URL bar could show a working page while
+/// the error overlay never left.
+///
+/// `identical()` against one private, const-canonicalized instance can't
+/// collide with any real value a caller passes (not even another `Sentinel`),
+/// so `webError` is free to just be `String?` again: `null` unambiguously
+/// means clear.
+class _Unset {
+  const _Unset();
+}
+
+const _unset = _Unset();
 
 @immutable
 class BrowserTab {
@@ -32,7 +53,7 @@ class BrowserTab {
     bool? isLoading,
     bool? canGoBack,
     bool? canGoForward,
-    Object? webError = const Sentinel(),
+    Object? webError = _unset,
   }) {
     return BrowserTab(
       id: id ?? this.id,
@@ -41,7 +62,7 @@ class BrowserTab {
       isLoading: isLoading ?? this.isLoading,
       canGoBack: canGoBack ?? this.canGoBack,
       canGoForward: canGoForward ?? this.canGoForward,
-      webError: webError is Sentinel ? this.webError : webError as String?,
+      webError: identical(webError, _unset) ? this.webError : webError as String?,
     );
   }
 

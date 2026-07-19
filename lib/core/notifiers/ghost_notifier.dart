@@ -89,7 +89,7 @@ class GhostTabsNotifier extends StateNotifier<NormalizedTabsState> {
   }
 
   void setWebError(String tabId, String? error) {
-    _updateTabById(tabId, (tab) => tab.copyWith(webError: error ?? clearWebError));
+    _updateTabById(tabId, (tab) => tab.copyWith(webError: error));
   }
 
   void updateActiveTabCanGoBack(bool canGoBack) {
