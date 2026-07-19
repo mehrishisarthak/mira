@@ -24,8 +24,16 @@ class HibernationNotifier extends StateNotifier<Set<String>> {
     state = Set.from(_mruSet);
   }
 
-  void onTabsClosed(Set<String> currentTabIds) {
-    _mruSet.removeWhere((id) => !currentTabIds.contains(id));
+  /// Evicts only the tabs that were actually closed.
+  ///
+  /// Takes the *closed* ids, not the surviving ones: `_mruSet` is a single
+  /// global set spanning both the normal and ghost pools (the dual-mode stack
+  /// mounts both at once), but each call site only knows about its own pool.
+  /// Retaining by "not in currentTabIds" therefore evicted every awake tab of
+  /// the *other* mode on any close.
+  void onTabsClosed(Set<String> closedTabIds) {
+    if (closedTabIds.isEmpty) return;
+    _mruSet.removeAll(closedTabIds);
     state = Set.from(_mruSet);
   }
 }

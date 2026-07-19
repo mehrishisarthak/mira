@@ -26,7 +26,6 @@ class TabsSheet extends ConsumerWidget {
     final isLight = theme.mode == ThemeMode.light;
     final surface = isLight ? const Color(0xFFF2F2F7) : const Color(0xFF121212);
     final textColor = isLight ? kMiraInkPrimary : Colors.white;
-    final accent = isGhostActive ? Colors.redAccent : theme.primaryColor;
     final bottom = MediaQuery.of(context).padding.bottom;
     final top = MediaQuery.of(context).padding.top;
 
@@ -39,7 +38,7 @@ class TabsSheet extends ConsumerWidget {
           if (ghostState.tabs.isNotEmpty) ...[
             _SectionHeader(
               label: 'GHOST',
-              count: ghostState.tabs.length,
+              count: ghostState.tabOrder.length,
               accent: Colors.redAccent,
               textColor: textColor,
               onClear: () {
@@ -65,10 +64,10 @@ class TabsSheet extends ConsumerWidget {
                 ),
                 delegate: SliverChildBuilderDelegate(
                   (_, i) => _TabGridCard(
-                    key: ValueKey(ghostState.tabs[i].id),
-                    tab: ghostState.tabs[i],
+                    key: ValueKey(ghostState.tabs[ghostState.tabOrder[i]]!.id),
+                    tab: ghostState.tabs[ghostState.tabOrder[i]]!,
                     isActive: isGhostActive &&
-                        ghostState.tabs[i].id ==
+                        ghostState.tabs[ghostState.tabOrder[i]]!.id ==
                             (ghostState.safeActiveTab?.id ?? ''),
                     isGhost: true,
                     accent: Colors.redAccent,
@@ -76,15 +75,16 @@ class TabsSheet extends ConsumerWidget {
                     onTap: () {
                       HapticFeedback.selectionClick();
                       ref.read(isGhostModeProvider.notifier).state = true;
-                      ref.read(ghostTabsProvider.notifier).switchTab(i);
+                      ref.read(ghostTabsProvider.notifier).switchTabById(
+                          ghostState.tabs[ghostState.tabOrder[i]]!.id);
                       Navigator.pop(context);
                     },
                     onClose: () {
                       HapticFeedback.lightImpact();
-                      ref.read(ghostTabsProvider.notifier).closeTab(ghostState.tabs[i].id);
+                      ref.read(ghostTabsProvider.notifier).closeTab(ghostState.tabs[ghostState.tabOrder[i]]!.id);
                     },
                   ),
-                  childCount: ghostState.tabs.length,
+                  childCount: ghostState.tabOrder.length,
                 ),
               ),
             ),
@@ -99,10 +99,10 @@ class TabsSheet extends ConsumerWidget {
           // ── Normal tabs ────────────────────────────────────────────
           _SectionHeader(
             label: 'TABS',
-            count: normalState.tabs.length,
+            count: normalState.tabOrder.length,
             accent: theme.primaryColor,
             textColor: textColor,
-            onClear: normalState.tabs.length > 1
+            onClear: normalState.tabOrder.length > 1
                 ? () {
                     HapticFeedback.mediumImpact();
                     ref.read(tabsProvider.notifier).nuke();
@@ -118,7 +118,7 @@ class TabsSheet extends ConsumerWidget {
           ),
 
           if (normalState.tabs.isEmpty ||
-              (normalState.tabs.length == 1 && normalState.tabs.first.url.isEmpty))
+              (normalState.tabOrder.length == 1 && normalState.tabs[normalState.tabOrder.first]!.url.isEmpty))
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.all(32),
@@ -145,25 +145,26 @@ class TabsSheet extends ConsumerWidget {
                 ),
                 delegate: SliverChildBuilderDelegate(
                   (_, i) => _TabGridCard(
-                    key: ValueKey(normalState.tabs[i].id),
-                    tab: normalState.tabs[i],
+                    key: ValueKey(normalState.tabs[normalState.tabOrder[i]]!.id),
+                    tab: normalState.tabs[normalState.tabOrder[i]]!,
                     isActive: !isGhostActive &&
-                        normalState.tabs[i].id == normalState.activeTab.id,
+                        normalState.tabs[normalState.tabOrder[i]]!.id == normalState.safeActiveTab?.id,
                     isGhost: false,
                     accent: theme.primaryColor,
                     textColor: textColor,
                     onTap: () {
                       HapticFeedback.selectionClick();
                       ref.read(isGhostModeProvider.notifier).state = false;
-                      ref.read(tabsProvider.notifier).switchTab(i);
+                      ref.read(tabsProvider.notifier).switchTabById(
+                          normalState.tabs[normalState.tabOrder[i]]!.id);
                       Navigator.pop(context);
                     },
                     onClose: () {
                       HapticFeedback.lightImpact();
-                      ref.read(tabsProvider.notifier).closeTab(normalState.tabs[i].id);
+                      ref.read(tabsProvider.notifier).closeTab(normalState.tabs[normalState.tabOrder[i]]!.id);
                     },
                   ),
-                  childCount: normalState.tabs.length,
+                  childCount: normalState.tabOrder.length,
                 ),
               ),
             ),
@@ -374,3 +375,5 @@ class _TabGridCard extends ConsumerWidget {
     );
   }
 }
+
+

@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart'
+    show CookieManager, WebStorageManager;
 import 'package:mira/pages/main_screen/main_screen_haptics.dart';
 import 'package:mira/constants/app_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -22,6 +24,7 @@ import 'package:mira/pages/browser_sheet.dart';
 
 import 'package:mira/pages/browser_chrome_providers.dart';
 import 'package:mira/core/notifiers/hibernation_notifier.dart';
+import 'package:mira/core/services/database_providers.dart';
 import 'package:mira/shell/desktop/open_private_browser_window.dart';
 
 /// Close the menu route, then push [page] on the root navigator (desktop popup).
@@ -187,7 +190,7 @@ class MiraMenuPage extends ConsumerWidget {
               title: Text('Copy URL', style: TextStyle(color: appTextColor)),
               onTap: () {
                 final rootNav = Navigator.of(context, rootNavigator: true);
-                final url = ref.read(currentActiveTabProvider).url;
+                final url = ref.read(tabsProvider).safeActiveTab?.url ?? '';
                 if (url.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('No page loaded yet')),
@@ -221,7 +224,7 @@ class MiraMenuPage extends ConsumerWidget {
               onTap: () async {
                 final navigator = Navigator.of(context, rootNavigator: true);
                 final messenger = ScaffoldMessenger.of(context);
-                final url = ref.read(currentActiveTabProvider).url;
+                final url = ref.read(tabsProvider).safeActiveTab?.url ?? '';
                 if (url.isEmpty) {
                   messenger.showSnackBar(
                     const SnackBar(content: Text('No page loaded yet')),
@@ -255,7 +258,7 @@ class MiraMenuPage extends ConsumerWidget {
                   );
                   return;
                 }
-                final url = ref.read(currentActiveTabProvider).url;
+                final url = ref.read(tabsProvider).safeActiveTab?.url ?? '';
                 final html = await engine.getPageHtml();
                 
                 final host =
@@ -357,10 +360,38 @@ class MiraMenuPage extends ConsumerWidget {
                 );
 
                 if (confirm == true && context.mounted) {
-                  final engine = ref.read(activeBrowserEngineProvider);
-                  if (engine != null) {
-                    await engine.clearStorage();
-                    await engine.clearCookies();
+                  // Cookies and site storage are process-wide managers in
+                  // flutter_inappwebview, so a single direct call clears them
+                  // for every tab (normal + ghost) regardless of which
+                  // engine, if any, is currently active. Calling these
+                  // directly — rather than only via activeBrowserEngineProvider
+                  // — means Nuke Data still fully wipes cookies/storage even
+                  // if there's no active engine wired up at nuke time.
+                  try {
+                    await CookieManager.instance().deleteAllCookies();
+                    await WebStorageManager.instance().deleteAllData();
+                  } catch (e) {
+                    debugPrint('MIRA: Nuke - failed clearing cookies/storage: $e');
+                  }
+
+                  // Unlike cookies/storage, the HTTP cache is per-engine
+                  // (per native webview controller), so every currently
+                  // instantiated tab's engine needs its own explicit
+                  // clearCache() call. Reading browserEngineProvider(id) for
+                  // a tab whose webview was never mounted (e.g. still
+                  // hibernated) is safe: it only constructs the Dart wrapper,
+                  // and clearCache() no-ops internally until a native
+                  // controller is actually attached.
+                  final allTabIds = <String>{
+                    ...ref.read(tabsProvider).tabs.keys,
+                    ...ref.read(ghostTabsProvider).tabs.keys,
+                  };
+                  for (final id in allTabIds) {
+                    try {
+                      await ref.read(browserEngineProvider(id)).clearCache();
+                    } catch (e) {
+                      debugPrint('MIRA: Nuke - failed clearing cache for tab $id: $e');
+                    }
                   }
 
                   ref.read(historyProvider.notifier).clearHistory();
@@ -371,10 +402,11 @@ class MiraMenuPage extends ConsumerWidget {
                   ref.read(browserChromeProvider.notifier).setLoadingProgress(100);
 
                   final s = ref.read(tabsProvider);
-                  if (s.tabs.isNotEmpty) {
+                  final wakeTab = s.safeActiveTab;
+                  if (wakeTab != null) {
                     ref
                         .read(hibernationProvider.notifier)
-                        .wakeTab(s.tabs[s.activeIndex].id);
+                        .wakeTab(wakeTab.id);
                   }
 
                   if (context.mounted) {
@@ -555,3 +587,5 @@ class MiraMenuPage extends ConsumerWidget {
     );
   }
 }
+
+

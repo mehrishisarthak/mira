@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:mira/core/notifiers/ghost_notifier.dart';
+import 'package:mira/core/notifiers/tab_notifier.dart';
 import 'package:mira/pages/browser_chrome_providers.dart';
 
 /// Self-contained page-load progress bar.
@@ -20,7 +21,7 @@ class BrowserProgressBar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final progress =
         ref.watch(browserChromeProvider.select((s) => s.loadingProgress)) / 100;
-    final url = ref.watch(currentActiveTabProvider.select((t) => t.url));
+    final url = ref.watch(tabsProvider.select((p) => p.safeActiveTab?.url ?? ''));
 
     if (progress >= 1.0 || url.isEmpty) return const SizedBox.shrink();
 
@@ -32,3 +33,7 @@ class BrowserProgressBar extends ConsumerWidget {
     );
   }
 }
+
+
+
+

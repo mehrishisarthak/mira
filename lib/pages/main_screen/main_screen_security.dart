@@ -4,11 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mira/constants/app_fonts.dart';
 
 import 'package:mira/core/entities/theme_entity.dart';
+import 'package:mira/core/notifiers/ghost_notifier.dart';
 import 'package:mira/core/notifiers/security_notifier.dart';
+import 'package:mira/core/notifiers/tab_notifier.dart';
 import 'package:mira/core/notifiers/theme_notifier.dart';
 import 'package:mira/core/providers/adblock_provider.dart';
 import 'package:mira/pages/browser_chrome_providers.dart';
 import 'package:mira/core/services/browser_engine_blueprints.dart';
+import 'package:mira/core/services/database_providers.dart';
 
 // ── Security / permissions panel ──────────────────────────────────────────────
 
@@ -143,8 +146,11 @@ class _SecurityPanel extends ConsumerWidget {
             isBlocked: security.isLocationBlocked,
             textColor: textColor,
             onToggle: (val) {
+              // Applying to every tab's engine (not just the active one) is
+              // handled centrally by mainscreen.dart's securityProvider
+              // listener, via applySecuritySettingsToAllTabs — this avoids a
+              // background tab retaining a stale permission grant.
               ref.read(securityProvider.notifier).toggleLocation(!val);
-              unawaited(applyMainScreenWebViewSettings(ref));
             },
           ),
 
@@ -157,7 +163,6 @@ class _SecurityPanel extends ConsumerWidget {
             textColor: textColor,
             onToggle: (val) {
               ref.read(securityProvider.notifier).toggleCamera(!val);
-              unawaited(applyMainScreenWebViewSettings(ref));
             },
           ),
 
@@ -177,7 +182,6 @@ class _SecurityPanel extends ConsumerWidget {
             accentColor: theme.primaryColor,
             onToggle: (val) {
               ref.read(securityProvider.notifier).toggleDesktop(val);
-              unawaited(applyMainScreenWebViewSettings(ref, forceReload: true));
             },
           ),
 
@@ -315,13 +319,7 @@ class _PermissionRow extends StatelessWidget {
 
 // ── WebView settings sync ─────────────────────────────────────────────────────
 
-Future<void> applyMainScreenWebViewSettings(
-  WidgetRef ref, {
-  bool forceReload = false,
-}) async {
-  final engine = ref.read(browserChromeProvider).engine;
-  if (engine == null) return;
-
+Future<BrowserEngineConfig> _resolveCurrentConfig(WidgetRef ref) async {
   final theme = ref.read(themeProvider);
   final securityState = ref.read(securityProvider);
 
@@ -336,14 +334,20 @@ Future<void> applyMainScreenWebViewSettings(
     }
   }
 
-  final config = BrowserEngineConfig(
+  return BrowserEngineConfig(
     isDesktopMode: securityState.isDesktopMode,
     isDarkMode: theme.mode == ThemeMode.dark,
     isCameraBlocked: securityState.isCameraBlocked,
     isLocationBlocked: securityState.isLocationBlocked,
     adBlockRules: adBlockRules,
   );
+}
 
+Future<void> _applyConfigToEngine(
+  BrowserEngine engine,
+  BrowserEngineConfig config, {
+  required bool forceReload,
+}) async {
   try {
     await engine.updateSettings(config);
     if (forceReload) await engine.reload();
@@ -351,3 +355,52 @@ Future<void> applyMainScreenWebViewSettings(
     debugPrint('MIRA: Failed to update engine settings: $e');
   }
 }
+
+/// Applies the current theme/security config to only the *active* tab's
+/// engine. Cheap — use this for cosmetic/low-stakes updates (e.g. theme
+/// changes) where disturbing background tabs isn't warranted.
+Future<void> applyMainScreenWebViewSettings(
+  WidgetRef ref, {
+  bool forceReload = false,
+}) async {
+  final engine = ref.read(browserChromeProvider).engine;
+  if (engine == null) return;
+  final config = await _resolveCurrentConfig(ref);
+  await _applyConfigToEngine(engine, config, forceReload: forceReload);
+}
+
+/// Applies the current theme/security config to *every* instantiated tab —
+/// normal and ghost, active and background alike. Required for
+/// security-sensitive toggles (camera, location, desktop mode): a background
+/// tab holding an already-granted camera/mic/location permission won't have
+/// that permission revoked just by flipping the app-level setting, since the
+/// engine only re-checks its blocked flags on the next permission request or
+/// reload. Mirrors mainscreen.dart's `_applyAdBlockToAllTabs`, which applies
+/// the same reload-everything reasoning for content blockers.
+///
+/// Reading `browserEngineProvider(id)` for a tab that has no live native
+/// webview yet (e.g. still hibernated) is safe — it only constructs the Dart
+/// wrapper; `updateSettings`/`reload` no-op internally until a controller is
+/// actually attached.
+Future<void> applySecuritySettingsToAllTabs(
+  WidgetRef ref, {
+  bool forceReload = true,
+}) async {
+  final config = await _resolveCurrentConfig(ref);
+
+  final allTabIds = <String>{
+    ...ref.read(tabsProvider).tabs.keys,
+    ...ref.read(ghostTabsProvider).tabs.keys,
+  };
+
+  for (final id in allTabIds) {
+    try {
+      final engine = ref.read(browserEngineProvider(id));
+      await _applyConfigToEngine(engine, config, forceReload: forceReload);
+    } catch (e) {
+      debugPrint('MIRA: Failed to update engine settings for tab $id: $e');
+    }
+  }
+}
+
+

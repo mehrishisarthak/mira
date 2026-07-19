@@ -55,15 +55,19 @@ void main() {
     notifier.switchTab(0);
     expect(notifier.state.activeIndex, 0);
 
-    final secondTabId = notifier.state.tabs[1].id;
+    final secondTabId = notifier.state.tabOrder[1];
     notifier.closeTab(secondTabId);
     expect(notifier.state.tabs.length, 2);
     expect(notifier.state.activeIndex, 0);
 
     notifier.nuke();
     expect(notifier.state.tabs.length, 1);
-    expect(notifier.state.tabs.first.url, '');
+    expect(notifier.state.tabs[notifier.state.tabOrder.first]!.url, '');
     expect(notifier.state.activeIndex, 0);
   });
 }
+
+
+
+
 

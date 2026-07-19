@@ -36,7 +36,8 @@ List<PlatformMenu> buildDesktopMainPlatformMenus({
         PlatformMenuItem(
           label: 'Close Tab',
           onSelected: () {
-            final active = ref.read(currentActiveTabProvider);
+            final active = ref.read(tabsProvider).safeActiveTab;
+            if (active == null) return;
             if (ref.read(isGhostModeProvider)) {
               ref.read(ghostTabsProvider.notifier).closeTab(active.id);
             } else {

@@ -17,14 +17,13 @@ import 'package:mira/core/providers/adblock_provider.dart';
 import 'package:mira/core/services/browser_engine_blueprints.dart';
 import 'package:mira/core/services/database_providers.dart';
 import 'package:mira/pages/browser_chrome_providers.dart';
-import 'package:mira/core/services/snapshot_service.dart';
 import 'package:mira/pages/browser/browser_view.dart';
 import 'package:mira/pages/main_screen/desktop_browser_chrome.dart';
 import 'package:mira/pages/main_screen/desktop_platform_menus.dart';
 import 'package:mira/pages/main_screen/desktop_sidebar.dart';
 import 'package:mira/pages/main_screen/main_screen_haptics.dart';
 import 'package:mira/pages/main_screen/main_screen_security.dart';
-import 'package:mira/pages/main_screen/mobile_main_app_bar.dart' show buildMobileBottomBar;
+import 'package:mira/pages/main_screen/mobile_main_app_bar.dart' show buildMobileTopBar;
 import 'package:mira/shell/desktop/desktop_browser_hotkeys.dart';
 import 'package:mira/shell/desktop/desktop_find_bar.dart';
 
@@ -48,7 +47,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    final initialUrl = ref.read(currentActiveTabProvider).url;
+    final initialUrl = ref.read(tabsProvider).safeActiveTab?.url ?? '';
     _urlController = TextEditingController(text: initialUrl);
         _urlFocusNode = FocusNode();
     _urlFocusNode.addListener(_onUrlFocusChanged);
@@ -57,7 +56,8 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
       HardwareKeyboard.instance.addHandler(_handleDesktopHotkey);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        _syncDesktopWindowTitle(ref.read(currentActiveTabProvider));
+        final tab = ref.read(tabsProvider).safeActiveTab;
+    if(tab != null) _syncDesktopWindowTitle(tab);
       });
     }
   }
@@ -65,7 +65,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     void _onUrlFocusChanged() {
     final engine = ref.read(activeBrowserEngineProvider);
     if (engine == null) return;
-    final tabId = ref.read(currentActiveTabProvider).id;
+    final tabId = ref.read(tabsProvider).safeActiveTab?.id ?? '';
 
     if (_urlFocusNode.hasFocus) {
       final cached = ref.read(tabSnapshotCacheProvider)[tabId];
@@ -240,7 +240,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
       final chrome = ref.read(browserChromeProvider);
       final engine = chrome.engine;
       final errorMessage = chrome.webError;
-      final activeUrl = ref.read(currentActiveTabProvider).url;
+      final activeUrl = ref.read(tabsProvider).safeActiveTab?.url ?? '';
       final isGhost = ref.read(isGhostModeProvider);
       final appTheme = ref.read(themeProvider);
 
@@ -299,7 +299,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
       _triggerHaptic(MainScreenHapticKind.selection);
       return;
     }
-    final activeUrl = ref.read(currentActiveTabProvider).url;
+    final activeUrl = ref.read(tabsProvider).safeActiveTab?.url ?? '';
     if (activeUrl.isNotEmpty) {
       _triggerHaptic(MainScreenHapticKind.light);
       if (ref.read(isGhostModeProvider)) {
@@ -330,8 +330,8 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     );
 
     final allTabs = [
-      ...ref.read(tabsProvider).tabs,
-      ...ref.read(ghostTabsProvider).tabs,
+      ...ref.read(tabsProvider).tabs.values,
+      ...ref.read(ghostTabsProvider).tabs.values,
     ];
 
     for (final tab in allTabs) {
@@ -361,8 +361,8 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
 
   @override
   Widget build(BuildContext context) {
-    ref.listen(currentActiveTabProvider, (previous, next) {
-      if (previous != null && previous.id != next.id) {
+    ref.listen<BrowserTab?>(currentActiveTabProvider, (previous, next) {
+      if (previous != null && next != null && previous.id != next.id) {
          final engine = ref.read(browserEngineProvider(previous.id));
          unawaited(() async {
             final bytes = await engine.takeSnapshot();
@@ -374,17 +374,17 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
       }
     });
 
-    final canGoBack = ref.watch(currentActiveTabProvider.select((t) => t.canGoBack));
+    final canGoBack = ref.watch(currentActiveTabProvider.select((t) => t?.canGoBack ?? false));
     final isGhost = ref.watch(isGhostModeProvider);
-    final activeTab = ref.watch(currentActiveTabProvider);
+    final activeTab = ref.watch(currentActiveTabProvider) ?? BrowserTab();
 
     final activeUrl = activeTab.url;
     final tabCount = ref.watch(tabCountProvider);
 
     if (!kIsWeb &&
         (Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
-      ref.listen<BrowserTab>(currentActiveTabProvider, (prev, next) {
-        _syncDesktopWindowTitle(next);
+      ref.listen<BrowserTab?>(currentActiveTabProvider, (prev, next) {
+        if (next != null) _syncDesktopWindowTitle(next);
       });
     }
     
@@ -418,12 +418,12 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     final isDesktop =
         !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
 
-    ref.listen(currentActiveTabProvider, (previous, next) {
-      if (previous?.id != next.id) {
+    ref.listen<BrowserTab?>(currentActiveTabProvider, (previous, next) {
+      if (next != null && previous?.id != next.id) {
         _urlController.text = next.url;
         _urlController.selection =
             TextSelection.collapsed(offset: next.url.length);
-      } else if (previous?.url != next.url && !_urlFocusNode.hasFocus) {
+      } else if (next != null && previous?.url != next.url && !_urlFocusNode.hasFocus) {
         _urlController.text = next.url;
         _urlController.selection =
             TextSelection.collapsed(offset: next.url.length);
@@ -434,11 +434,16 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     // Theme changes are handled by browser_side_effects.dart's themeProvider listener.
     ref.listen(securityProvider, (prev, next) {
       if (prev?.isDesktopMode != next.isDesktopMode) {
-        unawaited(applyMainScreenWebViewSettings(ref, forceReload: true));
+        // Propagate to every tab, not just the active one — a background
+        // tab shouldn't keep rendering in the wrong desktop/mobile mode.
+        unawaited(applySecuritySettingsToAllTabs(ref));
       }
       if (prev?.isCameraBlocked != next.isCameraBlocked ||
           prev?.isLocationBlocked != next.isLocationBlocked) {
-        unawaited(applyMainScreenWebViewSettings(ref));
+        // Propagate to every tab — a background tab that already has an
+        // active camera/mic/location grant won't have it revoked just by
+        // flipping the setting; it needs its engine reloaded too.
+        unawaited(applySecuritySettingsToAllTabs(ref));
       }
       if (prev?.isAdBlockEnabled != next.isAdBlockEnabled) {
         unawaited(_applyAdBlockToAllTabs(next.isAdBlockEnabled));
@@ -457,6 +462,11 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
         backgroundColor: backgroundColor,
         appBar: null,
         bottomNavigationBar: null,
+        // CRITICAL PERFORMANCE HACK: let the keyboard simply overlap the
+        // BrowserView instead of resizing the Scaffold. Resizing would force
+        // the Chromium engine to run a heavy DOM reflow on every keyboard
+        // show/hide animation frame; overlapping avoids that entirely.
+        resizeToAvoidBottomInset: false,
         body: isDesktop
             ? Row(
                 children: [
@@ -506,12 +516,11 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
                 ],
               )
             : SafeArea(
-                top: true,
-                bottom: false,
+                top: false,
+                bottom: true,
                 child: Column(
                   children: [
-                    const Expanded(child: BrowserView()),
-                    buildMobileBottomBar(
+                    buildMobileTopBar(
                       context: context,
                       ref: ref,
                       urlController: _urlController,
@@ -532,6 +541,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
                       onBackPressed: () => _handleBrowserBack(),
                       onGhostToggle: _toggleGhostMode,
                     ),
+                    const Expanded(child: BrowserView()),
                   ],
                 ),
               ),
@@ -592,20 +602,6 @@ class _GhostModeFlashState extends ConsumerState<_GhostModeFlash>
 
   @override
   Widget build(BuildContext context) {
-    ref.listen(currentActiveTabProvider, (previous, next) {
-      if (previous != null && previous.id != next.id) {
-         final engine = ref.read(browserEngineProvider(previous.id));
-         unawaited(() async {
-            final bytes = await engine.takeSnapshot();
-            if (bytes != null && mounted) {
-                ref.read(tabSnapshotCacheProvider.notifier).update((s) => {...s, previous.id: TabSnapshotData(bytes: bytes)});
-            }
-            engine.pauseRendering();
-         }());
-      }
-    });
-
-
     ref.listen<bool>(isGhostModeProvider, (prev, next) {
       if (prev == next) return;
       _color = next ? Colors.redAccent : Colors.black87;
@@ -623,3 +619,5 @@ class _GhostModeFlashState extends ConsumerState<_GhostModeFlash>
     );
   }
 }
+
+

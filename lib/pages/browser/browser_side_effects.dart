@@ -54,11 +54,13 @@ void handleEnginePageEvent(Ref ref, BrowserPageEvent event) {
     case BrowserPageEventType.loadStart:
       notifier.clearWebError();
       final isGhost = ref.read(isGhostModeProvider);
-      final activeTabId = ref.read(currentActiveTabProvider).id;
-      if (isGhost) {
-        ref.read(ghostTabsProvider.notifier).setWebError(activeTabId, null);
-      } else {
-        ref.read(tabsProvider.notifier).setWebError(activeTabId, null);
+      final activeTabId = ref.read(currentActiveTabProvider)?.id;
+      if (activeTabId != null) {
+        if (isGhost) {
+          ref.read(ghostTabsProvider.notifier).setWebError(activeTabId, null);
+        } else {
+          ref.read(tabsProvider.notifier).setWebError(activeTabId, null);
+        }
       }
       notifier.setLoadingProgress(0);
       if (event.url != null) {
@@ -94,11 +96,13 @@ void handleEnginePageEvent(Ref ref, BrowserPageEvent event) {
       break;
     case BrowserPageEventType.error:
       final isGhost = ref.read(isGhostModeProvider);
-      final activeTabId = ref.read(currentActiveTabProvider).id;
-      if (isGhost) {
-        ref.read(ghostTabsProvider.notifier).setWebError(activeTabId, event.errorDescription);
-      } else {
-        ref.read(tabsProvider.notifier).setWebError(activeTabId, event.errorDescription);
+      final activeTabId = ref.read(currentActiveTabProvider)?.id;
+      if (activeTabId != null) {
+        if (isGhost) {
+          ref.read(ghostTabsProvider.notifier).setWebError(activeTabId, event.errorDescription);
+        } else {
+          ref.read(tabsProvider.notifier).setWebError(activeTabId, event.errorDescription);
+        }
       }
       break;
     case BrowserPageEventType.downloadRequested:
@@ -151,22 +155,22 @@ void _showDownloadStartedSnackBar(String? filename) {
 void syncInitialEngine(WidgetRef ref) {
   final isGhost = ref.read(isGhostModeProvider);
   final state = isGhost ? ref.read(ghostTabsProvider) : ref.read(tabsProvider);
-  _syncEngineToChrome(ref, state.tabs, state.activeIndex);
+  _syncEngineToChrome(ref, state.tabOrder.map((id) => state.tabs[id]!).toList(), state.activeIndex);
 }
 
 void registerBrowserViewSideEffects({required WidgetRef ref}) {
   // 1. Sync active engine to BrowserChromeProvider and manage Hibernation
   ref.listen(tabsProvider, (previous, next) {
     if (!ref.read(isGhostModeProvider)) {
-      _syncEngineToChrome(ref, next.tabs, next.activeIndex);
+      _syncEngineToChrome(ref, next.tabOrder.map((id) => next.tabs[id]!).toList(), next.activeIndex);
     }
     if (previous != null && previous.tabs.length > next.tabs.length) {
-      final currentIds = next.tabs.map((t) => t.id).toSet();
-      final closedIds = previous.tabs.map((t) => t.id).toSet().difference(currentIds);
+      final currentIds = next.tabs.keys.toSet();
+      final closedIds = previous.tabs.keys.toSet().difference(currentIds);
       for (final id in closedIds) {
         ref.invalidate(browserEngineProvider(id));
       }
-      ref.read(hibernationProvider.notifier).onTabsClosed(currentIds);
+      ref.read(hibernationProvider.notifier).onTabsClosed(closedIds);
     }
   });
 
@@ -177,21 +181,21 @@ void registerBrowserViewSideEffects({required WidgetRef ref}) {
       return;
     }
     if (isGhost) {
-      _syncEngineToChrome(ref, next.tabs, next.activeIndex);
+      _syncEngineToChrome(ref, next.tabOrder.map((id) => next.tabs[id]!).toList(), next.activeIndex);
     }
     if (previous != null && previous.tabs.length > next.tabs.length) {
-      final currentIds = next.tabs.map((t) => t.id).toSet();
-      final closedIds = previous.tabs.map((t) => t.id).toSet().difference(currentIds);
+      final currentIds = next.tabs.keys.toSet();
+      final closedIds = previous.tabs.keys.toSet().difference(currentIds);
       for (final id in closedIds) {
         ref.invalidate(browserEngineProvider(id));
       }
-      ref.read(hibernationProvider.notifier).onTabsClosed(currentIds);
+      ref.read(hibernationProvider.notifier).onTabsClosed(closedIds);
     }
   });
 
   ref.listen(isGhostModeProvider, (_, isGhostNow) {
     final state = isGhostNow ? ref.read(ghostTabsProvider) : ref.read(tabsProvider);
-    _syncEngineToChrome(ref, state.tabs, state.activeIndex);
+    _syncEngineToChrome(ref, state.tabOrder.map((id) => state.tabs[id]!).toList(), state.activeIndex);
   });
 
   // 2. Listen to Theme changes to sync dark mode with the ACTIVE engine.
@@ -266,3 +270,7 @@ void _updateHistoryTitle(Ref ref, String? url, String title) {
   if (url == null || url.isEmpty || url == 'about:blank') return;
   ref.read(historyProvider.notifier).addToHistory(url, title: title);
 }
+
+
+
+

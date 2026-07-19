@@ -17,8 +17,9 @@ void main() {
   }
 
   List<String> urls(GhostTabsNotifier n) =>
-      n.state.tabs.map((t) => t.url).toList();
-  String activeUrl(GhostTabsNotifier n) => n.state.tabs[n.state.activeIndex].url;
+      n.state.tabOrder.map((id) => n.state.tabs[id]!.url).toList();
+  String activeUrl(GhostTabsNotifier n) =>
+      n.state.tabs[n.state.tabOrder[n.state.activeIndex]]!.url;
 
   test('forward move keeps a non-moved active tab tracked', () {
     final n = ghostWith(['a', 'b', 'c', 'd']);
@@ -58,7 +59,11 @@ void main() {
     n.addTab(url: 'a'); // [blank, a]
     n.addTab(url: 'b'); // [blank, a, b], active = 2
     n.reorderTab(2, 0); // move b to front
-    expect(n.state.tabs.first.url, 'b');
-    expect(n.state.tabs[n.state.activeIndex].url, 'b');
+    expect(n.state.tabs[n.state.tabOrder.first]!.url, 'b');
+    expect(n.state.tabs[n.state.tabOrder[n.state.activeIndex]]!.url, 'b');
   });
 }
+
+
+
+

@@ -65,11 +65,17 @@ bool handleDesktopBrowserHotkey({
   }
 
   if (key == LogicalKeyboardKey.keyW) {
-    final active = ref.read(currentActiveTabProvider);
-    if (ref.read(isGhostModeProvider)) {
-      ref.read(ghostTabsProvider.notifier).closeTab(active.id);
+    final isGhost = ref.read(isGhostModeProvider);
+    if (isGhost) {
+      final active = ref.read(ghostTabsProvider).safeActiveTab;
+      if (active != null) {
+        ref.read(ghostTabsProvider.notifier).closeTab(active.id);
+      }
     } else {
-      ref.read(tabsProvider.notifier).closeTab(active.id);
+      final active = ref.read(tabsProvider).safeActiveTab;
+      if (active != null) {
+        ref.read(tabsProvider.notifier).closeTab(active.id);
+      }
     }
     return true;
   }
@@ -141,7 +147,7 @@ void _cycleActiveTab(
   if (isGhost) {
     final s = ref.read(ghostTabsProvider);
     if (s.tabs.isEmpty) return;
-    final n = s.tabs.length;
+    final n = s.tabOrder.length;
     final next = forward
         ? (s.activeIndex + 1) % n
         : (s.activeIndex - 1 + n) % n;
@@ -149,10 +155,12 @@ void _cycleActiveTab(
   } else {
     final s = ref.read(tabsProvider);
     if (s.tabs.isEmpty) return;
-    final n = s.tabs.length;
+    final n = s.tabOrder.length;
     final next = forward
         ? (s.activeIndex + 1) % n
         : (s.activeIndex - 1 + n) % n;
     ref.read(tabsProvider.notifier).switchTab(next);
   }
 }
+
+

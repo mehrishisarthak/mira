@@ -288,7 +288,7 @@ class _BgPainter extends CustomPainter {
     final rng = math.Random(42);
     for (int i = 0; i < 18; i++) {
       final seedX = rng.nextDouble();
-      final seedY = rng.nextDouble();
+      rng.nextDouble(); // consume the paired draw to keep the seeded sequence stable
       final speed = 0.4 + rng.nextDouble() * 0.6;
       final phase = rng.nextDouble();
 
@@ -511,3 +511,7 @@ class _EnterButton extends StatelessWidget {
     );
   }
 }
+
+
+
+

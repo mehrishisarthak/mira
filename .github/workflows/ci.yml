@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+jobs:
+  analyze-and-test:
+    name: Analyze & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # `flutter analyze` exits non-zero on `error`-severity issues, but NOT
+      # on `info`/`warning`-severity issues like deprecated_member_use. We
+      # need those to fail CI too, since a growing pile of "quiet" analyzer
+      # warnings is exactly how this repo ended up with 49 unresolved issues
+      # before this pipeline existed. So: capture the output, always print
+      # it for visibility, then fail explicitly on either a non-zero exit
+      # code OR the presence of deprecated_member_use in the report.
+      - name: Run flutter analyze
+        id: analyze
+        run: |
+          set +e
+          flutter analyze --no-fatal-infos --no-fatal-warnings > analyze_output.txt 2>&1
+          ANALYZE_EXIT_CODE=$?
+          set -e
+
+          cat analyze_output.txt
+
+          FAIL=0
+
+          if [ "$ANALYZE_EXIT_CODE" -ne 0 ]; then
+            echo "::error::flutter analyze reported one or more errors (exit code $ANALYZE_EXIT_CODE)."
+            FAIL=1
+          fi
+
+          if grep -q "deprecated_member_use" analyze_output.txt; then
+            echo "::error::flutter analyze reported deprecated_member_use warnings. These are treated as CI-blocking in this repo — please migrate off the deprecated API instead of suppressing the warning."
+            FAIL=1
+          fi
+
+          if [ "$FAIL" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Run flutter test
+        run: flutter test

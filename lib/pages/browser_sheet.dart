@@ -50,30 +50,36 @@ class BrowserSheet extends ConsumerWidget {
           ),
           const SizedBox(height: 10),
 
-          Column(
-            children: [
-              ...SearchEngines.urls.keys.map((engineKey) {
-                return RadioListTile<String>(
-                  title: Text(
-                    SearchEngines.getName(engineKey),
-                    style: TextStyle(color: contentColor.withAlpha(179)),
-                  ),
-                  value: engineKey,
-                  groupValue: currentEngine,
-                  onChanged: (value) {
-                    if (value != null) {
-                      ref.read(searchEngineProvider.notifier).setEngine(value);
-                    }
-                  },
-                  activeColor: appTheme.accentColor,
-                  contentPadding: EdgeInsets.zero,
-                );
-              }),
-            ],
+          RadioGroup<String>(
+            groupValue: currentEngine,
+            onChanged: (value) {
+              if (value != null) {
+                ref.read(searchEngineProvider.notifier).setEngine(value);
+              }
+            },
+            child: Column(
+              children: [
+                ...SearchEngines.urls.keys.map((engineKey) {
+                  return RadioListTile<String>(
+                    title: Text(
+                      SearchEngines.getName(engineKey),
+                      style: TextStyle(color: contentColor.withAlpha(179)),
+                    ),
+                    value: engineKey,
+                    activeColor: appTheme.accentColor,
+                    contentPadding: EdgeInsets.zero,
+                  );
+                }),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 }
+
+
+
+
 

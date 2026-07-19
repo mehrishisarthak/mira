@@ -114,6 +114,13 @@ abstract class BrowserEngine {
   Future<void> clearStorage();
   Future<void> clearCookies();
 
+  /// Clears this engine's own native HTTP/resource cache. Unlike
+  /// [clearStorage] and [clearCookies] — which operate on process-wide
+  /// managers and so only need to be called once, on any single engine — the
+  /// underlying cache API is per-webview-controller, so every instantiated
+  /// engine needs its own explicit call for a full wipe (see "Nuke Data").
+  Future<void> clearCache();
+
   // --- Zoom Capabilities ---
 
   Future<void> zoomIn();
@@ -127,3 +134,5 @@ abstract class BrowserEngine {
   /// Returns a Flutter widget that renders the web content.
   Widget buildWidget({required String tabId, String? initialUrl});
 }
+
+

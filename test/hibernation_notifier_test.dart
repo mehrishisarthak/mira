@@ -34,15 +34,38 @@ void main() {
     expect(notifier.state.contains('new'), isTrue);
   });
 
-  test('onTabsClosed drops ids no longer present', () {
+  test('onTabsClosed evicts exactly the closed ids', () {
     final notifier = HibernationNotifier();
     notifier.wakeTab('a');
     notifier.wakeTab('b');
     notifier.wakeTab('c');
 
-    notifier.onTabsClosed({'a', 'c'}); // b closed
+    notifier.onTabsClosed({'b'});
 
     expect(notifier.state, containsAll(<String>['a', 'c']));
     expect(notifier.state.contains('b'), isFalse);
+  });
+
+  test('closing a normal tab does not evict awake ghost tabs', () {
+    // Regression: _mruSet is global across both pools (the dual-mode stack
+    // mounts normal + ghost simultaneously), but each call site only knows its
+    // own pool. Retaining by "not in survivors" tore down every live webview
+    // of the other mode on any close — for ghost tabs that means an
+    // incognito session silently reloading and losing its state.
+    final notifier = HibernationNotifier();
+    expect(maxAliveWebViewTabs(), greaterThanOrEqualTo(3),
+        reason: 'test needs room for 2 normal + 1 ghost tab');
+
+    notifier.wakeTab('normal_1');
+    notifier.wakeTab('normal_2');
+    notifier.wakeTab('ghost_1');
+
+    // The normal-pool listener fires with only the normal pool's closed ids.
+    notifier.onTabsClosed({'normal_2'});
+
+    expect(notifier.state.contains('ghost_1'), isTrue,
+        reason: 'ghost tab must survive a normal-pool close');
+    expect(notifier.state.contains('normal_1'), isTrue);
+    expect(notifier.state.contains('normal_2'), isFalse);
   });
 }

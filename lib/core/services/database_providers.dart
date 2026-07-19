@@ -28,7 +28,7 @@ final browserEngineProvider = Provider.family<BrowserEngine, String>((ref, tabId
   // Watching would rebuild the provider (disposing the engine) whenever any
   // ghost tab is added or removed, creating an orphaned non-private engine
   // for a tab that no longer exists.
-  final isGhostTab = ref.read(ghostTabsProvider).tabs.any((t) => t.id == tabId);
+  final isGhostTab = ref.read(ghostTabsProvider).tabs.containsKey(tabId);
 
   // Use loadRulesSync() — not adBlockRulesProvider.valueOrNull.
   // main.dart warms this cache OFF the critical path (unawaited). The always-on
@@ -67,3 +67,7 @@ final browserEngineProvider = Provider.family<BrowserEngine, String>((ref, tabId
   ref.onDispose(() => engine.dispose());
   return engine;
 });
+
+
+
+
