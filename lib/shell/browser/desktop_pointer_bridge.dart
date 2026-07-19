@@ -1,6 +1,5 @@
-import 'dart:async';
-
 import 'package:flutter/gestures.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
 /// Forwards desktop trackpad gestures into the page (O-38).
@@ -12,10 +11,11 @@ import 'package:flutter/widgets.dart';
 /// this as not-planned (flutter_inappwebview #2503 / #2511), so the events are
 /// translated here and applied with JavaScript.
 ///
-/// Deltas are accumulated and flushed on a [_flushInterval] timer rather than
-/// evaluated per event: a trackpad emits ~60-120 updates/sec and one
+/// Deltas accumulate and flush once per rendered frame via a [Ticker], not on a
+/// fixed timer. A trackpad emits 60–120 updates/sec, and one
 /// `evaluateJavascript` round-trip each would swamp the IPC bridge (the same
-/// concern as O-70 on the engine's own callbacks).
+/// concern as O-70). Ticking on vsync also means one scroll write per frame
+/// drawn, which is what makes it read as smooth rather than stepped.
 class DesktopPointerBridge extends StatefulWidget {
   const DesktopPointerBridge({
     super.key,
@@ -33,35 +33,63 @@ class DesktopPointerBridge extends StatefulWidget {
   State<DesktopPointerBridge> createState() => _DesktopPointerBridgeState();
 }
 
-class _DesktopPointerBridgeState extends State<DesktopPointerBridge> {
-  static const Duration _flushInterval = Duration(milliseconds: 16);
-
-  /// Trackpad pan deltas are small; without a multiplier a full swipe barely
-  /// moves the page. Tuned to feel close to Chrome on the same hardware.
+class _DesktopPointerBridgeState extends State<DesktopPointerBridge>
+    with SingleTickerProviderStateMixin {
+  /// Raw pan deltas are small; without a multiplier a full swipe barely moves
+  /// the page. Tuned to sit near Chrome on the same hardware.
   static const double _scrollMultiplier = 3.0;
 
+  /// Scrolls the scrollable ancestor under the cursor, falling back to the
+  /// document. `window.scrollBy` alone only moves the document, so any page
+  /// built from inner scroll containers — which is most modern sites — ignored
+  /// the gesture entirely, and horizontal scrolling never worked at all
+  /// because the document itself rarely overflows sideways.
+  static const String _scrollJs = '''
+(function(x,y,dx,dy){
+  var e=document.elementFromPoint(x,y);
+  while(e&&e!==document.body&&e!==document.documentElement){
+    var s=getComputedStyle(e),
+        vy=s.overflowY,vx=s.overflowX,
+        cy=(vy==='auto'||vy==='scroll')&&e.scrollHeight>e.clientHeight,
+        cx=(vx==='auto'||vx==='scroll')&&e.scrollWidth>e.clientWidth;
+    if((dy&&cy)||(dx&&cx)){
+      if(cy)e.scrollTop+=dy;
+      if(cx)e.scrollLeft+=dx;
+      return;
+    }
+    e=e.parentElement;
+  }
+  window.scrollBy(dx,dy);
+})''';
+
+  Ticker? _ticker;
   double _pendingDx = 0;
   double _pendingDy = 0;
-  Timer? _flushTimer;
+  Offset _cursor = Offset.zero;
 
   /// Cumulative scale reported since the gesture began (1.0 at start), so the
-  /// per-flush zoom step is the ratio against what we last applied.
+  /// per-frame zoom step is the ratio against what we last applied.
   double _lastScale = 1.0;
   double _pageZoom = 1.0;
   bool _zoomDirty = false;
 
   @override
+  void initState() {
+    super.initState();
+    _ticker = createTicker(_onTick);
+  }
+
+  @override
   void dispose() {
-    _flushTimer?.cancel();
+    _ticker?.dispose();
     super.dispose();
   }
 
-  void _scheduleFlush() {
-    _flushTimer ??= Timer(_flushInterval, _flush);
+  void _wake() {
+    if (_ticker != null && !_ticker!.isActive) _ticker!.start();
   }
 
-  void _flush() {
-    _flushTimer = null;
+  void _onTick(Duration _) {
     if (!mounted) return;
 
     final dx = _pendingDx;
@@ -69,18 +97,27 @@ class _DesktopPointerBridgeState extends State<DesktopPointerBridge> {
     _pendingDx = 0;
     _pendingDy = 0;
 
+    if (dx == 0 && dy == 0 && !_zoomDirty) {
+      // Idle — stop ticking so we aren't burning a frame callback for the life
+      // of the browser view.
+      _ticker?.stop();
+      return;
+    }
+
     if (dx != 0 || dy != 0) {
-      // Negated: panDelta describes how the content is dragged, while
-      // scrollBy takes a scroll offset — they run opposite each other.
+      // Negated: panDelta describes how the content is dragged, while a scroll
+      // offset runs the opposite way.
+      final sx = (-dx * _scrollMultiplier).toStringAsFixed(2);
+      final sy = (-dy * _scrollMultiplier).toStringAsFixed(2);
       widget.runJs(
-        'window.scrollBy(${(-dx * _scrollMultiplier).toStringAsFixed(2)},'
-        ' ${(-dy * _scrollMultiplier).toStringAsFixed(2)});',
+        '$_scrollJs(${_cursor.dx.toStringAsFixed(0)},'
+        '${_cursor.dy.toStringAsFixed(0)},$sx,$sy);',
       );
     }
 
     if (_zoomDirty) {
       _zoomDirty = false;
-      // documentElement.style.zoom rather than the engine's zoomIn/zoomOut:
+      // documentElement.style.zoom rather than BrowserEngine.zoomIn/zoomOut:
       // those call the plugin's Android-only zoom APIs, which no-op on Windows.
       widget.runJs(
         'document.documentElement.style.zoom='
@@ -89,11 +126,19 @@ class _DesktopPointerBridgeState extends State<DesktopPointerBridge> {
     }
   }
 
+  Offset _toLocal(Offset global) {
+    final box = context.findRenderObject();
+    if (box is RenderBox && box.hasSize) return box.globalToLocal(global);
+    return global;
+  }
+
   void _onPanZoomStart(PointerPanZoomStartEvent event) {
     _lastScale = 1.0;
+    _cursor = _toLocal(event.position);
   }
 
   void _onPanZoomUpdate(PointerPanZoomUpdateEvent event) {
+    _cursor = _toLocal(event.position);
     _pendingDx += event.panDelta.dx;
     _pendingDy += event.panDelta.dy;
 
@@ -105,12 +150,12 @@ class _DesktopPointerBridgeState extends State<DesktopPointerBridge> {
       _zoomDirty = true;
     }
 
-    _scheduleFlush();
+    _wake();
   }
 
   void _onPanZoomEnd(PointerPanZoomEndEvent event) {
     _lastScale = 1.0;
-    _scheduleFlush();
+    _wake();
   }
 
   @override

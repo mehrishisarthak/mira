@@ -36,6 +36,14 @@ class _SidebarTabScope {
   int get hashCode => state.activeIndex.hashCode ^ state.tabOrder.length.hashCode;
 }
 
+/// Width of the collapsed rail. Mainscreen reserves exactly this much padding
+/// so the content box — and therefore the native webview surface — never
+/// resizes while the sidebar animates.
+const double kCollapsedSidebarWidth = 52;
+
+/// Width of the expanded panel. Overlays the content; nothing is reflowed.
+const double kExpandedSidebarWidth = 240;
+
 class DesktopSidebar extends ConsumerWidget {
   const DesktopSidebar({super.key});
 
@@ -64,10 +72,23 @@ class DesktopSidebar extends ConsumerWidget {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       curve: Curves.easeInOut,
-      width: expanded ? 240 : 52,
+      width: expanded ? kExpandedSidebarWidth : kCollapsedSidebarWidth,
       decoration: BoxDecoration(
         color: bg,
         border: Border(right: BorderSide(color: border)),
+        // The sidebar overlays the page rather than displacing it, so it needs
+        // a shadow to read as a floating panel instead of a paint glitch over
+        // the webview. Only while expanded — the collapsed rail sits flush in
+        // its reserved gutter and has nothing to float above.
+        boxShadow: expanded
+            ? const [
+                BoxShadow(
+                  color: Color(0x66000000),
+                  blurRadius: 16,
+                  offset: Offset(2, 0),
+                ),
+              ]
+            : null,
       ),
       // LayoutBuilder drives child layout from actual rendered width so the
       // expanded/collapsed switch happens mid-animation without overflow.

@@ -498,10 +498,17 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
         // show/hide animation frame; overlapping avoids that entirely.
         resizeToAvoidBottomInset: false,
         body: isDesktop
-            ? Row(
+            // Sidebar OVERLAYS the content rather than sharing a Row with it.
+            // In a Row, animating the sidebar 52<->240 relaid out the Expanded
+            // region every frame, which resizes the native WebView2 surface
+            // every frame — an expensive reflow for a purely decorative
+            // animation. Reserving the collapsed rail width as permanent
+            // padding keeps the webview's box constant for the whole
+            // expand/collapse, and the expanded panel floats over the page.
+            ? Stack(
                 children: [
-                  const DesktopSidebar(),
-                  Expanded(
+                  Padding(
+                    padding: const EdgeInsets.only(left: kCollapsedSidebarWidth),
                     child: Column(
                       children: [
                         buildDesktopToolbar(
@@ -542,6 +549,12 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
                         ),
                       ],
                     ),
+                  ),
+                  const Positioned(
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    child: DesktopSidebar(),
                   ),
                 ],
               )
