@@ -86,6 +86,12 @@ proves the raster delta.
   watch, `.select((m) => m[tab.id])` hibernated scoping, and the
   `transitionActive` guard on the async `takeSnapshot()` all hold.
 
+#### Test suite (2026-07-19)
+
+| ID | Sev | Issue | Location | Notes |
+|----|----|-------|----------|-------|
+| O-88 | 🟠 | **`app_startup_smoke_test` has 3 failing tests — the suite is NOT green.** D-28's "25/25 green" is stale. `SplashScreen.initState` constructs `InAppWebViewEngine` directly for the O-48 pre-warm, which throws `A platform implementation for flutter_inappwebview has not been set` under `flutter_test`. The splash then never builds, so the wordmark/branding assertions find nothing. Verified pre-existing at both `64e0819` and `79d9eab` — **not** caused by the Qyx rename or the logo work. | `splashscreen.dart:59`, `test/app_startup_smoke_test.dart` | Inject the pre-warm engine behind a provider/override (or guard it on a test flag) so the splash builds headless. Until then `flutter test` is red and CI (`.github/workflows/ci.yml`) will be too. |
+
 ### Memory / Lifecycle
 | ID | Sev | Issue | Location | Notes |
 |----|----|-------|----------|-------|

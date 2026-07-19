@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qyx/constants/app_fonts.dart';
+import 'package:qyx/core/ui/qyx_mark.dart';
 
 import 'package:qyx/core/entities/theme_entity.dart';
 import 'package:qyx/core/notifiers/ghost_notifier.dart';
@@ -320,6 +321,8 @@ class _NormalSpeedDial extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    QyxMark(size: 34, color: accent),
+                    const SizedBox(height: 20),
                     Text(
                       _greeting(),
                       style: jetBrainsMono(

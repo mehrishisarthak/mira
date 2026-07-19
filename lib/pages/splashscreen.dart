@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qyx/constants/app_fonts.dart';
+import 'package:qyx/core/ui/qyx_mark.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:qyx/core/entities/theme_entity.dart';
@@ -45,7 +46,7 @@ class _SplashScreenState extends State<SplashScreen>
   Widget? _destination;
   bool _navigating = false;
 
-  static const List<String> _letters = ['M', 'I', 'R', 'A'];
+  static const List<String> _letters = ['Q', 'Y', 'X'];
   static const Color _accent = Colors.greenAccent;
 
   @override
@@ -64,7 +65,7 @@ class _SplashScreenState extends State<SplashScreen>
 
   void _buildAnimations() {
     _letterCtrls = List.generate(
-      4,
+      _letters.length,
       (_) => AnimationController(
         vsync: this,
         duration: const Duration(milliseconds: 260),
@@ -114,13 +115,13 @@ class _SplashScreenState extends State<SplashScreen>
     if (!mounted) return;
 
     // Staggered letter reveal — each letter slides up and fades in
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < _letters.length; i++) {
       unawaited(_letterCtrls[i].forward());
       await Future.delayed(const Duration(milliseconds: 80));
     }
 
     // Wait for the last letter to fully land
-    await _letterCtrls[3].forward(from: _letterCtrls[3].value);
+    await _letterCtrls.last.forward(from: _letterCtrls.last.value);
     await Future.delayed(const Duration(milliseconds: 55));
     if (!mounted) return;
 
@@ -203,6 +204,15 @@ class _SplashScreenState extends State<SplashScreen>
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
+                // ── MARK ──────────────────────────────────────────────────────
+                // Rides the first letter's fade so it leads the wordmark in.
+                FadeTransition(
+                  opacity: _letterFade.first,
+                  child: QyxMark(size: 56, color: _accent),
+                ),
+
+                const SizedBox(height: 26),
+
                 // ── WORDMARK ──────────────────────────────────────────────────
                 Stack(
                   alignment: Alignment.center,
@@ -211,7 +221,7 @@ class _SplashScreenState extends State<SplashScreen>
                     // Letters
                     Row(
                       mainAxisSize: MainAxisSize.min,
-                      children: List.generate(4, _buildLetter),
+                      children: List.generate(_letters.length, _buildLetter),
                     ),
                     // Scan line rendered on top via CustomPaint
                     Positioned.fill(

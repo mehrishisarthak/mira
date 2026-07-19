@@ -214,7 +214,7 @@ class _SidebarHeader extends ConsumerWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              isGhost ? 'GHOST MODE' : 'MIRA',
+              isGhost ? 'GHOST MODE' : 'QYX',
               style: jetBrainsMono(
                 color: isGhost ? Colors.redAccent : fg,
                 fontSize: 13,

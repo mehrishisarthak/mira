@@ -79,8 +79,8 @@ void main() {
     );
 
     // Splash renders the wordmark as individual animated letters.
-    expect(find.text('M'), findsOneWidget);
-    expect(find.text('R'), findsOneWidget);
+    expect(find.text('Q'), findsOneWidget);
+    expect(find.text('X'), findsOneWidget);
 
     await _drainSplash(tester);
 
@@ -111,7 +111,7 @@ void main() {
     await _drainSplash(tester);
 
     expect(find.text('REQUIRED UPDATE'), findsOneWidget);
-    expect(find.text('UPDATE MIRA'), findsOneWidget);
+    expect(find.text('UPDATE QYX'), findsOneWidget);
   });
 
   testWidgets('app shell boots and shows splash branding', (tester) async {
@@ -136,8 +136,8 @@ void main() {
     );
 
     // Splash renders the wordmark as individual animated letters.
-    expect(find.text('M'), findsOneWidget);
-    expect(find.text('R'), findsOneWidget);
+    expect(find.text('Q'), findsOneWidget);
+    expect(find.text('X'), findsOneWidget);
 
     await _drainSplash(tester);
   });

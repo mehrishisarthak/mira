@@ -157,7 +157,7 @@ class MyApp extends ConsumerWidget {
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'MIRA Browser',
+      title: 'Qyx Browser',
       scaffoldMessengerKey: scaffoldMessengerKey,
       navigatorKey: rootNavigatorKey,
       theme: lightTheme,

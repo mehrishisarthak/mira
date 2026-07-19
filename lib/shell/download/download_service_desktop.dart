@@ -236,7 +236,7 @@ class DesktopDownloadService implements DownloadService {
       request.followRedirects = false;
       request.headers.set(
         HttpHeaders.userAgentHeader,
-        'Mozilla/5.0 (compatible; MIRABrowser/1.0)',
+        'Mozilla/5.0 (compatible; QyxBrowser/1.0)',
       );
 
       // FIXED: Inject the authentication headers if they exist

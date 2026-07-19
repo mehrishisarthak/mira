@@ -491,7 +491,7 @@ class _EnterButton extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'ENTER MIRA',
+              'ENTER QYX',
               style: jetBrainsMono(
                 fontSize: 12,
                 color: kMiraMatteBlack,

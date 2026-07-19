@@ -95,14 +95,14 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     _titleSyncDebounce = Timer(const Duration(milliseconds: 300), () async {
       if (!mounted) return;
       final raw = tab.title.trim();
-      final label = raw.isEmpty ? 'Mira' : raw;
+      final label = raw.isEmpty ? 'Qyx' : raw;
       final isGhost = ref.read(isGhostModeProvider);
       if (isGhost) {
         await desktopSetWindowTitle(
-          raw.isEmpty ? 'MIRA Private' : '$label — MIRA Private',
+          raw.isEmpty ? 'Qyx Private' : '$label — Qyx Private',
         );
       } else {
-        await desktopSetWindowTitle('$label — Mira');
+        await desktopSetWindowTitle('$label — Qyx');
       }
     });
   }
@@ -272,7 +272,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
             _triggerHaptic(MainScreenHapticKind.selection);
             ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: const Text("Press back again to exit MIRA"),
+                  content: const Text("Press back again to exit Qyx"),
                   backgroundColor: isGhost ? Colors.redAccent : appTheme.primaryColor,
                   duration: const Duration(seconds: 2),
                 )
