@@ -1,6 +1,4 @@
-import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -20,9 +18,10 @@ class WebViewSkeletonOverlay extends ConsumerWidget {
         ref.watch(browserChromeProvider.select((s) => s.loadingProgress));
     final activeTabUrl =
         ref.watch(tabsProvider.select((p) => p.safeActiveTab?.url ?? ''));
-    final isDesktop = !kIsWeb &&
-        (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
-    final isLoading = !isDesktop && progress < 100 && activeTabUrl.isNotEmpty;
+    // Runs on desktop too. This is a pure Flutter overlay with no platform
+    // dependency, and desktop shows the same bare surface while a page loads —
+    // the previous `!isDesktop` gate had no recorded reason.
+    final isLoading = progress < 100 && activeTabUrl.isNotEmpty;
     return IgnorePointer(
       ignoring: !isLoading,
       child: AnimatedOpacity(
