@@ -137,12 +137,14 @@ class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingOb
                           snapshotBytes,
                           fit: BoxFit.cover,
                           gaplessPlayback: true,
-                          // Bound the decode like every other snapshot site
-                          // (O-47): an unbounded full-screen capture sits in
-                          // the image cache at full ARGB size. Logical width
-                          // trades sharpness for ~1/9 the memory; the image is
-                          // only visible during the sheet's fade.
-                          cacheWidth: MediaQuery.of(context).size.width.round(),
+                          // Deliberately NOT cacheWidth-bounded, unlike the
+                          // grid/hibernated sites (O-47). Those cap one
+                          // persistent thumbnail *per tab*; this is a single
+                          // transient full-bleed image, cleared when the sheet
+                          // closes, against a 100 MB default image cache. Any
+                          // bound here is a visible upscale on a full-screen
+                          // transition and buys memory we are not short of.
+                          // See O-85.
                         ),
                       ),
                   ],
