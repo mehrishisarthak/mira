@@ -63,7 +63,23 @@ Widget buildDesktopToolbar({
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          child: Row(
+          // The native title bar is hidden (TitleBarStyle.hidden), and nothing
+          // ever made this custom one draggable — the window could only be
+          // moved via OS-level Win+drag or a taskbar action, not by grabbing
+          // the toolbar the way every other app's title bar works.
+          //
+          // DragToMoveArea behind the Row, not wrapping it: it uses
+          // HitTestBehavior.translucent, so a real tap/drag that starts on a
+          // button or the address bar is still won by that widget's own
+          // recognizer (a Tap resolves before Pan's slop threshold is
+          // crossed) — only gestures starting on the toolbar's empty space
+          // (padding, the gaps between icons) fall through to it and move the
+          // window. Also gives a free double-click-to-maximize on that same
+          // empty space, matching a normal title bar.
+          child: Stack(
+            children: [
+              const Positioned.fill(child: DragToMoveArea(child: SizedBox.expand())),
+              Row(
             children: [
               _NavButton(
                 icon: Icons.arrow_back,
@@ -123,6 +139,8 @@ Widget buildDesktopToolbar({
               // The native title bar is hidden (TitleBarStyle.hidden in main.dart),
               // so the window has no min/max/close affordance without these.
               _WindowControls(color: contentColor),
+            ],
+              ),
             ],
           ),
         ),

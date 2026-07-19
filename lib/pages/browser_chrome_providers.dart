@@ -102,6 +102,12 @@ final activeTabIdProvider = Provider<String>((ref) {
 
 final desktopFindBarVisibleProvider = StateProvider<bool>((ref) => false);
 
+/// True while the ACTIVE tab's page is in HTML5 Fullscreen (a page's own
+/// `requestFullscreen()`, e.g. a YouTube video's fullscreen button) — not our
+/// zoom controls. Desktop hides the sidebar/toolbar/window-controls and
+/// requests real OS-level fullscreen while this is true; see mainscreen.dart.
+final isDesktopFullscreenProvider = StateProvider<bool>((ref) => false);
+
 /// Screenshot of a specific tab's webview, captured when a Flutter overlay (the
 /// tab sheet) opens over the live page. While set, [BrowserView] paints this
 /// image *over* that tab's live Hybrid-Composition surface, so the overlay

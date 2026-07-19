@@ -11,6 +11,7 @@ enum BrowserPageEventType {
   error,
   downloadRequested,
   updateVisitedHistory,
+  fullscreenChanged,
 }
 
 /// A wrapper class for broadcasting web page events through the [BrowserEngine].
@@ -22,6 +23,7 @@ class BrowserPageEvent {
   final String? errorDescription;
   final DownloadRequest? downloadRequest;
   final dynamic originalEvent;
+  final bool? isFullscreen;
 
   const BrowserPageEvent({
     required this.type,
@@ -31,6 +33,7 @@ class BrowserPageEvent {
     this.errorDescription,
     this.downloadRequest,
     this.originalEvent,
+    this.isFullscreen,
   });
 }
 

@@ -132,6 +132,12 @@ void handleEnginePageEvent(Ref ref, BrowserPageEvent event) {
         _showDownloadStartedNotice(req.filename);
       }
       break;
+    case BrowserPageEventType.fullscreenChanged:
+      if (event.isFullscreen != null) {
+        ref.read(isDesktopFullscreenProvider.notifier).state =
+            event.isFullscreen!;
+      }
+      break;
   }
 }
 

@@ -454,6 +454,23 @@ class InAppWebViewEngine implements BrowserEngine {
       onDownloadStartRequest: (controller, request) {
         handleDownloadRequest(request);
       },
+      // A page's own HTML5 Fullscreen API call (e.g. a YouTube video's
+      // fullscreen button), not our own zoomIn/zoomOut. WebView2 grows to fill
+      // its Flutter parent, but nothing told the app chrome around it to get
+      // out of the way — the sidebar, toolbar, and window controls all kept
+      // rendering over/around the "fullscreen" video.
+      onEnterFullscreen: (controller) {
+        _eventController.add(const BrowserPageEvent(
+          type: BrowserPageEventType.fullscreenChanged,
+          isFullscreen: true,
+        ));
+      },
+      onExitFullscreen: (controller) {
+        _eventController.add(const BrowserPageEvent(
+          type: BrowserPageEventType.fullscreenChanged,
+          isFullscreen: false,
+        ));
+      },
     );
 
     if (!_isDesktop) return webView;

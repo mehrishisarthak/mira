@@ -374,6 +374,17 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
 
   @override
   Widget build(BuildContext context) {
+    // A page's own HTML5 fullscreen (e.g. a YouTube video) hides our chrome
+    // (see the desktop Stack below) but that alone still leaves the OS
+    // window's own borders/taskbar visible. Mirror what an actual browser
+    // does: also ask the OS for real fullscreen. Side effect belongs in
+    // listen, not the build return value itself.
+    ref.listen<bool>(isDesktopFullscreenProvider, (previous, next) {
+      if (previous != next) {
+        unawaited(desktopSetFullScreen(next));
+      }
+    });
+
     ref.listen<BrowserTab?>(currentActiveTabProvider, (previous, next) {
       if (previous != null && next != null && previous.id != next.id) {
          // Resume the tab being switched TO, first and synchronously.
@@ -445,6 +456,9 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
 
     final isDesktop =
         !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
+    final isFullscreen = isDesktop && ref.watch(isDesktopFullscreenProvider);
+    final sidebarExpanded =
+        isDesktop && ref.watch(desktopSidebarExpandedProvider);
 
     ref.listen<BrowserTab?>(currentActiveTabProvider, (previous, next) {
       if (next != null && previous?.id != next.id) {
@@ -496,65 +510,99 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
         // show/hide animation frame; overlapping avoids that entirely.
         resizeToAvoidBottomInset: false,
         body: isDesktop
-            // Sidebar OVERLAYS the content rather than sharing a Row with it.
-            // In a Row, animating the sidebar 52<->240 relaid out the Expanded
-            // region every frame, which resizes the native WebView2 surface
-            // every frame — an expensive reflow for a purely decorative
-            // animation. Reserving the collapsed rail width as permanent
-            // padding keeps the webview's box constant for the whole
-            // expand/collapse, and the expanded panel floats over the page.
             ? Stack(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(left: kCollapsedSidebarWidth),
-                    child: Column(
-                      children: [
-                        buildDesktopToolbar(
-                          context: context,
-                          ref: ref,
-                          bgColor: isGhost ? const Color(0xFF1A1A1A) : appBarColor,
-                          contentColor: contentColor,
-                          accentColor: primaryAccent,
-                          hintColor: hintColor,
-                          activeTab: activeTab,
-                          isGhost: isGhost,
-                          securityIcon: securityIcon,
-                          securityColor: securityColor,
-                          isBookmarked: isBookmarked,
-                          hasWebView: hasWebView,
-                          urlController: _urlController,
-                          urlFocusNode: _urlFocusNode,
-                          onUrlSubmitted: _performSearch,
-                          onFindPressed: _openDesktopFindBar,
-                        ),
-                        Expanded(
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              const BrowserView(),
-                              const _GhostModeFlash(),
-                              if (ref.watch(desktopFindBarVisibleProvider))
-                                const Positioned(
-                                  top: 8,
-                                  right: 12,
-                                  child: SizedBox(
-                                    width: 340,
-                                    child: DesktopFindBar(),
+                  children: [
+                    // Sidebar OVERLAYS the content rather than sharing a Row
+                    // with it. In a Row, animating the sidebar 52<->240
+                    // relaid out this region every frame, which resizes the
+                    // native WebView2 surface every frame — an expensive
+                    // reflow for a purely decorative animation. Reserving the
+                    // collapsed rail width as permanent padding keeps the
+                    // webview's box constant for the whole expand/collapse,
+                    // and the expanded panel floats over the page.
+                    //
+                    // In fullscreen the gutter itself goes to zero: a page's
+                    // own HTML5 fullscreen (a YouTube video, say) should own
+                    // the entire window, not share it with a permanently
+                    // reserved sidebar strip.
+                    Padding(
+                      padding: EdgeInsets.only(
+                          left: isFullscreen ? 0 : kCollapsedSidebarWidth),
+                      child: Column(
+                        children: [
+                          if (!isFullscreen)
+                            buildDesktopToolbar(
+                              context: context,
+                              ref: ref,
+                              bgColor: isGhost
+                                  ? const Color(0xFF1A1A1A)
+                                  : appBarColor,
+                              contentColor: contentColor,
+                              accentColor: primaryAccent,
+                              hintColor: hintColor,
+                              activeTab: activeTab,
+                              isGhost: isGhost,
+                              securityIcon: securityIcon,
+                              securityColor: securityColor,
+                              isBookmarked: isBookmarked,
+                              hasWebView: hasWebView,
+                              urlController: _urlController,
+                              urlFocusNode: _urlFocusNode,
+                              onUrlSubmitted: _performSearch,
+                              onFindPressed: _openDesktopFindBar,
+                            ),
+                          Expanded(
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                const BrowserView(),
+                                const _GhostModeFlash(),
+                                if (!isFullscreen &&
+                                    ref.watch(desktopFindBarVisibleProvider))
+                                  const Positioned(
+                                    top: 8,
+                                    right: 12,
+                                    child: SizedBox(
+                                      width: 340,
+                                      child: DesktopFindBar(),
+                                    ),
                                   ),
-                                ),
-                            ],
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  const Positioned(
-                    left: 0,
-                    top: 0,
-                    bottom: 0,
-                    child: DesktopSidebar(),
-                  ),
-                ],
+
+                    // Outside-click-to-collapse barrier. Sits above the
+                    // content (toolbar/webview) but below the sidebar itself
+                    // in paint order below, so a tap on the sidebar still
+                    // reaches the sidebar (Positioned constrains it to its
+                    // own 240px band — a tap outside that band geometrically
+                    // misses it and falls through to this layer instead).
+                    // Only present while expanded, so it never intercepts
+                    // ordinary clicks once collapsed. The first outside click
+                    // is consumed by the collapse, matching how a flyout
+                    // panel (VS Code's activity bar, a nav drawer) dismisses
+                    // — not also forwarded to whatever was underneath.
+                    if (!isFullscreen && sidebarExpanded)
+                      Positioned.fill(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => ref
+                              .read(desktopSidebarExpandedProvider.notifier)
+                              .state = false,
+                        ),
+                      ),
+
+                    if (!isFullscreen)
+                      const Positioned(
+                        left: 0,
+                        top: 0,
+                        bottom: 0,
+                        child: DesktopSidebar(),
+                      ),
+                  ],
               )
             : SafeArea(
                 top: false,
