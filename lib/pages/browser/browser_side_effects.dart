@@ -29,12 +29,23 @@ final _engineEventsSubscriptionProvider =
     if (event.type == BrowserPageEventType.loadStop || 
         event.type == BrowserPageEventType.loadStart ||
         event.type == BrowserPageEventType.updateVisitedHistory) {
-      final canGoBack = await engine.canGoBack();
+      // Both flags in one hop so the toolbar can render an honest
+      // enabled/disabled state for Forward as well as Back. Awaited together
+      // rather than in sequence — two round-trips either way, but they overlap
+      // instead of stacking (O-83 tracks trimming the trigger set further).
+      final navState = await Future.wait([
+        engine.canGoBack(),
+        engine.canGoForward(),
+      ]);
       final isGhost = ref.read(isGhostModeProvider);
       if (isGhost) {
-        ref.read(ghostTabsProvider.notifier).updateActiveTabCanGoBack(canGoBack);
+        ref
+            .read(ghostTabsProvider.notifier)
+            .updateActiveTabNavState(navState[0], navState[1]);
       } else {
-        ref.read(tabsProvider.notifier).updateActiveTabCanGoBack(canGoBack);
+        ref
+            .read(tabsProvider.notifier)
+            .updateActiveTabNavState(navState[0], navState[1]);
       }
     }
   });

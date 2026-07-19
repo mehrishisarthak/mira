@@ -65,19 +65,31 @@ Widget buildDesktopToolbar({
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           child: Row(
             children: [
-              IconButton(
-                icon: Icon(Icons.arrow_back, color: contentColor, size: 20),
+              _NavButton(
+                icon: Icons.arrow_back,
                 tooltip: 'Back',
-                onPressed: hasWebView
-                    ? () => ref.read(browserChromeProvider).engine?.goBack()
-                    : null,
+                contentColor: contentColor,
+                // Gated on real history, not just "a webview exists", so the
+                // greyed state actually means "nowhere to go".
+                enabled: hasWebView && activeTab.canGoBack,
+                onPressed: () =>
+                    ref.read(browserChromeProvider).engine?.goBack(),
               ),
-              IconButton(
-                icon: Icon(Icons.arrow_forward, color: contentColor, size: 20),
+              _NavButton(
+                icon: Icons.arrow_forward,
                 tooltip: 'Forward',
-                onPressed: hasWebView
-                    ? () => ref.read(browserChromeProvider).engine?.goForward()
-                    : null,
+                contentColor: contentColor,
+                enabled: hasWebView && activeTab.canGoForward,
+                onPressed: () =>
+                    ref.read(browserChromeProvider).engine?.goForward(),
+              ),
+              _NavButton(
+                icon: Icons.refresh,
+                tooltip: 'Reload',
+                contentColor: contentColor,
+                enabled: hasWebView,
+                onPressed: () =>
+                    ref.read(browserChromeProvider).engine?.reload(),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -422,6 +434,71 @@ class _DesktopAddressBarState extends State<_DesktopAddressBar> {
                       widget.activeTab.url, widget.activeTab.title),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// Toolbar icon button with a real disabled state and a pointer hover cue.
+///
+/// Material's IconButton does highlight on hover, but at this icon size against
+/// the dark chrome the default overlay is close to invisible — the toolbar read
+/// as inert. This draws an explicit hover pill and dims the icon when disabled,
+/// so "greyed" reliably means "no history in that direction".
+class _NavButton extends StatefulWidget {
+  const _NavButton({
+    required this.icon,
+    required this.tooltip,
+    required this.contentColor,
+    required this.enabled,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final Color contentColor;
+  final bool enabled;
+  final VoidCallback onPressed;
+
+  @override
+  State<_NavButton> createState() => _NavButtonState();
+}
+
+class _NavButtonState extends State<_NavButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = widget.enabled;
+    return Tooltip(
+      message: widget.tooltip,
+      waitDuration: const Duration(milliseconds: 500),
+      child: MouseRegion(
+        cursor: active ? SystemMouseCursors.click : SystemMouseCursors.basic,
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: GestureDetector(
+          onTap: active ? widget.onPressed : null,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            width: 34,
+            height: 34,
+            margin: const EdgeInsets.symmetric(horizontal: 2),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: (_hovered && active)
+                  ? widget.contentColor.withValues(alpha: 0.10)
+                  : Colors.transparent,
+            ),
+            child: Icon(
+              widget.icon,
+              size: 20,
+              color: active
+                  ? widget.contentColor
+                  : widget.contentColor.withValues(alpha: 0.28),
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -12,6 +12,7 @@ class BrowserTab {
   final String title;
   final bool isLoading;
   final bool canGoBack;
+  final bool canGoForward;
   final String? webError;
 
   BrowserTab({
@@ -20,6 +21,7 @@ class BrowserTab {
     this.title = 'New Tab',
     this.isLoading = false,
     this.canGoBack = false,
+    this.canGoForward = false,
     this.webError,
   }) : id = id ?? const Uuid().v4();
 
@@ -29,6 +31,7 @@ class BrowserTab {
     String? title,
     bool? isLoading,
     bool? canGoBack,
+    bool? canGoForward,
     Object? webError = const Sentinel(),
   }) {
     return BrowserTab(
@@ -37,6 +40,7 @@ class BrowserTab {
       title: title ?? this.title,
       isLoading: isLoading ?? this.isLoading,
       canGoBack: canGoBack ?? this.canGoBack,
+      canGoForward: canGoForward ?? this.canGoForward,
       webError: webError is Sentinel ? this.webError : webError as String?,
     );
   }
@@ -50,10 +54,11 @@ class BrowserTab {
           other.title == title &&
           other.isLoading == isLoading &&
           other.canGoBack == canGoBack &&
+          other.canGoForward == canGoForward &&
           other.webError == webError);
 
   @override
-  int get hashCode => Object.hash(id, url, title, isLoading, canGoBack, webError);
+  int get hashCode => Object.hash(id, url, title, isLoading, canGoBack, canGoForward, webError);
 
   Map<String, dynamic> toMap() {
     return {

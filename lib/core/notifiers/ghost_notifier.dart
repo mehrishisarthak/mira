@@ -98,6 +98,19 @@ class GhostTabsNotifier extends StateNotifier<NormalizedTabsState> {
     if (activeTab.canGoBack == canGoBack) return;
     _updateActiveTab((tab) => tab.copyWith(canGoBack: canGoBack));
   }
+
+  /// Both nav flags in one write — see TabsNotifier.updateActiveTabNavState.
+  void updateActiveTabNavState(bool canGoBack, bool canGoForward) {
+    if (state.tabOrder.isEmpty) return;
+    final activeTab = state.tabs[state.tabOrder[state.activeIndex]]!;
+    if (activeTab.canGoBack == canGoBack &&
+        activeTab.canGoForward == canGoForward) {
+      return;
+    }
+    _updateActiveTab(
+      (tab) => tab.copyWith(canGoBack: canGoBack, canGoForward: canGoForward),
+    );
+  }
   
   void updateCanGoBack(String tabId, bool canGoBack) {
     if (!state.tabs.containsKey(tabId)) return;
