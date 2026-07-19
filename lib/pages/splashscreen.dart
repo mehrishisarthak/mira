@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 
 import 'package:qyx/core/entities/theme_entity.dart';
 import 'package:qyx/core/services/update_service.dart';
+import 'package:qyx/core/services/browser_engine_blueprints.dart';
 import 'package:qyx/core/services/database_providers.dart';
 import 'package:qyx/core/services/snapshot_service.dart';
 import 'package:qyx/shell/browser/in_app_webview_engine.dart';
@@ -18,7 +19,21 @@ class SplashScreen extends StatefulWidget {
   final Widget nextScreen;
   final http.Client? httpClient;
 
-  const SplashScreen({super.key, required this.nextScreen, this.httpClient});
+  /// Builds the engine pre-warmed during the splash animation (O-48).
+  ///
+  /// Injectable for the same reason [httpClient] is: the default constructs a
+  /// real [InAppWebViewEngine], which throws under `flutter_test` because no
+  /// `InAppWebViewPlatform` implementation is registered — that took the whole
+  /// splash build down with it (O-88). Tests pass `() => null`, which the
+  /// null-guard in [build] already handles.
+  final BrowserEngine? Function()? preWarmEngineFactory;
+
+  const SplashScreen({
+    super.key,
+    required this.nextScreen,
+    this.httpClient,
+    this.preWarmEngineFactory,
+  });
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();
@@ -56,7 +71,9 @@ class _SplashScreenState extends State<SplashScreen>
     unawaited(SnapshotService.clearStaleSnapshots());
     
     // Pre-warm the WebView engine during splash
-    globalPreWarmedEngine = InAppWebViewEngine(isPrivate: false);
+    globalPreWarmedEngine = widget.preWarmEngineFactory != null
+        ? widget.preWarmEngineFactory!()
+        : InAppWebViewEngine(isPrivate: false);
 
     _buildAnimations();
     _runAnimation();

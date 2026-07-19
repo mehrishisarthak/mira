@@ -70,6 +70,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: SplashScreen(
+          preWarmEngineFactory: () => null,
           httpClient: mockClient,
           nextScreen: const Scaffold(
             body: Center(child: Text('Startup Target Screen')),
@@ -100,6 +101,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: SplashScreen(
+          preWarmEngineFactory: () => null,
           httpClient: mockClient,
           nextScreen: const Scaffold(
             body: Center(child: Text('Startup Target Screen')),
@@ -127,6 +129,7 @@ void main() {
         child: MyApp(
           httpClient: mockClient,
           home: SplashScreen(
+          preWarmEngineFactory: () => null,
             httpClient: mockClient,
             nextScreen:
                 const Scaffold(body: Center(child: Text('Target Screen'))),
