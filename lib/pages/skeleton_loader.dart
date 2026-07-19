@@ -20,7 +20,12 @@ class _WebSkeletonLoaderState extends ConsumerState<WebSkeletonLoader> with Sing
       vsync: this,
       duration: const Duration(milliseconds: 1000),
     )..repeat(reverse: true);
-    _animation = Tween<double>(begin: 0.3, end: 0.6).animate(_controller);
+    // Never fades below 0.55. The old 0.3–0.6 range dropped the placeholders
+    // close to the ground colour at the bottom of every cycle, which reads as
+    // the screen flickering rather than as a shimmer.
+    _animation = Tween<double>(begin: 0.55, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
   }
 
   @override
@@ -32,9 +37,17 @@ class _WebSkeletonLoaderState extends ConsumerState<WebSkeletonLoader> with Sing
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
-    final baseColor = theme.mode == ThemeMode.light 
-        ? Colors.grey[300]! 
-        : const Color(0xFF2C2C2C); 
+    // Placeholder fill, chosen for contrast against the ground it sits on.
+    //
+    // Dark was #2C2C2C against a #282828 (kMiraMatteBlack) background — a
+    // 4/255 delta, i.e. invisible, and after the shimmer's opacity it was
+    // closer still. #3D3D3D clears both the ground and the #323232 elevated
+    // surface, so the placeholders actually read as blocks.
+    //
+    // Light (#E0E0E0 on white) was already fine and is unchanged.
+    final baseColor = theme.mode == ThemeMode.light
+        ? Colors.grey[300]!
+        : const Color(0xFF3D3D3D);
 
     // FIX: SizedBox.expand forces the container to fill the entire Stack/Screen
     return SizedBox.expand(
