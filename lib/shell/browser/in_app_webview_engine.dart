@@ -8,6 +8,7 @@ import 'package:qyx/core/config/desktop_user_agent.dart';
 import 'package:qyx/core/app_globals.dart';
 import 'package:flutter/gestures.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:qyx/shell/browser/desktop_pointer_bridge.dart';
 
 /// The concrete implementation of [BrowserEngine] using the flutter_inappwebview plugin.
 class InAppWebViewEngine implements BrowserEngine {
@@ -292,6 +293,9 @@ class InAppWebViewEngine implements BrowserEngine {
     }
   }
 
+  static final bool _isDesktop =
+      !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
+
   @override
   Widget buildWidget({required String tabId, String? initialUrl}) {
     // Prevent double-load: if the pending URL matches what initialUrlRequest will load,
@@ -301,7 +305,7 @@ class InAppWebViewEngine implements BrowserEngine {
       _pendingHeaders = null;
     }
 
-    return InAppWebView(
+    final webView = InAppWebView(
       key: _webViewKey,
       initialUrlRequest: (initialUrl != null && initialUrl.isNotEmpty)
           ? URLRequest(url: WebUri(initialUrl))
@@ -347,14 +351,20 @@ class InAppWebViewEngine implements BrowserEngine {
         // custom app schemes (market://, whatsapp://, etc.)
         return NavigationActionPolicy.CANCEL;
       },
-      gestureRecognizers: <Factory<OneSequenceGestureRecognizer>>{
-        Factory<VerticalDragGestureRecognizer>(
-          () => VerticalDragGestureRecognizer(),
-        ),
-        Factory<HorizontalDragGestureRecognizer>(
-          () => HorizontalDragGestureRecognizer(),
-        ),
-      },
+      // Mobile only (O-61): these exist to let the native view win touch
+      // drags against Flutter's gesture arena. Desktop input is pointer /
+      // pan-zoom, not touch drags, so claiming the arena there only competes
+      // with the pointer stream DesktopPointerBridge needs.
+      gestureRecognizers: _isDesktop
+          ? const <Factory<OneSequenceGestureRecognizer>>{}
+          : <Factory<OneSequenceGestureRecognizer>>{
+              Factory<VerticalDragGestureRecognizer>(
+                () => VerticalDragGestureRecognizer(),
+              ),
+              Factory<HorizontalDragGestureRecognizer>(
+                () => HorizontalDragGestureRecognizer(),
+              ),
+            },
       onWebViewCreated: (controller) {
         setController(controller);
       },
@@ -427,6 +437,18 @@ class InAppWebViewEngine implements BrowserEngine {
       onDownloadStartRequest: (controller, request) {
         handleDownloadRequest(request);
       },
+    );
+
+    if (!_isDesktop) return webView;
+
+    // Desktop trackpads emit PointerPanZoom events, which WebView2 via this
+    // plugin ignores entirely — so a trackpad does nothing while a mouse wheel
+    // works. Upstream closed that as not-planned, so translate here (O-38).
+    return DesktopPointerBridge(
+      runJs: (source) async {
+        await _controller?.evaluateJavascript(source: source);
+      },
+      child: webView,
     );
   }
 
