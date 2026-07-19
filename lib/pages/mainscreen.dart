@@ -10,6 +10,7 @@ import 'package:qyx/core/notifiers/theme_notifier.dart';
 import 'package:qyx/core/notifiers/ghost_notifier.dart';
 import 'package:qyx/core/notifiers/search_notifier.dart';
 import 'package:qyx/core/notifiers/security_notifier.dart';
+import 'package:qyx/core/notifiers/hibernation_notifier.dart';
 import 'package:qyx/core/notifiers/tab_notifier.dart';
 import 'package:qyx/core/entities/tab_entity.dart';
 import 'package:qyx/core/entities/theme_entity.dart';
@@ -363,6 +364,21 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
   Widget build(BuildContext context) {
     ref.listen<BrowserTab?>(currentActiveTabProvider, (previous, next) {
       if (previous != null && next != null && previous.id != next.id) {
+         // Resume the tab being switched TO, first and synchronously.
+         //
+         // The pause below had no paired resume anywhere: the only other
+         // resumeRendering() sites are URL-bar blur and tab-sheet close. So a
+         // tab paused on switch-away stayed paused forever and rendered blank
+         // when you came back. On mobile the tab-sheet close hid it; on
+         // desktop you switch from the sidebar, so nothing ever resumed it.
+         //
+         // Guarded on the awake set: a hibernated tab has no live engine to
+         // resume and renders a placeholder instead, and reading the provider
+         // for it would construct an engine we deliberately evicted.
+         if (ref.read(hibernationProvider).contains(next.id)) {
+           unawaited(ref.read(browserEngineProvider(next.id)).resumeRendering());
+         }
+
          final engine = ref.read(browserEngineProvider(previous.id));
          unawaited(() async {
             final bytes = await engine.takeSnapshot();
