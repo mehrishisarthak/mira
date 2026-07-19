@@ -68,6 +68,14 @@ class MiraMenuPage extends ConsumerWidget {
             defaultTargetPlatform == TargetPlatform.linux ||
             defaultTargetPlatform == TargetPlatform.macOS);
 
+    // Mirrors the guard in InAppWebViewEngine._buildContentBlockers: WebKit
+    // ContentBlockers exist on Android/iOS/macOS only. Note macOS IS supported,
+    // so this is deliberately not `!isDesktop`.
+    final adBlockSupported = !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS ||
+            defaultTargetPlatform == TargetPlatform.macOS);
+
     final isLight = theme.mode == ThemeMode.light;
     final appTextColor = isLight ? kMiraInkPrimary : Colors.white;
     final primaryAccent = isGhost ? Colors.redAccent : theme.primaryColor;
@@ -84,7 +92,7 @@ class MiraMenuPage extends ConsumerWidget {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'M I R A',
+          'Q Y X',
           style: jetBrainsMono(
             color: primaryAccent,
             fontSize: 18,
@@ -297,13 +305,11 @@ class MiraMenuPage extends ConsumerWidget {
 
             ListTile(
               title: Text(
-                isDesktop ? "New private window" : "New Ghost Tab",
+                "New Ghost Tab",
                 style: TextStyle(color: appTextColor),
               ),
               subtitle: Text(
-                isDesktop
-                    ? "Opens a separate private window (like Chrome)"
-                    : "Start a private session",
+                "Start a private session",
                 style: TextStyle(
                     color: appTextColor.withAlpha(128), fontSize: 12),
               ),
@@ -447,22 +453,36 @@ class MiraMenuPage extends ConsumerWidget {
                   ref.read(securityProvider.notifier).toggleCamera(val),
             ),
 
+            // Ad blocking rides on WebKit-style ContentBlockers, which the
+            // plugin only implements on Android/iOS/macOS — on Windows/Linux
+            // _buildContentBlockers() returns an empty list, so the toggle
+            // blocks precisely nothing. Show it disabled and say so rather than
+            // reporting "Active" while doing nothing (O-89).
             SwitchListTile(
               title: Text("Ad & Tracker Block",
-                  style: TextStyle(color: appTextColor)),
+                  style: TextStyle(
+                      color: adBlockSupported
+                          ? appTextColor
+                          : appTextColor.withAlpha(97))),
               subtitle: Text(
-                securityState.isAdBlockEnabled ? "Active" : "Off",
+                !adBlockSupported
+                    ? "Not supported on desktop yet"
+                    : securityState.isAdBlockEnabled
+                        ? "Active"
+                        : "Off",
                 style: TextStyle(
                     color: appTextColor.withAlpha(128), fontSize: 12),
               ),
               secondary: Icon(Icons.shield_outlined,
-                  color: securityState.isAdBlockEnabled
+                  color: adBlockSupported && securityState.isAdBlockEnabled
                       ? Colors.greenAccent
                       : appTextColor.withAlpha(128)),
-              value: securityState.isAdBlockEnabled,
+              value: adBlockSupported && securityState.isAdBlockEnabled,
               activeThumbColor: Colors.greenAccent,
-              onChanged: (val) =>
-                  ref.read(securityProvider.notifier).toggleAdBlock(val),
+              onChanged: !adBlockSupported
+                  ? null
+                  : (val) =>
+                      ref.read(securityProvider.notifier).toggleAdBlock(val),
             ),
 
 

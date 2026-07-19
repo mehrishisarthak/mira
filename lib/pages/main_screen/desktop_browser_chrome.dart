@@ -346,11 +346,28 @@ class _DesktopAddressBarState extends State<_DesktopAddressBar> {
             child: showDomain
                 ? GestureDetector(
                     onTap: () {
-                      widget.urlFocusNode.requestFocus();
-                      widget.urlController.selection = TextSelection(
-                        baseOffset: 0,
-                        extentOffset: widget.urlController.text.length,
-                      );
+                      // Mount the TextField BEFORE asking for focus.
+                      //
+                      // While showDomain is true the TextField is not in the
+                      // tree at all, so urlFocusNode has no attachment and
+                      // requestFocus() silently does nothing. _hasFocus then
+                      // never flips, showDomain stays true, and the field can
+                      // never be reached — the bar is permanently uneditable
+                      // once a page has loaded (O-36).
+                      //
+                      // Flipping _hasFocus ourselves builds the TextField this
+                      // frame; the focus request goes in a post-frame callback
+                      // so the node has something to attach to by the time it
+                      // runs.
+                      setState(() => _hasFocus = true);
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (!mounted) return;
+                        widget.urlFocusNode.requestFocus();
+                        widget.urlController.selection = TextSelection(
+                          baseOffset: 0,
+                          extentOffset: widget.urlController.text.length,
+                        );
+                      });
                     },
                     child: Text(
                       _domain,
