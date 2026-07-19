@@ -22,6 +22,7 @@ import 'package:qyx/pages/book_marks_screen.dart';
 import 'package:qyx/pages/downloads_screen.dart';
 import 'package:qyx/pages/browser_sheet.dart';
 
+import 'package:qyx/core/ui/qyx_toast.dart';
 import 'package:qyx/pages/browser_chrome_providers.dart';
 import 'package:qyx/core/notifiers/hibernation_notifier.dart';
 import 'package:qyx/core/services/database_providers.dart';
@@ -197,30 +198,20 @@ class MiraMenuPage extends ConsumerWidget {
               leading: Icon(Icons.link, color: appTextColor.withAlpha(179)),
               title: Text('Copy URL', style: TextStyle(color: appTextColor)),
               onTap: () {
-                final rootNav = Navigator.of(context, rootNavigator: true);
                 final url = ref.read(tabsProvider).safeActiveTab?.url ?? '';
                 if (url.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('No page loaded yet')),
-                  );
+                  showQyxNotice('No page loaded yet');
                   return;
                 }
                 Clipboard.setData(ClipboardData(text: url));
-                if (desktopOverlay) {
-                  Navigator.of(context).pop();
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (rootNav.context.mounted) {
-                      ScaffoldMessenger.of(rootNav.context).showSnackBar(
-                        const SnackBar(
-                            content: Text('URL copied to clipboard')),
-                      );
-                    }
-                  });
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('URL copied to clipboard')),
-                  );
-                }
+                // showQyxNotice drives off rootNavigatorKey/scaffoldMessengerKey
+                // directly, not context, so it doesn't care whether this popup
+                // is still open or has already been popped — the
+                // postFrameCallback-after-pop dance the two branches used to
+                // need (waiting for the popup to close before reaching for the
+                // ROOT scaffold's messenger) is no longer needed.
+                if (desktopOverlay) Navigator.of(context).pop();
+                showQyxNotice('URL copied to clipboard', kind: QyxToastKind.success);
               },
             ),
 
@@ -231,19 +222,14 @@ class MiraMenuPage extends ConsumerWidget {
                   Text('Open Externally', style: TextStyle(color: appTextColor)),
               onTap: () async {
                 final navigator = Navigator.of(context, rootNavigator: true);
-                final messenger = ScaffoldMessenger.of(context);
                 final url = ref.read(tabsProvider).safeActiveTab?.url ?? '';
                 if (url.isEmpty) {
-                  messenger.showSnackBar(
-                    const SnackBar(content: Text('No page loaded yet')),
-                  );
+                  showQyxNotice('No page loaded yet');
                   return;
                 }
                 final uri = Uri.tryParse(url);
                 if (uri == null || !await canLaunchUrl(uri)) {
-                  messenger.showSnackBar(
-                    const SnackBar(content: Text('Could not open this URL')),
-                  );
+                  showQyxNotice('Could not open this URL', kind: QyxToastKind.error);
                   return;
                 }
                 await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -261,14 +247,12 @@ class MiraMenuPage extends ConsumerWidget {
                 final rootNav = Navigator.of(context, rootNavigator: true);
                 final engine = ref.read(activeBrowserEngineProvider);
                 if (engine == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('No page loaded yet')),
-                  );
+                  showQyxNotice('No page loaded yet');
                   return;
                 }
                 final url = ref.read(tabsProvider).safeActiveTab?.url ?? '';
                 final html = await engine.getPageHtml();
-                
+
                 final host =
                     (Uri.tryParse(url)?.host ?? 'page').replaceAll('.', '_');
                 final filename =
@@ -278,20 +262,8 @@ class MiraMenuPage extends ConsumerWidget {
                     .savePage(html, filename);
                 if (!context.mounted) return;
                 if (savedPath != null) {
-                  if (desktopOverlay) {
-                    rootNav.pop();
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (rootNav.context.mounted) {
-                        ScaffoldMessenger.of(rootNav.context).showSnackBar(
-                          SnackBar(content: Text('Saved: $filename')),
-                        );
-                      }
-                    });
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Saved: $filename')),
-                    );
-                  }
+                  if (desktopOverlay) rootNav.pop();
+                  showQyxNotice('Saved: $filename', kind: QyxToastKind.success);
                 }
               },
             ),
@@ -417,11 +389,7 @@ class MiraMenuPage extends ConsumerWidget {
 
                   if (context.mounted) {
                     Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text("System Purged."),
-                          backgroundColor: Colors.redAccent),
-                    );
+                    showQyxNotice('System Purged.', kind: QyxToastKind.error);
                   }
                 }
               },

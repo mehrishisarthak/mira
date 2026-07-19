@@ -17,6 +17,7 @@ import 'package:qyx/core/entities/theme_entity.dart';
 import 'package:qyx/core/providers/adblock_provider.dart';
 import 'package:qyx/core/services/browser_engine_blueprints.dart';
 import 'package:qyx/core/services/database_providers.dart';
+import 'package:qyx/core/ui/qyx_toast.dart';
 import 'package:qyx/pages/browser_chrome_providers.dart';
 import 'package:qyx/pages/browser/browser_view.dart';
 import 'package:qyx/pages/main_screen/desktop_browser_chrome.dart';
@@ -257,7 +258,6 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
       final errorMessage = chrome.webError;
       final activeUrl = ref.read(tabsProvider).safeActiveTab?.url ?? '';
       final isGhost = ref.read(isGhostModeProvider);
-      final appTheme = ref.read(themeProvider);
 
       if (engine != null && await engine.canGoBack()) {
         if (errorMessage != null) {
@@ -285,12 +285,10 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
           _lastExitTime = now;
           if (mounted) {
             _triggerHaptic(MainScreenHapticKind.selection);
-            ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: const Text("Press back again to exit Qyx"),
-                  backgroundColor: isGhost ? Colors.redAccent : appTheme.primaryColor,
-                  duration: const Duration(seconds: 2),
-                )
+            showQyxNotice(
+              "Press back again to exit Qyx",
+              kind: isGhost ? QyxToastKind.error : QyxToastKind.info,
+              duration: const Duration(seconds: 2),
             );
           }
         } else {

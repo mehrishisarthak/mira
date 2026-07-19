@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:qyx/constants/app_fonts.dart';
 
 import 'package:qyx/core/entities/theme_entity.dart';
@@ -69,6 +71,22 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen>
   Future<void> _finish() async {
     HapticFeedback.mediumImpact();
     await ref.read(preferencesServiceProvider).setFirstRun(false);
+
+    // Notifications only, at the one moment the OS allows asking without a
+    // trigger. Camera/location/mic are deliberately NOT asked here: they
+    // exist so a *web page* can request them, Android/iOS both expect that
+    // just-in-time and scoped to the site, and asking upfront for
+    // permissions the app itself never uses is a real Play Store review risk
+    // (R-04) with no offsetting benefit — the grant would sit unused until a
+    // site asked anyway. download_service_mobile.dart already requests this
+    // same permission before showing a download-complete notification;
+    // asking again here is a harmless no-op re-request if the user already
+    // decided (the OS returns the existing status without re-prompting).
+    if (!kIsWeb && (defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS)) {
+      await Permission.notification.request();
+    }
+
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(

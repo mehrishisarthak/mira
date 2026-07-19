@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qyx/core/app_globals.dart';
 import 'package:qyx/core/entities/tab_entity.dart';
 import 'package:qyx/pages/downloads_screen.dart';
+import 'package:qyx/core/ui/qyx_toast.dart';
 
 import 'package:qyx/core/notifiers/ghost_notifier.dart';
 import 'package:qyx/core/notifiers/history_notifier.dart';
@@ -128,7 +129,7 @@ void handleEnginePageEvent(Ref ref, BrowserPageEvent event) {
             debugPrint('MIRA_DOWNLOAD: event handler error -> $e');
           }),
         );
-        _showDownloadStartedSnackBar(req.filename);
+        _showDownloadStartedNotice(req.filename);
       }
       break;
   }
@@ -139,27 +140,19 @@ Map<String, String>? _parseHeaders(String? cookies) {
   return {'Cookie': cookies};
 }
 
-/// Chrome-style "download started" snackbar with a shortcut to the Downloads
-/// screen. Shown from the page-event handler, which has no [BuildContext], so it
-/// drives the UI through the app-global keys.
-void _showDownloadStartedSnackBar(String? filename) {
-  final messenger = scaffoldMessengerKey.currentState;
-  if (messenger == null) return;
+/// Chrome-style "download started" notice with a shortcut to the Downloads
+/// screen. Shown from the page-event handler, which has no [BuildContext], so
+/// it drives the UI through the app-global keys (showQyxNotice needs none).
+void _showDownloadStartedNotice(String? filename) {
   final hasName = filename != null && filename.isNotEmpty;
-  messenger
-    ..clearSnackBars()
-    ..showSnackBar(
-      SnackBar(
-        content: Text(hasName ? 'Downloading $filename' : 'Download started'),
-        duration: const Duration(seconds: 4),
-        action: SnackBarAction(
-          label: 'VIEW',
-          onPressed: () => rootNavigatorKey.currentState?.push(
-            MaterialPageRoute<void>(builder: (_) => const DownloadsPage()),
-          ),
-        ),
-      ),
-    );
+  showQyxNotice(
+    hasName ? 'Downloading $filename' : 'Download started',
+    duration: const Duration(seconds: 4),
+    actionLabel: 'VIEW',
+    onAction: () => rootNavigatorKey.currentState?.push(
+      MaterialPageRoute<void>(builder: (_) => const DownloadsPage()),
+    ),
+  );
 }
 
 /// Called once from [BrowserView.initState] after the first frame.

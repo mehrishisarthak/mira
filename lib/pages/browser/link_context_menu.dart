@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:qyx/core/ui/qyx_toast.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -125,9 +126,7 @@ class BrowserLinkContextMenu {
       switch (action) {
         case 'copy':
           Clipboard.setData(ClipboardData(text: linkUrl));
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Link copied')),
-          );
+          showQyxNotice('Link copied', kind: QyxToastKind.success);
           break;
         case 'newtab':
           if (isGhost) {
@@ -144,13 +143,7 @@ class BrowserLinkContextMenu {
           break;
         case 'download':
           ref.read(downloadsProvider.notifier).startDownload(linkUrl);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Download started'),
-              backgroundColor: Colors.blueAccent,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+          showQyxNotice('Download started');
           break;
       }
     });
@@ -204,9 +197,7 @@ class BrowserLinkContextMenu {
               onTap: () {
                 Navigator.pop(ctx);
                 Clipboard.setData(ClipboardData(text: linkUrl));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Link copied')),
-                );
+                showQyxNotice('Link copied', kind: QyxToastKind.success);
               },
             ),
             ListTile(
@@ -243,13 +234,7 @@ class BrowserLinkContextMenu {
                 Navigator.pop(ctx);
                 HapticFeedback.mediumImpact();
                 ref.read(downloadsProvider.notifier).startDownload(linkUrl);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Download started'),
-                    backgroundColor: Colors.blueAccent,
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
+                showQyxNotice('Download started');
               },
             ),
             const SizedBox(height: 8),

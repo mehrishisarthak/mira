@@ -9,8 +9,8 @@ import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:qyx/core/services/isar_database_repository.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:qyx/core/app_globals.dart';
 import 'package:qyx/core/entities/download_entity.dart';
+import 'package:qyx/core/ui/qyx_toast.dart';
 import 'package:qyx/core/services/download_manager.dart';
 import 'package:qyx/core/services/download_service.dart';
 
@@ -195,9 +195,7 @@ class MobileDownloadService implements DownloadService {
     if (result.type != ResultType.done) {
       debugPrint(
           'MIRA_DOWNLOAD: open failed (${result.type}) -> ${result.message}');
-      scaffoldMessengerKey.currentState?.showSnackBar(
-        SnackBar(content: Text(_openErrorMessage(result.type))),
-      );
+      showQyxNotice(_openErrorMessage(result.type), kind: QyxToastKind.error);
     }
   }
 
@@ -267,11 +265,9 @@ class MobileDownloadService implements DownloadService {
       if (!status.isGranted) {
         if (status.isPermanentlyDenied) {
           // Graceful handling for persistent denial (O-56)
-          scaffoldMessengerKey.currentState?.showSnackBar(
-            const SnackBar(
-              content: Text('Notifications disabled. Downloads will run silently.'),
-              duration: Duration(seconds: 3),
-            ),
+          showQyxNotice(
+            'Notifications disabled. Downloads will run silently.',
+            duration: const Duration(seconds: 3),
           );
         }
         debugPrint('MIRA_DOWNLOAD: notification permission not granted — '
