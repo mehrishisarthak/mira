@@ -567,33 +567,39 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
                                       child: DesktopFindBar(),
                                     ),
                                   ),
+                                // Outside-click-to-collapse barrier. Scoped to
+                                // this content Stack (not the outer one) so it
+                                // never covers the toolbar — address bar, nav
+                                // buttons, window min/max/close stay clickable
+                                // while the sidebar is expanded. Sits above the
+                                // webview but below the sidebar itself in paint
+                                // order below, so a tap on the sidebar still
+                                // reaches the sidebar (Positioned constrains it
+                                // to its own 240px band — a tap outside that
+                                // band geometrically misses it and falls
+                                // through to this layer instead). Only present
+                                // while expanded, so it never intercepts
+                                // ordinary clicks once collapsed. The first
+                                // outside click is consumed by the collapse,
+                                // matching how a flyout panel (VS Code's
+                                // activity bar, a nav drawer) dismisses — not
+                                // also forwarded to whatever was underneath.
+                                if (!isFullscreen && sidebarExpanded)
+                                  Positioned.fill(
+                                    child: GestureDetector(
+                                      behavior: HitTestBehavior.opaque,
+                                      onTap: () => ref
+                                          .read(desktopSidebarExpandedProvider
+                                              .notifier)
+                                          .state = false,
+                                    ),
+                                  ),
                               ],
                             ),
                           ),
                         ],
                       ),
                     ),
-
-                    // Outside-click-to-collapse barrier. Sits above the
-                    // content (toolbar/webview) but below the sidebar itself
-                    // in paint order below, so a tap on the sidebar still
-                    // reaches the sidebar (Positioned constrains it to its
-                    // own 240px band — a tap outside that band geometrically
-                    // misses it and falls through to this layer instead).
-                    // Only present while expanded, so it never intercepts
-                    // ordinary clicks once collapsed. The first outside click
-                    // is consumed by the collapse, matching how a flyout
-                    // panel (VS Code's activity bar, a nav drawer) dismisses
-                    // — not also forwarded to whatever was underneath.
-                    if (!isFullscreen && sidebarExpanded)
-                      Positioned.fill(
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: () => ref
-                              .read(desktopSidebarExpandedProvider.notifier)
-                              .state = false,
-                        ),
-                      ),
 
                     if (!isFullscreen)
                       const Positioned(

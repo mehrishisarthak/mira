@@ -460,12 +460,14 @@ class InAppWebViewEngine implements BrowserEngine {
       // out of the way — the sidebar, toolbar, and window controls all kept
       // rendering over/around the "fullscreen" video.
       onEnterFullscreen: (controller) {
+        if (!_isDesktop) return;
         _eventController.add(const BrowserPageEvent(
           type: BrowserPageEventType.fullscreenChanged,
           isFullscreen: true,
         ));
       },
       onExitFullscreen: (controller) {
+        if (!_isDesktop) return;
         _eventController.add(const BrowserPageEvent(
           type: BrowserPageEventType.fullscreenChanged,
           isFullscreen: false,

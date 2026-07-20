@@ -18,227 +18,73 @@ Most "Incognito" modes are fake. They stop saving history to your device but sti
 
 **The Nuke Button.** One tap to incinerate everything. Cookies, Local Storage, Session Storage, HTTP Cache, Form Data, all active WebView controllers — gone.
 
----
-
-## Screenshots
-
-### A Tactical Experience
-
-| **Welcome Screen** | **MIRA Menu** |
-| :---: | :---: |
-| <img src="assets/screenshots/2.png" width="200" alt="MIRA Welcome Screen"> | <img src="assets/screenshots/4.png" width="200" alt="MIRA Menu"> |
-
-### Ghost Protocol: True Privacy
-
-| **Ghost Landing Page** | **Ghost Active State** |
-| :---: | :---: |
-| <img src="assets/screenshots/6.png" width="200" alt="Ghost Mode Landing"> | <img src="assets/screenshots/8.png" width="200" alt="Ghost Mode Active"> |
-
-### The Power of Nuke
-
-| **Nuke Confirmation** | **Secure Loading** |
-| :---: | :---: |
-| <img src="assets/screenshots/7.png" width="200" alt="Nuke Everything Confirmation"> | <img src="assets/screenshots/1.png" width="200" alt="MIRA Loading Screen"> |
-
-### Tab Management & Speed Dial
-
-| **Split-State Tab Manager** | **Tactical Speed Dial** |
-| :---: | :---: |
-| <img src="assets/screenshots/5.png" width="200" alt="MIRA Tab Manager"> | <img src="assets/screenshots/3.png" width="200" alt="MIRA Speed Dial"> |
+**Underwave Design.** A premium, hardware-accelerated aesthetic utilizing glassmorphism, radial gradients, and fluid spring physics. 
 
 ---
 
-## Current State — v0.8 Stable (In Progress)
+## Technical Architecture
 
-MIRA is in active development toward its first stable release. The core browser engine is complete and battle-tested. All Priority 1 crash bugs are closed. App Store submission blockers are being resolved now.
+MIRA is built to overcome the traditional performance limits of cross-platform browsers. 
+
+* **State Normalization:** Tab state is managed via $O(1)$ `Map` structures in Riverpod, completely eliminating $O(N)$ rebuild loops.
+* **Snapshot-Swapping:** To bypass the heavy "Hybrid Composition" tax of Flutter rendering over native WebViews, MIRA captures hardware snapshots of web pages before opening UI overlays. The heavy native view is paused and offstaged, replaced by a 120fps-capable `Image.memory` layer.
+* **Dual-Mode Persistence:** Normal tab thumbnails are flushed to disk (Isar) to save RAM. Ghost tab thumbnails are held strictly in ephemeral RAM and vanish instantly.
+* **Federated Desktop Support:** Desktop builds (Windows, macOS) wrap native OS webviews (`WebView2`, `WKWebView`). Plans are actively in motion to fork the Windows platform channel to achieve true focus and gesture parity with mobile.
+
+---
+
+## Current State — v0.8 Stable (Release Candidate)
+
+MIRA's core engine, state management, and memory pooling are complete and battle-tested. The codebase currently boasts a zero-error `flutter analyze` CI pipeline. Current efforts are focused entirely on clearing Google Play Store submission gates.
 
 ### What Works Today
 
-- Multi-tab browsing with LRU memory management (max 3 live WebViews, hibernation for the rest)
-- Ghost Protocol with fully isolated tab session — no history, cookies, or cache
-- Speed dial, bookmarks, and browsing history
-- Ad blocking at network layer and content layer
-- Location, camera, and microphone blocking (default on)
-- Proxy support — Android native PROXY_OVERRIDE, iOS local gateway
-- Proxy lifecycle tied to app foreground/background state
-- Downloads on Android, iOS, and desktop with real-time progress
-- Nuke Everything — deep system purge in one tap
-- 5 color themes with Light, Dark, and Auto mode
-- Desktop mode with custom user agent
-- Custom error screens with self-healing connection recovery
-- Full platform support: Android, iOS, Windows, macOS, Linux
+- Multi-tab browsing with dynamic Hybrid Caching and LRU memory management.
+- Ghost Protocol with fully isolated tab sessions — no history, cookies, or cache leaks.
+- "Underwave" glassmorphic UI with responsive desktop/mobile shells.
+- Global Security Settings: Camera, Location, and Microphone blocking propagates instantly across all active engines.
+- Downloads on Android, iOS, and desktop with real-time progress.
+- Nuke Everything — deep system purge in one tap, covered by strict unit tests.
+- 5 color themes with Light, Dark, and Auto mode.
+- Full platform support: Android, iOS, Windows, macOS.
 
-### Recently Fixed
+### Recent Architectural Victories
 
-| ID | Fix |
-|----|-----|
-| C01 | Stale WebView controller after LRU tab eviction |
-| C02 | iOS proxy server not shutting down on app background |
-| C03 | flutter_downloader callback firing on dead isolate |
-| C04 | WebView2 controller accessed before ready on Windows |
-| C05 | Unhelpful error on preferences service failure |
-| C06 | Missing error boundary on notifier exceptions |
-| A01 | iOS PrivacyInfo and usage descriptions |
-| A02 | Android manifest permissions and Data Safety |
+- **Zero-Rebuild UI:** Scoped Riverpod `.select()` usage prevents the Flutter UI from reacting to the hundreds of micro-updates emitted by the native webview bridge during page loads.
+- **Unified Tab Sheet:** Migrated from offstage webviews to a `SliverGrid` of raw `Uint8List` snapshots, crushing layout overhead.
+- **CI/CD Integration:** Automated GitHub Actions enforcing formatting, static analysis, and unit testing (`ghost_mode_isolation_test`, `nuke_data_test`).
 
 ---
 
 ## Feature Roadmap
 
-### v0.8 Stable
-> Gate: All crashes fixed + App Store submissions unblocked
+### 🚀 Immediate Priorities (Play Store Release Gates)
+- [ ] Migrate from debug keystore to production signing.
+- [ ] Bump `targetSdk` to 35.
+- [ ] Complete Permissions Declaration for `CAMERA`/`LOCATION`.
+- [ ] Publish Privacy Policy and Data Safety forms.
+- [ ] Generate Store Listing assets and content rating.
 
-- [x] All Priority 1 crashes closed
-- [x] iOS PrivacyInfo and usage descriptions
-- [x] Android manifest permissions and Data Safety
-- [ ] macOS sandbox entitlements
-- [ ] Force upgrade mechanism
-- [ ] Certificate pinning on MIRA endpoints
-- [ ] Mixed content policy enforcement
-- [ ] Ad-block script tamper validation
-- [ ] Safe Browsing integration
-- [ ] Ad-block rules moved out of binary
+### F-Series Features (The Next Evolution)
+- [ ] **F-01:** Address-bar autocomplete (history/bookmarks dropdown).
+- [ ] **F-02:** Password manager and credential autofill via secure storage.
+- [ ] **F-03:** Mobile find-in-page integration.
+- [ ] **F-04:** Cross-device privacy-preserving sync.
+- [ ] **F-05:** Reader Mode (declutter and readability extraction).
 
----
-
-### v0.9 Private Beta
-> Gate: Privacy foundations + stable data layer
-
-- [ ] Tracker blocking at request level
-- [ ] Remote updatable filter lists (no app update required)
-- [ ] HTTPS-only mode with interstitial warning
-- [ ] DNS over HTTPS
-- [ ] Third-party cookies blocked by default
-- [ ] Clear on exit for normal mode
-- [ ] Verified zero telemetry and zero outbound calls
-- [ ] Schema versioning on local storage (safe migrations)
-- [ ] Migrate to Isar or Drift structured database
-- [ ] Desktop download progress persisted across restarts
-- [ ] History with full timestamps and relative time display
-
----
-
-### v1.0 Public Launch
-> Gate: Competes directly with Brave on privacy + desktop UX complete
-
-**Privacy Tier 2**
-- [ ] Canvas fingerprint blocking
-- [ ] WebGL fingerprint blocking
-- [ ] User agent spoofing (per-site or global)
-- [ ] Timezone and locale normalisation (report UTC regardless of device)
-- [ ] First-party isolation per domain
-- [ ] Referrer policy enforcement (no cross-origin leakage)
-- [ ] Link decoration stripping (UTM params, fbclid, gclid auto-removed)
-- [ ] Permission memory per site
-- [ ] Privacy-preserving Safe Browsing (local hash check, no URL sent to Google)
-
-**Desktop UX**
-- [ ] Keyboard shortcuts (Cmd/Ctrl+T, W, R, L, arrow navigation)
-- [ ] Window title updates with current page title
-- [ ] Right-click custom context menu
-- [ ] Configurable LRU tab limit per platform
-- [ ] Tab drag to reorder + middle click to close
-- [ ] Download stream cancellation on window close
-
----
-
-### v1.5 Privacy Browser
-> Gate: Mobile polish + privacy reporting
-
-**Mobile Bug Fixes**
-- [ ] Android storage permission re-request after denial
-- [ ] Ghost tab controller recovery after hot restart
-- [ ] iOS back gesture conflict resolution with WebView swipe
-- [ ] Scroll position restoration after LRU eviction
-- [ ] Ad-block CSS injection limited to main frame only
-- [ ] Download progress preserved when navigating away
-
-**Privacy Tier 3**
-- [ ] Per-site privacy report (trackers blocked, cookies blocked, requests made)
-- [ ] Filter list tamper detection (hash verification)
-- [ ] On-device exportable crash logs (never uploaded automatically)
-- [ ] Open source filter rules published on GitHub with versioning
-- [ ] App Store listing explicitly states no cloud sync
-
----
-
-### v2.0 Power User
-> Gate: Full browser feature parity + advanced privacy controls
-
-**Browser Fundamentals**
-- [ ] Find in page with match count and navigation
-- [ ] Print support via system dialog
-- [ ] Share sheet integration (native mobile share)
-- [ ] Reading mode (strip page to article content)
-- [ ] Zoom persistence per site
-- [ ] Per-domain cookie and site data management
-- [ ] User-configurable speed dial
-- [ ] WebView dark mode toggle per site
-
-**Privacy Tier 4**
-- [ ] First-class proxy/VPN integration (SOCKS5 and HTTP per profile)
-- [ ] Custom DoH server UI
-- [ ] Script blocking per site (whitelist/blacklist JavaScript per domain)
-- [ ] Custom filter list import (URL or file upload)
-- [ ] Tab isolation per tab (separate WebView context, no shared storage)
-- [ ] Media device enumeration blocking
-
----
-
-### v3.0 Activist Grade
-> Gate: Nothing currently on the market competes here
-
-**Observability & Accessibility**
-- [ ] On-device crash reporting (exportable, never auto-uploaded)
-- [ ] Full semantic labels on all UI elements (VoiceOver + TalkBack)
-
-**Privacy Tier 5**
-- [ ] Panic button (one tap wipes everything, returns to home screen)
-- [ ] App lock with biometric authentication (Face ID, fingerprint)
-- [ ] Screen capture prevention
-- [ ] Network request log (local only, per-session, exportable as JSON)
-- [ ] Steganographic icon option (MIRA can appear as a different app)
-- [ ] Reproducible builds (verify binary matches source code)
-
----
-
-## Competitive Position
-
-| Version | Competes With |
-|---------|---------------|
-| v0.8 | Stock Android/iOS browser |
-| v0.9 | Firefox Focus |
-| v1.0 | Brave Browser |
-| v1.5 | DuckDuckGo Browser |
-| v2.0 | Tor Browser (on usability) |
-| v3.0 | Nothing currently on the market |
+### Desktop Parity
+- [ ] Fork `flutter_inappwebview_windows` to fix `WebView2` focus trapping, back/forward mouse buttons, and trackpad scrolling without rebuilding an engine from scratch.
 
 ---
 
 ## What MIRA Will Never Have
 
-- Cloud sync of any kind
-- Analytics or telemetry
-- Advertising
-- Account or login requirement
-- Data sold or shared with third parties
-- Remote kill switch on features
-
----
-
-## Technical Stack
-
-| Layer | Technology |
-|-------|-----------|
-| Framework | Flutter (Dart) |
-| WebView Engine | flutter_inappwebview |
-| State Management | Riverpod (Core/Shell dual-state architecture) |
-| Local Storage | SharedPreferences → Isar/Drift (v0.9) |
-| Downloads (Mobile) | flutter_downloader |
-| Downloads (Desktop) | Native HttpClient streaming |
-| iOS Proxy Gateway | shelf + shelf_proxy |
-| Android Proxy | WebViewFeature.PROXY_OVERRIDE |
-| Ad Blocking | Content blockers + domain blockers + CSS injection |
+- Cloud sync without end-to-end encryption.
+- Analytics or telemetry.
+- Advertising.
+- Account or login requirement.
+- Data sold or shared with third parties.
+- Remote kill switch on features.
 
 ---
 
@@ -259,16 +105,10 @@ flutter pub get
 flutter run
 ```
 
-**Run on iOS:**
-```bash
-flutter run -d iPhone
-```
-
 **Run on Desktop:**
 ```bash
 flutter run -d windows
 flutter run -d macos
-flutter run -d linux
 ```
 
 ---
@@ -282,7 +122,7 @@ MIRA is open source. PRs are welcome for:
 - Performance optimizations
 - Platform-specific bug fixes
 
-Please read the architecture notes in the codebase before contributing. The Core/Shell pattern is intentional — platform implementations belong in `lib/shell/`, business logic belongs in `lib/core/`.
+Please read the architecture notes in the codebase before contributing. The codebase heavily relies on strictly scoped Riverpod providers.
 
 ---
 

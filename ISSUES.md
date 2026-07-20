@@ -5,7 +5,7 @@
 > (`audit_report.md`, `definitive_audit_report.md`, `MERIS_DEFINITIVE_AUDIT.md`,
 > `ISSUES_AUDIT.md`, `FULL_CODEBASE_VALIDATOR_REPORT.md`), all now deleted.
 >
-> **Last updated:** 2026-07-19
+> **Last updated:** 2026-07-20
 > **Legend:** 🔴 high · 🟠 medium · 🟡 low · ⚪ info/cosmetic · ✅ done · ❌ rejected
 
 ---
@@ -85,6 +85,22 @@ proves the raster delta.
 - State/rebuild layer clean post-O-79/O-80/O-82: `tabsSignature` structural
   watch, `.select((m) => m[tab.id])` hibernated scoping, and the
   `transitionActive` guard on the async `takeSnapshot()` all hold.
+
+#### Council / graphify post-fullscreen-fix pass (2026-07-20)
+Delta review of `b460fe2` (desktop fullscreen/drag/sidebar) and `446b731`
+(mobile pull-to-refresh) — the two commits since the 2026-07-19 pass.
+Rendering pipeline clean: O-44/O-81 status unchanged, no new HC-compositing
+cost introduced. Rebuild-scope layer clean — `isDesktopFullscreenProvider`
+does not leak into mobile rebuilds (`isDesktop &&` short-circuit holds).
+Both fixes below applied and verified (`flutter analyze` 4 pre-existing;
+`flutter test` 34/34 green); the widget-tree fix (O-89) still needs a live
+Windows build to confirm the hit-test claim itself, per the standing
+desktop-runtime-verification convention.
+
+| ID | Sev | Issue | Location | Notes |
+|----|----|-------|----------|-------|
+| O-89 | ✅ | **Sidebar outside-click-to-collapse barrier covered the toolbar, not just the content area.** While `desktopSidebarExpandedProvider` was true, a `Positioned.fill` barrier in the outer `Stack` sat above the toolbar (address bar, nav buttons, window min/max/close) and below the sidebar's own 240px band. First click on those controls collapsed the sidebar and was consumed, not forwarded — needed a second click. Desktop-only preview (O-39); self-corrected. | `mainscreen.dart:588` (pre-fix) | **FIXED.** Moved the barrier from the outer `Stack` into the content-scoped inner `Stack` (the one already confined to `Expanded`, below the toolbar `Column` entry) — no new constants, sidebar's fixed-gutter `Padding` pattern (`b3ecb8e`) untouched. **Needs live-build confirmation** — this was reasoned from the widget tree, not exercised on the .exe. |
+| O-90 | ✅ | **`onEnterFullscreen`/`onExitFullscreen` wired before the desktop early-return, so mobile fullscreen video also wrote the desktop-named `isDesktopFullscreenProvider` and fired `desktopSetFullScreen()`.** Confirmed **not** a rebuild leak (Mainscreen's `isDesktop &&` watch short-circuits on mobile, so nothing subscribes) and **not** a crash (`desktopSetFullScreen` is `Platform.is*`-guarded in `desktop_windowing_io.dart`). Cosmetic: one no-op async call + one provider write per mobile fullscreen toggle. | `in_app_webview_engine.dart:462-473` | **FIXED.** Added `if (!_isDesktop) return;` to both callback bodies — same gating idiom already used for `gestureRecognizers` and the `DesktopPointerBridge` wrap in this file (`a4b3dd3`), just extended to the two callbacks `b460fe2` missed. |
 
 #### Test suite (2026-07-19)
 

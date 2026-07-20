@@ -72,3 +72,7 @@ flutter_launcher_icons:
   # an image — nothing to misalign under the mask.
   adaptive_icon_background: "#282828"
   adaptive_icon_foreground: "assets/icon_foreground.png"
+  windows:
+    generate: true
+    image_path: "assets/icon.png"
+    icon_size: 256
