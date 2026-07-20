@@ -1,22 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mira/constants/app_fonts.dart';
+import 'package:qyx/constants/app_fonts.dart';
 
-import 'package:mira/core/entities/tab_entity.dart';
-import 'package:mira/core/notifiers/ghost_notifier.dart';
-import 'package:mira/core/notifiers/tab_notifier.dart';
-import 'package:mira/core/notifiers/theme_notifier.dart';
-import 'package:mira/pages/downloads_screen.dart';
-import 'package:mira/pages/history_screen.dart';
-import 'package:mira/core/entities/theme_entity.dart' show MiraTheme, kMiraInkPrimary;
-import 'package:mira/pages/main_screen/desktop_browser_chrome.dart' show showDesktopMiraMenuPopup;
-import 'package:mira/pages/mira_drawer.dart';
-import 'package:mira/shell/desktop/open_private_browser_window.dart';
+import 'package:qyx/core/entities/tab_entity.dart';
+import 'package:qyx/core/notifiers/ghost_notifier.dart';
+import 'package:qyx/core/notifiers/tab_notifier.dart';
+import 'package:qyx/core/notifiers/theme_notifier.dart';
+import 'package:qyx/pages/downloads_screen.dart';
+import 'package:qyx/pages/history_screen.dart';
+import 'package:qyx/core/entities/theme_entity.dart' show MiraTheme, kMiraInkPrimary;
+import 'package:qyx/pages/mira_drawer.dart';
 
 final desktopSidebarExpandedProvider = StateProvider<bool>((ref) => true);
 
 class _SidebarTabScope {
-  final TabsState state;
+  final NormalizedTabsState state;
   _SidebarTabScope(this.state);
 
   @override
@@ -25,16 +23,26 @@ class _SidebarTabScope {
     if (other is! _SidebarTabScope) return false;
     final a = state;
     final b = other.state;
-    if (a.activeIndex != b.activeIndex || a.tabs.length != b.tabs.length) return false;
-    for (int i = 0; i < a.tabs.length; i++) {
-      if (a.tabs[i].id != b.tabs[i].id || a.tabs[i].title != b.tabs[i].title) return false;
+    if (a.activeIndex != b.activeIndex || a.tabOrder.length != b.tabOrder.length) return false;
+    for (int i = 0; i < a.tabOrder.length; i++) {
+      final aId = a.tabOrder[i];
+      final bId = b.tabOrder[i];
+      if (aId != bId || a.tabs[aId]?.title != b.tabs[bId]?.title) return false;
     }
     return true;
   }
 
   @override
-  int get hashCode => state.activeIndex.hashCode ^ state.tabs.length.hashCode;
+  int get hashCode => state.activeIndex.hashCode ^ state.tabOrder.length.hashCode;
 }
+
+/// Width of the collapsed rail. Mainscreen reserves exactly this much padding
+/// so the content box — and therefore the native webview surface — never
+/// resizes while the sidebar animates.
+const double kCollapsedSidebarWidth = 52;
+
+/// Width of the expanded panel. Overlays the content; nothing is reflowed.
+const double kExpandedSidebarWidth = 240;
 
 class DesktopSidebar extends ConsumerWidget {
   const DesktopSidebar({super.key});
@@ -46,8 +54,10 @@ class DesktopSidebar extends ConsumerWidget {
     final theme = ref.watch(themeProvider);
     final tabState = ref.watch(tabsProvider.select((s) => _SidebarTabScope(s))).state;
     final ghostState = ref.watch(ghostTabsProvider.select((s) => _SidebarTabScope(s))).state;
+    final normalOrder = tabState.tabOrder;
     final normalTabs = tabState.tabs;
     final normalActive = tabState.activeIndex;
+    final ghostOrder = ghostState.tabOrder;
     final ghostTabs = ghostState.tabs;
     final ghostActive = ghostState.activeIndex;
 
@@ -62,10 +72,23 @@ class DesktopSidebar extends ConsumerWidget {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       curve: Curves.easeInOut,
-      width: expanded ? 240 : 52,
+      width: expanded ? kExpandedSidebarWidth : kCollapsedSidebarWidth,
       decoration: BoxDecoration(
         color: bg,
         border: Border(right: BorderSide(color: border)),
+        // The sidebar overlays the page rather than displacing it, so it needs
+        // a shadow to read as a floating panel instead of a paint glitch over
+        // the webview. Only while expanded — the collapsed rail sits flush in
+        // its reserved gutter and has nothing to float above.
+        boxShadow: expanded
+            ? const [
+                BoxShadow(
+                  color: Color(0x66000000),
+                  blurRadius: 16,
+                  offset: Offset(2, 0),
+                ),
+              ]
+            : null,
       ),
       // LayoutBuilder drives child layout from actual rendered width so the
       // expanded/collapsed switch happens mid-animation without overflow.
@@ -83,12 +106,13 @@ class DesktopSidebar extends ConsumerWidget {
                   builder: (context) {
                     final items = <Widget Function()>[];
 
-                    if (normalTabs.isNotEmpty) {
-                      if (isExpanded && ghostTabs.isNotEmpty) {
+                    if (normalOrder.isNotEmpty) {
+                      if (isExpanded && ghostOrder.isNotEmpty) {
                         items.add(() => _SectionLabel(label: 'TABS', color: muted));
                       }
-                      for (int i = 0; i < normalTabs.length; i++) {
-                        final tab = normalTabs[i];
+                      for (int i = 0; i < normalOrder.length; i++) {
+                        final tab = normalTabs[normalOrder[i]];
+                        if (tab == null) continue;
                         items.add(() => _SidebarTabItem(
                               tab: tab,
                               index: i,
@@ -102,7 +126,7 @@ class DesktopSidebar extends ConsumerWidget {
                       }
                     }
 
-                    if (ghostTabs.isNotEmpty) {
+                    if (ghostOrder.isNotEmpty) {
                       if (isExpanded) {
                         items.add(() => _SectionLabel(
                               label: 'GHOST',
@@ -116,8 +140,9 @@ class DesktopSidebar extends ConsumerWidget {
                               endIndent: 8,
                             ));
                       }
-                      for (int i = 0; i < ghostTabs.length; i++) {
-                        final tab = ghostTabs[i];
+                      for (int i = 0; i < ghostOrder.length; i++) {
+                        final tab = ghostTabs[ghostOrder[i]];
+                        if (tab == null) continue;
                         items.add(() => _SidebarTabItem(
                               tab: tab,
                               index: i,
@@ -210,7 +235,7 @@ class _SidebarHeader extends ConsumerWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              isGhost ? 'GHOST MODE' : 'MIRA',
+              isGhost ? 'GHOST MODE' : 'QYX',
               style: jetBrainsMono(
                 color: isGhost ? Colors.redAccent : fg,
                 fontSize: 13,
@@ -352,9 +377,9 @@ class _SidebarTabItemState extends ConsumerState<_SidebarTabItem> {
   void _onTap() {
     ref.read(isGhostModeProvider.notifier).state = widget.isGhost;
     if (widget.isGhost) {
-      ref.read(ghostTabsProvider.notifier).switchTab(widget.index);
+      ref.read(ghostTabsProvider.notifier).switchTabById(widget.tab.id);
     } else {
-      ref.read(tabsProvider.notifier).switchTab(widget.index);
+      ref.read(tabsProvider.notifier).switchTabById(widget.tab.id);
     }
   }
 
@@ -577,3 +602,5 @@ class _NavItem extends StatelessWidget {
     );
   }
 }
+
+

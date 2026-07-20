@@ -1,32 +1,33 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:mira/shell/desktop/desktop_windowing.dart';
+import 'package:qyx/shell/desktop/desktop_windowing.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:io';
-import 'package:mira/core/notifiers/bookmarks_notifier.dart';
-import 'package:mira/core/notifiers/theme_notifier.dart';
-import 'package:mira/core/notifiers/ghost_notifier.dart';
-import 'package:mira/core/notifiers/search_notifier.dart';
-import 'package:mira/core/notifiers/security_notifier.dart';
-import 'package:mira/core/notifiers/tab_notifier.dart';
-import 'package:mira/core/entities/tab_entity.dart';
-import 'package:mira/core/entities/theme_entity.dart';
-import 'package:mira/core/providers/adblock_provider.dart';
-import 'package:mira/core/services/browser_engine_blueprints.dart';
-import 'package:mira/core/services/database_providers.dart';
-import 'package:mira/pages/browser_chrome_providers.dart';
-import 'package:mira/core/services/snapshot_service.dart';
-import 'package:mira/pages/browser/browser_view.dart';
-import 'package:mira/pages/main_screen/desktop_browser_chrome.dart';
-import 'package:mira/pages/main_screen/desktop_platform_menus.dart';
-import 'package:mira/pages/main_screen/desktop_sidebar.dart';
-import 'package:mira/pages/main_screen/main_screen_haptics.dart';
-import 'package:mira/pages/main_screen/main_screen_security.dart';
-import 'package:mira/pages/main_screen/mobile_main_app_bar.dart' show buildMobileBottomBar;
-import 'package:mira/shell/desktop/desktop_browser_hotkeys.dart';
-import 'package:mira/shell/desktop/desktop_find_bar.dart';
+import 'package:qyx/core/notifiers/bookmarks_notifier.dart';
+import 'package:qyx/core/notifiers/theme_notifier.dart';
+import 'package:qyx/core/notifiers/ghost_notifier.dart';
+import 'package:qyx/core/notifiers/search_notifier.dart';
+import 'package:qyx/core/notifiers/security_notifier.dart';
+import 'package:qyx/core/notifiers/hibernation_notifier.dart';
+import 'package:qyx/core/notifiers/tab_notifier.dart';
+import 'package:qyx/core/entities/tab_entity.dart';
+import 'package:qyx/core/entities/theme_entity.dart';
+import 'package:qyx/core/providers/adblock_provider.dart';
+import 'package:qyx/core/services/browser_engine_blueprints.dart';
+import 'package:qyx/core/services/database_providers.dart';
+import 'package:qyx/core/ui/qyx_toast.dart';
+import 'package:qyx/pages/browser_chrome_providers.dart';
+import 'package:qyx/pages/browser/browser_view.dart';
+import 'package:qyx/pages/main_screen/desktop_browser_chrome.dart';
+import 'package:qyx/pages/main_screen/desktop_platform_menus.dart';
+import 'package:qyx/pages/main_screen/desktop_sidebar.dart';
+import 'package:qyx/pages/main_screen/main_screen_haptics.dart';
+import 'package:qyx/pages/main_screen/main_screen_security.dart';
+import 'package:qyx/pages/main_screen/mobile_main_app_bar.dart' show buildMobileTopBar;
+import 'package:qyx/shell/desktop/desktop_browser_hotkeys.dart';
+import 'package:qyx/shell/desktop/desktop_find_bar.dart';
 
 class Mainscreen extends ConsumerStatefulWidget {
   const Mainscreen({super.key});
@@ -48,7 +49,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    final initialUrl = ref.read(currentActiveTabProvider).url;
+    final initialUrl = ref.read(tabsProvider).safeActiveTab?.url ?? '';
     _urlController = TextEditingController(text: initialUrl);
         _urlFocusNode = FocusNode();
     _urlFocusNode.addListener(_onUrlFocusChanged);
@@ -57,7 +58,8 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
       HardwareKeyboard.instance.addHandler(_handleDesktopHotkey);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        _syncDesktopWindowTitle(ref.read(currentActiveTabProvider));
+        final tab = ref.read(tabsProvider).safeActiveTab;
+    if(tab != null) _syncDesktopWindowTitle(tab);
       });
     }
   }
@@ -65,7 +67,21 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     void _onUrlFocusChanged() {
     final engine = ref.read(activeBrowserEngineProvider);
     if (engine == null) return;
-    final tabId = ref.read(currentActiveTabProvider).id;
+
+    // Mobile only. The pause + snapshot-swap below exists to keep the soft
+    // keyboard from reflowing the viewport over a live Hybrid-Composition
+    // surface (D-32). Desktop has no soft keyboard and no HC reflow, so all it
+    // does there is freeze the page the moment you click the address bar — and
+    // when no snapshot is available to paint over it, the site just disappears.
+    //
+    // This only became reachable on desktop once the address bar was made
+    // focusable again (O-36); before that the focus never fired here.
+    if (!kIsWeb &&
+        (Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
+      return;
+    }
+
+    final tabId = ref.read(tabsProvider).safeActiveTab?.id ?? '';
 
     if (_urlFocusNode.hasFocus) {
       final cached = ref.read(tabSnapshotCacheProvider)[tabId];
@@ -95,14 +111,14 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     _titleSyncDebounce = Timer(const Duration(milliseconds: 300), () async {
       if (!mounted) return;
       final raw = tab.title.trim();
-      final label = raw.isEmpty ? 'Mira' : raw;
+      final label = raw.isEmpty ? 'Qyx' : raw;
       final isGhost = ref.read(isGhostModeProvider);
       if (isGhost) {
         await desktopSetWindowTitle(
-          raw.isEmpty ? 'MIRA Private' : '$label — MIRA Private',
+          raw.isEmpty ? 'Qyx Private' : '$label — Qyx Private',
         );
       } else {
-        await desktopSetWindowTitle('$label — Mira');
+        await desktopSetWindowTitle('$label — Qyx');
       }
     });
   }
@@ -240,9 +256,8 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
       final chrome = ref.read(browserChromeProvider);
       final engine = chrome.engine;
       final errorMessage = chrome.webError;
-      final activeUrl = ref.read(currentActiveTabProvider).url;
+      final activeUrl = ref.read(tabsProvider).safeActiveTab?.url ?? '';
       final isGhost = ref.read(isGhostModeProvider);
-      final appTheme = ref.read(themeProvider);
 
       if (engine != null && await engine.canGoBack()) {
         if (errorMessage != null) {
@@ -270,12 +285,10 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
           _lastExitTime = now;
           if (mounted) {
             _triggerHaptic(MainScreenHapticKind.selection);
-            ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: const Text("Press back again to exit MIRA"),
-                  backgroundColor: isGhost ? Colors.redAccent : appTheme.primaryColor,
-                  duration: const Duration(seconds: 2),
-                )
+            showQyxNotice(
+              "Press back again to exit Qyx",
+              kind: isGhost ? QyxToastKind.error : QyxToastKind.info,
+              duration: const Duration(seconds: 2),
             );
           }
         } else {
@@ -299,7 +312,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
       _triggerHaptic(MainScreenHapticKind.selection);
       return;
     }
-    final activeUrl = ref.read(currentActiveTabProvider).url;
+    final activeUrl = ref.read(tabsProvider).safeActiveTab?.url ?? '';
     if (activeUrl.isNotEmpty) {
       _triggerHaptic(MainScreenHapticKind.light);
       if (ref.read(isGhostModeProvider)) {
@@ -330,8 +343,8 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     );
 
     final allTabs = [
-      ...ref.read(tabsProvider).tabs,
-      ...ref.read(ghostTabsProvider).tabs,
+      ...ref.read(tabsProvider).tabs.values,
+      ...ref.read(ghostTabsProvider).tabs.values,
     ];
 
     for (final tab in allTabs) {
@@ -361,8 +374,34 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
 
   @override
   Widget build(BuildContext context) {
-    ref.listen(currentActiveTabProvider, (previous, next) {
-      if (previous != null && previous.id != next.id) {
+    // A page's own HTML5 fullscreen (e.g. a YouTube video) hides our chrome
+    // (see the desktop Stack below) but that alone still leaves the OS
+    // window's own borders/taskbar visible. Mirror what an actual browser
+    // does: also ask the OS for real fullscreen. Side effect belongs in
+    // listen, not the build return value itself.
+    ref.listen<bool>(isDesktopFullscreenProvider, (previous, next) {
+      if (previous != next) {
+        unawaited(desktopSetFullScreen(next));
+      }
+    });
+
+    ref.listen<BrowserTab?>(currentActiveTabProvider, (previous, next) {
+      if (previous != null && next != null && previous.id != next.id) {
+         // Resume the tab being switched TO, first and synchronously.
+         //
+         // The pause below had no paired resume anywhere: the only other
+         // resumeRendering() sites are URL-bar blur and tab-sheet close. So a
+         // tab paused on switch-away stayed paused forever and rendered blank
+         // when you came back. On mobile the tab-sheet close hid it; on
+         // desktop you switch from the sidebar, so nothing ever resumed it.
+         //
+         // Guarded on the awake set: a hibernated tab has no live engine to
+         // resume and renders a placeholder instead, and reading the provider
+         // for it would construct an engine we deliberately evicted.
+         if (ref.read(hibernationProvider).contains(next.id)) {
+           unawaited(ref.read(browserEngineProvider(next.id)).resumeRendering());
+         }
+
          final engine = ref.read(browserEngineProvider(previous.id));
          unawaited(() async {
             final bytes = await engine.takeSnapshot();
@@ -374,17 +413,17 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
       }
     });
 
-    final canGoBack = ref.watch(currentActiveTabProvider.select((t) => t.canGoBack));
+    final canGoBack = ref.watch(currentActiveTabProvider.select((t) => t?.canGoBack ?? false));
     final isGhost = ref.watch(isGhostModeProvider);
-    final activeTab = ref.watch(currentActiveTabProvider);
+    final activeTab = ref.watch(currentActiveTabProvider) ?? BrowserTab();
 
     final activeUrl = activeTab.url;
     final tabCount = ref.watch(tabCountProvider);
 
     if (!kIsWeb &&
         (Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
-      ref.listen<BrowserTab>(currentActiveTabProvider, (prev, next) {
-        _syncDesktopWindowTitle(next);
+      ref.listen<BrowserTab?>(currentActiveTabProvider, (prev, next) {
+        if (next != null) _syncDesktopWindowTitle(next);
       });
     }
     
@@ -417,13 +456,16 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
 
     final isDesktop =
         !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
+    final isFullscreen = isDesktop && ref.watch(isDesktopFullscreenProvider);
+    final sidebarExpanded =
+        isDesktop && ref.watch(desktopSidebarExpandedProvider);
 
-    ref.listen(currentActiveTabProvider, (previous, next) {
-      if (previous?.id != next.id) {
+    ref.listen<BrowserTab?>(currentActiveTabProvider, (previous, next) {
+      if (next != null && previous?.id != next.id) {
         _urlController.text = next.url;
         _urlController.selection =
             TextSelection.collapsed(offset: next.url.length);
-      } else if (previous?.url != next.url && !_urlFocusNode.hasFocus) {
+      } else if (next != null && previous?.url != next.url && !_urlFocusNode.hasFocus) {
         _urlController.text = next.url;
         _urlController.selection =
             TextSelection.collapsed(offset: next.url.length);
@@ -434,11 +476,16 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
     // Theme changes are handled by browser_side_effects.dart's themeProvider listener.
     ref.listen(securityProvider, (prev, next) {
       if (prev?.isDesktopMode != next.isDesktopMode) {
-        unawaited(applyMainScreenWebViewSettings(ref, forceReload: true));
+        // Propagate to every tab, not just the active one — a background
+        // tab shouldn't keep rendering in the wrong desktop/mobile mode.
+        unawaited(applySecuritySettingsToAllTabs(ref));
       }
       if (prev?.isCameraBlocked != next.isCameraBlocked ||
           prev?.isLocationBlocked != next.isLocationBlocked) {
-        unawaited(applyMainScreenWebViewSettings(ref));
+        // Propagate to every tab — a background tab that already has an
+        // active camera/mic/location grant won't have it revoked just by
+        // flipping the setting; it needs its engine reloaded too.
+        unawaited(applySecuritySettingsToAllTabs(ref));
       }
       if (prev?.isAdBlockEnabled != next.isAdBlockEnabled) {
         unawaited(_applyAdBlockToAllTabs(next.isAdBlockEnabled));
@@ -457,61 +504,118 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
         backgroundColor: backgroundColor,
         appBar: null,
         bottomNavigationBar: null,
+        // CRITICAL PERFORMANCE HACK: let the keyboard simply overlap the
+        // BrowserView instead of resizing the Scaffold. Resizing would force
+        // the Chromium engine to run a heavy DOM reflow on every keyboard
+        // show/hide animation frame; overlapping avoids that entirely.
+        resizeToAvoidBottomInset: false,
         body: isDesktop
-            ? Row(
-                children: [
-                  const DesktopSidebar(),
-                  Expanded(
-                    child: Column(
-                      children: [
-                        buildDesktopToolbar(
-                          context: context,
-                          ref: ref,
-                          bgColor: isGhost ? const Color(0xFF1A1A1A) : appBarColor,
-                          contentColor: contentColor,
-                          accentColor: primaryAccent,
-                          hintColor: hintColor,
-                          activeTab: activeTab,
-                          isGhost: isGhost,
-                          securityIcon: securityIcon,
-                          securityColor: securityColor,
-                          isBookmarked: isBookmarked,
-                          hasWebView: hasWebView,
-                          urlController: _urlController,
-                          urlFocusNode: _urlFocusNode,
-                          onUrlSubmitted: _performSearch,
-                          onFindPressed: _openDesktopFindBar,
-                        ),
-                        Expanded(
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              const BrowserView(),
-                              const _GhostModeFlash(),
-                              if (ref.watch(desktopFindBarVisibleProvider))
-                                const Positioned(
-                                  top: 8,
-                                  right: 12,
-                                  child: SizedBox(
-                                    width: 340,
-                                    child: DesktopFindBar(),
+            ? Stack(
+                  children: [
+                    // Sidebar OVERLAYS the content rather than sharing a Row
+                    // with it. In a Row, animating the sidebar 52<->240
+                    // relaid out this region every frame, which resizes the
+                    // native WebView2 surface every frame — an expensive
+                    // reflow for a purely decorative animation. Reserving the
+                    // collapsed rail width as permanent padding keeps the
+                    // webview's box constant for the whole expand/collapse,
+                    // and the expanded panel floats over the page.
+                    //
+                    // In fullscreen the gutter itself goes to zero: a page's
+                    // own HTML5 fullscreen (a YouTube video, say) should own
+                    // the entire window, not share it with a permanently
+                    // reserved sidebar strip.
+                    Padding(
+                      padding: EdgeInsets.only(
+                          left: isFullscreen ? 0 : kCollapsedSidebarWidth),
+                      child: Column(
+                        children: [
+                          if (!isFullscreen)
+                            buildDesktopToolbar(
+                              context: context,
+                              ref: ref,
+                              bgColor: isGhost
+                                  ? const Color(0xFF1A1A1A)
+                                  : appBarColor,
+                              contentColor: contentColor,
+                              accentColor: primaryAccent,
+                              hintColor: hintColor,
+                              activeTab: activeTab,
+                              isGhost: isGhost,
+                              securityIcon: securityIcon,
+                              securityColor: securityColor,
+                              isBookmarked: isBookmarked,
+                              hasWebView: hasWebView,
+                              urlController: _urlController,
+                              urlFocusNode: _urlFocusNode,
+                              onUrlSubmitted: _performSearch,
+                              onFindPressed: _openDesktopFindBar,
+                            ),
+                          Expanded(
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                const BrowserView(),
+                                const _GhostModeFlash(),
+                                if (!isFullscreen &&
+                                    ref.watch(desktopFindBarVisibleProvider))
+                                  const Positioned(
+                                    top: 8,
+                                    right: 12,
+                                    child: SizedBox(
+                                      width: 340,
+                                      child: DesktopFindBar(),
+                                    ),
                                   ),
-                                ),
-                            ],
+                                // Outside-click-to-collapse barrier. Scoped to
+                                // this content Stack (not the outer one) so it
+                                // never covers the toolbar — address bar, nav
+                                // buttons, window min/max/close stay clickable
+                                // while the sidebar is expanded. Sits above the
+                                // webview but below the sidebar itself in paint
+                                // order below, so a tap on the sidebar still
+                                // reaches the sidebar (Positioned constrains it
+                                // to its own 240px band — a tap outside that
+                                // band geometrically misses it and falls
+                                // through to this layer instead). Only present
+                                // while expanded, so it never intercepts
+                                // ordinary clicks once collapsed. The first
+                                // outside click is consumed by the collapse,
+                                // matching how a flyout panel (VS Code's
+                                // activity bar, a nav drawer) dismisses — not
+                                // also forwarded to whatever was underneath.
+                                if (!isFullscreen && sidebarExpanded)
+                                  Positioned.fill(
+                                    child: GestureDetector(
+                                      behavior: HitTestBehavior.opaque,
+                                      onTap: () => ref
+                                          .read(desktopSidebarExpandedProvider
+                                              .notifier)
+                                          .state = false,
+                                    ),
+                                  ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+
+                    if (!isFullscreen)
+                      const Positioned(
+                        left: 0,
+                        top: 0,
+                        bottom: 0,
+                        child: DesktopSidebar(),
+                      ),
+                  ],
               )
             : SafeArea(
-                top: true,
-                bottom: false,
+                top: false,
+                bottom: true,
                 child: Column(
                   children: [
-                    const Expanded(child: BrowserView()),
-                    buildMobileBottomBar(
+                    buildMobileTopBar(
                       context: context,
                       ref: ref,
                       urlController: _urlController,
@@ -532,6 +636,7 @@ class _MainscreenState extends ConsumerState<Mainscreen> with WidgetsBindingObse
                       onBackPressed: () => _handleBrowserBack(),
                       onGhostToggle: _toggleGhostMode,
                     ),
+                    const Expanded(child: BrowserView()),
                   ],
                 ),
               ),
@@ -592,20 +697,6 @@ class _GhostModeFlashState extends ConsumerState<_GhostModeFlash>
 
   @override
   Widget build(BuildContext context) {
-    ref.listen(currentActiveTabProvider, (previous, next) {
-      if (previous != null && previous.id != next.id) {
-         final engine = ref.read(browserEngineProvider(previous.id));
-         unawaited(() async {
-            final bytes = await engine.takeSnapshot();
-            if (bytes != null && mounted) {
-                ref.read(tabSnapshotCacheProvider.notifier).update((s) => {...s, previous.id: TabSnapshotData(bytes: bytes)});
-            }
-            engine.pauseRendering();
-         }());
-      }
-    });
-
-
     ref.listen<bool>(isGhostModeProvider, (prev, next) {
       if (prev == next) return;
       _color = next ? Colors.redAccent : Colors.black87;
@@ -623,3 +714,5 @@ class _GhostModeFlashState extends ConsumerState<_GhostModeFlash>
     );
   }
 }
+
+

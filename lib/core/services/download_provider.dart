@@ -1,12 +1,12 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mira/core/entities/download_entity.dart';
-import 'package:mira/core/notifiers/downloads_notifier.dart';
-import 'package:mira/core/services/isar_database_repository.dart';
-import 'package:mira/shell/download/download_service_desktop.dart';
-import 'package:mira/shell/download/download_service_mobile.dart';
-import 'package:mira/shell/download/download_service_stub.dart';
+import 'package:qyx/core/entities/download_entity.dart';
+import 'package:qyx/core/notifiers/downloads_notifier.dart';
+import 'package:qyx/core/services/isar_database_repository.dart';
+import 'package:qyx/shell/download/download_service_desktop.dart';
+import 'package:qyx/shell/download/download_service_mobile.dart';
+import 'package:qyx/shell/download/download_service_stub.dart';
 
 /// Single source of truth for the downloads state.
 ///

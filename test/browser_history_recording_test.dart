@@ -1,13 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mira/core/notifiers/ghost_notifier.dart';
-import 'package:mira/core/notifiers/tab_notifier.dart';
-import 'package:mira/core/services/browser_engine_blueprints.dart';
-import 'package:mira/core/services/database_providers.dart';
-import 'package:mira/core/services/isar_database_repository.dart';
-import 'package:mira/core/services/isar_schemas.dart';
-import 'package:mira/core/services/preferences_service.dart';
-import 'package:mira/pages/browser/browser_side_effects.dart';
+import 'package:qyx/core/notifiers/ghost_notifier.dart';
+import 'package:qyx/core/notifiers/tab_notifier.dart';
+import 'package:qyx/core/services/browser_engine_blueprints.dart';
+import 'package:qyx/core/services/database_providers.dart';
+import 'package:qyx/core/services/isar_database_repository.dart';
+import 'package:qyx/core/services/isar_schemas.dart';
+import 'package:qyx/core/services/preferences_service.dart';
+import 'package:qyx/pages/browser/browser_side_effects.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Captures history writes without touching Isar. [HistoryNotifier] only calls

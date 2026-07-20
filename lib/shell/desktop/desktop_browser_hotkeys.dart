@@ -5,10 +5,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:mira/core/notifiers/ghost_notifier.dart';
-import 'package:mira/core/notifiers/tab_notifier.dart';
-import 'package:mira/pages/browser_chrome_providers.dart';
-import 'package:mira/shell/desktop/open_private_browser_window.dart';
+import 'package:qyx/core/notifiers/ghost_notifier.dart';
+import 'package:qyx/core/notifiers/tab_notifier.dart';
+import 'package:qyx/pages/browser_chrome_providers.dart';
+import 'package:qyx/shell/desktop/open_private_browser_window.dart';
 
 /// Returns `true` when the event was handled (Chrome-like desktop shortcuts).
 bool handleDesktopBrowserHotkey({
@@ -65,11 +65,17 @@ bool handleDesktopBrowserHotkey({
   }
 
   if (key == LogicalKeyboardKey.keyW) {
-    final active = ref.read(currentActiveTabProvider);
-    if (ref.read(isGhostModeProvider)) {
-      ref.read(ghostTabsProvider.notifier).closeTab(active.id);
+    final isGhost = ref.read(isGhostModeProvider);
+    if (isGhost) {
+      final active = ref.read(ghostTabsProvider).safeActiveTab;
+      if (active != null) {
+        ref.read(ghostTabsProvider.notifier).closeTab(active.id);
+      }
     } else {
-      ref.read(tabsProvider.notifier).closeTab(active.id);
+      final active = ref.read(tabsProvider).safeActiveTab;
+      if (active != null) {
+        ref.read(tabsProvider.notifier).closeTab(active.id);
+      }
     }
     return true;
   }
@@ -141,7 +147,7 @@ void _cycleActiveTab(
   if (isGhost) {
     final s = ref.read(ghostTabsProvider);
     if (s.tabs.isEmpty) return;
-    final n = s.tabs.length;
+    final n = s.tabOrder.length;
     final next = forward
         ? (s.activeIndex + 1) % n
         : (s.activeIndex - 1 + n) % n;
@@ -149,10 +155,12 @@ void _cycleActiveTab(
   } else {
     final s = ref.read(tabsProvider);
     if (s.tabs.isEmpty) return;
-    final n = s.tabs.length;
+    final n = s.tabOrder.length;
     final next = forward
         ? (s.activeIndex + 1) % n
         : (s.activeIndex - 1 + n) % n;
     ref.read(tabsProvider.notifier).switchTab(next);
   }
 }
+
+

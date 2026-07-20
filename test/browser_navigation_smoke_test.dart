@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mira/core/services/preferences_service.dart';
-import 'package:mira/core/notifiers/tab_notifier.dart';
-import 'package:mira/pages/tab_screen.dart';
+import 'package:qyx/core/services/preferences_service.dart';
+import 'package:qyx/core/notifiers/tab_notifier.dart';
+import 'package:qyx/pages/tab_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -55,15 +55,19 @@ void main() {
     notifier.switchTab(0);
     expect(notifier.state.activeIndex, 0);
 
-    final secondTabId = notifier.state.tabs[1].id;
+    final secondTabId = notifier.state.tabOrder[1];
     notifier.closeTab(secondTabId);
     expect(notifier.state.tabs.length, 2);
     expect(notifier.state.activeIndex, 0);
 
     notifier.nuke();
     expect(notifier.state.tabs.length, 1);
-    expect(notifier.state.tabs.first.url, '');
+    expect(notifier.state.tabs[notifier.state.tabOrder.first]!.url, '');
     expect(notifier.state.activeIndex, 0);
   });
 }
+
+
+
+
 

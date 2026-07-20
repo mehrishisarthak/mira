@@ -11,6 +11,7 @@ enum BrowserPageEventType {
   error,
   downloadRequested,
   updateVisitedHistory,
+  fullscreenChanged,
 }
 
 /// A wrapper class for broadcasting web page events through the [BrowserEngine].
@@ -22,6 +23,7 @@ class BrowserPageEvent {
   final String? errorDescription;
   final DownloadRequest? downloadRequest;
   final dynamic originalEvent;
+  final bool? isFullscreen;
 
   const BrowserPageEvent({
     required this.type,
@@ -31,6 +33,7 @@ class BrowserPageEvent {
     this.errorDescription,
     this.downloadRequest,
     this.originalEvent,
+    this.isFullscreen,
   });
 }
 
@@ -114,6 +117,13 @@ abstract class BrowserEngine {
   Future<void> clearStorage();
   Future<void> clearCookies();
 
+  /// Clears this engine's own native HTTP/resource cache. Unlike
+  /// [clearStorage] and [clearCookies] — which operate on process-wide
+  /// managers and so only need to be called once, on any single engine — the
+  /// underlying cache API is per-webview-controller, so every instantiated
+  /// engine needs its own explicit call for a full wipe (see "Nuke Data").
+  Future<void> clearCache();
+
   // --- Zoom Capabilities ---
 
   Future<void> zoomIn();
@@ -127,3 +137,5 @@ abstract class BrowserEngine {
   /// Returns a Flutter widget that renders the web content.
   Widget buildWidget({required String tabId, String? initialUrl});
 }
+
+

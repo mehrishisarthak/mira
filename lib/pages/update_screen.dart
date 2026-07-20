@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:mira/constants/app_fonts.dart';
-import 'package:mira/core/entities/theme_entity.dart';
-import 'package:mira/core/services/update_service.dart';
+import 'package:qyx/constants/app_fonts.dart';
+import 'package:qyx/core/entities/theme_entity.dart';
+import 'package:qyx/core/services/update_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class UpdateScreen extends StatelessWidget {
@@ -19,8 +19,8 @@ class UpdateScreen extends StatelessWidget {
     final bool isForce = result.status == UpdateStatus.forceUpdate;
     final String title = isForce ? 'REQUIRED UPDATE' : 'UPDATE AVAILABLE';
     final String subtitle = isForce
-        ? 'Mira version ${result.latestVersion} is required to continue using the browser safely.'
-        : 'A new version of Mira (${result.latestVersion}) is available. Update now for the latest security features.';
+        ? 'Qyx version ${result.latestVersion} is required to continue using the browser safely.'
+        : 'A new version of Qyx (${result.latestVersion}) is available. Update now for the latest security features.';
 
     return Scaffold(
       backgroundColor: kMiraMatteBlack,
@@ -99,7 +99,7 @@ class UpdateScreen extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
                   child: Text(
-                    'UPDATE MIRA',
+                    'UPDATE QYX',
                     style: jetBrainsMono(
                       color: Colors.greenAccent,
                       fontWeight: FontWeight.bold,

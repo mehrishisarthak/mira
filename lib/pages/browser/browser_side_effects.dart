@@ -1,20 +1,21 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mira/core/app_globals.dart';
-import 'package:mira/core/entities/tab_entity.dart';
-import 'package:mira/pages/downloads_screen.dart';
+import 'package:qyx/core/app_globals.dart';
+import 'package:qyx/core/entities/tab_entity.dart';
+import 'package:qyx/pages/downloads_screen.dart';
+import 'package:qyx/core/ui/qyx_toast.dart';
 
-import 'package:mira/core/notifiers/ghost_notifier.dart';
-import 'package:mira/core/notifiers/history_notifier.dart';
-import 'package:mira/core/notifiers/tab_notifier.dart';
-import 'package:mira/core/notifiers/hibernation_notifier.dart';
-import 'package:mira/core/notifiers/theme_notifier.dart';
-import 'package:mira/core/services/database_providers.dart';
-import 'package:mira/core/services/browser_engine_blueprints.dart';
-import 'package:mira/core/services/download_provider.dart';
-import 'package:mira/pages/browser_chrome_providers.dart';
-import 'package:mira/pages/main_screen/main_screen_security.dart';
+import 'package:qyx/core/notifiers/ghost_notifier.dart';
+import 'package:qyx/core/notifiers/history_notifier.dart';
+import 'package:qyx/core/notifiers/tab_notifier.dart';
+import 'package:qyx/core/notifiers/hibernation_notifier.dart';
+import 'package:qyx/core/notifiers/theme_notifier.dart';
+import 'package:qyx/core/services/database_providers.dart';
+import 'package:qyx/core/services/browser_engine_blueprints.dart';
+import 'package:qyx/core/services/download_provider.dart';
+import 'package:qyx/pages/browser_chrome_providers.dart';
+import 'package:qyx/pages/main_screen/main_screen_security.dart';
 
 /// Provider that manages the stream subscription for a given [BrowserEngine].
 /// autoDispose so the family entry — and its `pageEvents` subscription — is torn
@@ -29,12 +30,23 @@ final _engineEventsSubscriptionProvider =
     if (event.type == BrowserPageEventType.loadStop || 
         event.type == BrowserPageEventType.loadStart ||
         event.type == BrowserPageEventType.updateVisitedHistory) {
-      final canGoBack = await engine.canGoBack();
+      // Both flags in one hop so the toolbar can render an honest
+      // enabled/disabled state for Forward as well as Back. Awaited together
+      // rather than in sequence — two round-trips either way, but they overlap
+      // instead of stacking (O-83 tracks trimming the trigger set further).
+      final navState = await Future.wait([
+        engine.canGoBack(),
+        engine.canGoForward(),
+      ]);
       final isGhost = ref.read(isGhostModeProvider);
       if (isGhost) {
-        ref.read(ghostTabsProvider.notifier).updateActiveTabCanGoBack(canGoBack);
+        ref
+            .read(ghostTabsProvider.notifier)
+            .updateActiveTabNavState(navState[0], navState[1]);
       } else {
-        ref.read(tabsProvider.notifier).updateActiveTabCanGoBack(canGoBack);
+        ref
+            .read(tabsProvider.notifier)
+            .updateActiveTabNavState(navState[0], navState[1]);
       }
     }
   });
@@ -54,11 +66,13 @@ void handleEnginePageEvent(Ref ref, BrowserPageEvent event) {
     case BrowserPageEventType.loadStart:
       notifier.clearWebError();
       final isGhost = ref.read(isGhostModeProvider);
-      final activeTabId = ref.read(currentActiveTabProvider).id;
-      if (isGhost) {
-        ref.read(ghostTabsProvider.notifier).setWebError(activeTabId, null);
-      } else {
-        ref.read(tabsProvider.notifier).setWebError(activeTabId, null);
+      final activeTabId = ref.read(currentActiveTabProvider)?.id;
+      if (activeTabId != null) {
+        if (isGhost) {
+          ref.read(ghostTabsProvider.notifier).setWebError(activeTabId, null);
+        } else {
+          ref.read(tabsProvider.notifier).setWebError(activeTabId, null);
+        }
       }
       notifier.setLoadingProgress(0);
       if (event.url != null) {
@@ -94,11 +108,13 @@ void handleEnginePageEvent(Ref ref, BrowserPageEvent event) {
       break;
     case BrowserPageEventType.error:
       final isGhost = ref.read(isGhostModeProvider);
-      final activeTabId = ref.read(currentActiveTabProvider).id;
-      if (isGhost) {
-        ref.read(ghostTabsProvider.notifier).setWebError(activeTabId, event.errorDescription);
-      } else {
-        ref.read(tabsProvider.notifier).setWebError(activeTabId, event.errorDescription);
+      final activeTabId = ref.read(currentActiveTabProvider)?.id;
+      if (activeTabId != null) {
+        if (isGhost) {
+          ref.read(ghostTabsProvider.notifier).setWebError(activeTabId, event.errorDescription);
+        } else {
+          ref.read(tabsProvider.notifier).setWebError(activeTabId, event.errorDescription);
+        }
       }
       break;
     case BrowserPageEventType.downloadRequested:
@@ -113,7 +129,13 @@ void handleEnginePageEvent(Ref ref, BrowserPageEvent event) {
             debugPrint('MIRA_DOWNLOAD: event handler error -> $e');
           }),
         );
-        _showDownloadStartedSnackBar(req.filename);
+        _showDownloadStartedNotice(req.filename);
+      }
+      break;
+    case BrowserPageEventType.fullscreenChanged:
+      if (event.isFullscreen != null) {
+        ref.read(isDesktopFullscreenProvider.notifier).state =
+            event.isFullscreen!;
       }
       break;
   }
@@ -124,49 +146,41 @@ Map<String, String>? _parseHeaders(String? cookies) {
   return {'Cookie': cookies};
 }
 
-/// Chrome-style "download started" snackbar with a shortcut to the Downloads
-/// screen. Shown from the page-event handler, which has no [BuildContext], so it
-/// drives the UI through the app-global keys.
-void _showDownloadStartedSnackBar(String? filename) {
-  final messenger = scaffoldMessengerKey.currentState;
-  if (messenger == null) return;
+/// Chrome-style "download started" notice with a shortcut to the Downloads
+/// screen. Shown from the page-event handler, which has no [BuildContext], so
+/// it drives the UI through the app-global keys (showQyxNotice needs none).
+void _showDownloadStartedNotice(String? filename) {
   final hasName = filename != null && filename.isNotEmpty;
-  messenger
-    ..clearSnackBars()
-    ..showSnackBar(
-      SnackBar(
-        content: Text(hasName ? 'Downloading $filename' : 'Download started'),
-        duration: const Duration(seconds: 4),
-        action: SnackBarAction(
-          label: 'VIEW',
-          onPressed: () => rootNavigatorKey.currentState?.push(
-            MaterialPageRoute<void>(builder: (_) => const DownloadsPage()),
-          ),
-        ),
-      ),
-    );
+  showQyxNotice(
+    hasName ? 'Downloading $filename' : 'Download started',
+    duration: const Duration(seconds: 4),
+    actionLabel: 'VIEW',
+    onAction: () => rootNavigatorKey.currentState?.push(
+      MaterialPageRoute<void>(builder: (_) => const DownloadsPage()),
+    ),
+  );
 }
 
 /// Called once from [BrowserView.initState] after the first frame.
 void syncInitialEngine(WidgetRef ref) {
   final isGhost = ref.read(isGhostModeProvider);
   final state = isGhost ? ref.read(ghostTabsProvider) : ref.read(tabsProvider);
-  _syncEngineToChrome(ref, state.tabs, state.activeIndex);
+  _syncEngineToChrome(ref, state.tabOrder.map((id) => state.tabs[id]!).toList(), state.activeIndex);
 }
 
 void registerBrowserViewSideEffects({required WidgetRef ref}) {
   // 1. Sync active engine to BrowserChromeProvider and manage Hibernation
   ref.listen(tabsProvider, (previous, next) {
     if (!ref.read(isGhostModeProvider)) {
-      _syncEngineToChrome(ref, next.tabs, next.activeIndex);
+      _syncEngineToChrome(ref, next.tabOrder.map((id) => next.tabs[id]!).toList(), next.activeIndex);
     }
     if (previous != null && previous.tabs.length > next.tabs.length) {
-      final currentIds = next.tabs.map((t) => t.id).toSet();
-      final closedIds = previous.tabs.map((t) => t.id).toSet().difference(currentIds);
+      final currentIds = next.tabs.keys.toSet();
+      final closedIds = previous.tabs.keys.toSet().difference(currentIds);
       for (final id in closedIds) {
         ref.invalidate(browserEngineProvider(id));
       }
-      ref.read(hibernationProvider.notifier).onTabsClosed(currentIds);
+      ref.read(hibernationProvider.notifier).onTabsClosed(closedIds);
     }
   });
 
@@ -177,21 +191,21 @@ void registerBrowserViewSideEffects({required WidgetRef ref}) {
       return;
     }
     if (isGhost) {
-      _syncEngineToChrome(ref, next.tabs, next.activeIndex);
+      _syncEngineToChrome(ref, next.tabOrder.map((id) => next.tabs[id]!).toList(), next.activeIndex);
     }
     if (previous != null && previous.tabs.length > next.tabs.length) {
-      final currentIds = next.tabs.map((t) => t.id).toSet();
-      final closedIds = previous.tabs.map((t) => t.id).toSet().difference(currentIds);
+      final currentIds = next.tabs.keys.toSet();
+      final closedIds = previous.tabs.keys.toSet().difference(currentIds);
       for (final id in closedIds) {
         ref.invalidate(browserEngineProvider(id));
       }
-      ref.read(hibernationProvider.notifier).onTabsClosed(currentIds);
+      ref.read(hibernationProvider.notifier).onTabsClosed(closedIds);
     }
   });
 
   ref.listen(isGhostModeProvider, (_, isGhostNow) {
     final state = isGhostNow ? ref.read(ghostTabsProvider) : ref.read(tabsProvider);
-    _syncEngineToChrome(ref, state.tabs, state.activeIndex);
+    _syncEngineToChrome(ref, state.tabOrder.map((id) => state.tabs[id]!).toList(), state.activeIndex);
   });
 
   // 2. Listen to Theme changes to sync dark mode with the ACTIVE engine.
@@ -266,3 +280,7 @@ void _updateHistoryTitle(Ref ref, String? url, String title) {
   if (url == null || url.isEmpty || url == 'about:blank') return;
   ref.read(historyProvider.notifier).addToHistory(url, title: title);
 }
+
+
+
+

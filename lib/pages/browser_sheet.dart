@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mira/core/entities/theme_entity.dart';
-import 'package:mira/core/notifiers/search_notifier.dart';
-import 'package:mira/core/notifiers/theme_notifier.dart';
+import 'package:qyx/core/entities/theme_entity.dart';
+import 'package:qyx/core/notifiers/search_notifier.dart';
+import 'package:qyx/core/notifiers/theme_notifier.dart';
 import '../constants/search_engines.dart';
 
 class BrowserSheet extends ConsumerWidget {
@@ -50,30 +50,36 @@ class BrowserSheet extends ConsumerWidget {
           ),
           const SizedBox(height: 10),
 
-          Column(
-            children: [
-              ...SearchEngines.urls.keys.map((engineKey) {
-                return RadioListTile<String>(
-                  title: Text(
-                    SearchEngines.getName(engineKey),
-                    style: TextStyle(color: contentColor.withAlpha(179)),
-                  ),
-                  value: engineKey,
-                  groupValue: currentEngine,
-                  onChanged: (value) {
-                    if (value != null) {
-                      ref.read(searchEngineProvider.notifier).setEngine(value);
-                    }
-                  },
-                  activeColor: appTheme.accentColor,
-                  contentPadding: EdgeInsets.zero,
-                );
-              }),
-            ],
+          RadioGroup<String>(
+            groupValue: currentEngine,
+            onChanged: (value) {
+              if (value != null) {
+                ref.read(searchEngineProvider.notifier).setEngine(value);
+              }
+            },
+            child: Column(
+              children: [
+                ...SearchEngines.urls.keys.map((engineKey) {
+                  return RadioListTile<String>(
+                    title: Text(
+                      SearchEngines.getName(engineKey),
+                      style: TextStyle(color: contentColor.withAlpha(179)),
+                    ),
+                    value: engineKey,
+                    activeColor: appTheme.accentColor,
+                    contentPadding: EdgeInsets.zero,
+                  );
+                }),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 }
+
+
+
+
 

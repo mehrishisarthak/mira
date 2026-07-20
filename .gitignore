@@ -46,3 +46,10 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# graphify generated output (regenerable) + scratch dumps
+graphify-out/
+full_code.txt
+
+# Visual Studio local cache (regenerable, was 308M untracked)
+.vs/

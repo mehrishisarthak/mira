@@ -3,26 +3,30 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mira/pages/main_screen/main_screen_haptics.dart';
-import 'package:mira/constants/app_fonts.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart'
+    show CookieManager, WebStorageManager;
+import 'package:qyx/pages/main_screen/main_screen_haptics.dart';
+import 'package:qyx/constants/app_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:mira/core/notifiers/history_notifier.dart';
+import 'package:qyx/core/notifiers/history_notifier.dart';
 
 // Models
-import 'package:mira/core/entities/theme_entity.dart';
-import 'package:mira/core/notifiers/theme_notifier.dart';
-import 'package:mira/core/notifiers/security_notifier.dart';
-import 'package:mira/core/notifiers/ghost_notifier.dart';
-import 'package:mira/core/notifiers/tab_notifier.dart';
-import 'package:mira/core/services/download_provider.dart';
-import 'package:mira/pages/history_screen.dart';
-import 'package:mira/pages/book_marks_screen.dart';
-import 'package:mira/pages/downloads_screen.dart';
-import 'package:mira/pages/browser_sheet.dart';
+import 'package:qyx/core/entities/theme_entity.dart';
+import 'package:qyx/core/notifiers/theme_notifier.dart';
+import 'package:qyx/core/notifiers/security_notifier.dart';
+import 'package:qyx/core/notifiers/ghost_notifier.dart';
+import 'package:qyx/core/notifiers/tab_notifier.dart';
+import 'package:qyx/core/services/download_provider.dart';
+import 'package:qyx/pages/history_screen.dart';
+import 'package:qyx/pages/book_marks_screen.dart';
+import 'package:qyx/pages/downloads_screen.dart';
+import 'package:qyx/pages/browser_sheet.dart';
 
-import 'package:mira/pages/browser_chrome_providers.dart';
-import 'package:mira/core/notifiers/hibernation_notifier.dart';
-import 'package:mira/shell/desktop/open_private_browser_window.dart';
+import 'package:qyx/core/ui/qyx_toast.dart';
+import 'package:qyx/pages/browser_chrome_providers.dart';
+import 'package:qyx/core/notifiers/hibernation_notifier.dart';
+import 'package:qyx/core/services/database_providers.dart';
+import 'package:qyx/shell/desktop/open_private_browser_window.dart';
 
 /// Close the menu route, then push [page] on the root navigator (desktop popup).
 void _popMenuThenPush(BuildContext context, Widget page) {
@@ -65,6 +69,14 @@ class MiraMenuPage extends ConsumerWidget {
             defaultTargetPlatform == TargetPlatform.linux ||
             defaultTargetPlatform == TargetPlatform.macOS);
 
+    // Mirrors the guard in InAppWebViewEngine._buildContentBlockers: WebKit
+    // ContentBlockers exist on Android/iOS/macOS only. Note macOS IS supported,
+    // so this is deliberately not `!isDesktop`.
+    final adBlockSupported = !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS ||
+            defaultTargetPlatform == TargetPlatform.macOS);
+
     final isLight = theme.mode == ThemeMode.light;
     final appTextColor = isLight ? kMiraInkPrimary : Colors.white;
     final primaryAccent = isGhost ? Colors.redAccent : theme.primaryColor;
@@ -81,7 +93,7 @@ class MiraMenuPage extends ConsumerWidget {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'M I R A',
+          'Q Y X',
           style: jetBrainsMono(
             color: primaryAccent,
             fontSize: 18,
@@ -186,30 +198,20 @@ class MiraMenuPage extends ConsumerWidget {
               leading: Icon(Icons.link, color: appTextColor.withAlpha(179)),
               title: Text('Copy URL', style: TextStyle(color: appTextColor)),
               onTap: () {
-                final rootNav = Navigator.of(context, rootNavigator: true);
-                final url = ref.read(currentActiveTabProvider).url;
+                final url = ref.read(tabsProvider).safeActiveTab?.url ?? '';
                 if (url.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('No page loaded yet')),
-                  );
+                  showQyxNotice('No page loaded yet');
                   return;
                 }
                 Clipboard.setData(ClipboardData(text: url));
-                if (desktopOverlay) {
-                  Navigator.of(context).pop();
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (rootNav.context.mounted) {
-                      ScaffoldMessenger.of(rootNav.context).showSnackBar(
-                        const SnackBar(
-                            content: Text('URL copied to clipboard')),
-                      );
-                    }
-                  });
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('URL copied to clipboard')),
-                  );
-                }
+                // showQyxNotice drives off rootNavigatorKey/scaffoldMessengerKey
+                // directly, not context, so it doesn't care whether this popup
+                // is still open or has already been popped — the
+                // postFrameCallback-after-pop dance the two branches used to
+                // need (waiting for the popup to close before reaching for the
+                // ROOT scaffold's messenger) is no longer needed.
+                if (desktopOverlay) Navigator.of(context).pop();
+                showQyxNotice('URL copied to clipboard', kind: QyxToastKind.success);
               },
             ),
 
@@ -220,19 +222,14 @@ class MiraMenuPage extends ConsumerWidget {
                   Text('Open Externally', style: TextStyle(color: appTextColor)),
               onTap: () async {
                 final navigator = Navigator.of(context, rootNavigator: true);
-                final messenger = ScaffoldMessenger.of(context);
-                final url = ref.read(currentActiveTabProvider).url;
+                final url = ref.read(tabsProvider).safeActiveTab?.url ?? '';
                 if (url.isEmpty) {
-                  messenger.showSnackBar(
-                    const SnackBar(content: Text('No page loaded yet')),
-                  );
+                  showQyxNotice('No page loaded yet');
                   return;
                 }
                 final uri = Uri.tryParse(url);
                 if (uri == null || !await canLaunchUrl(uri)) {
-                  messenger.showSnackBar(
-                    const SnackBar(content: Text('Could not open this URL')),
-                  );
+                  showQyxNotice('Could not open this URL', kind: QyxToastKind.error);
                   return;
                 }
                 await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -250,14 +247,12 @@ class MiraMenuPage extends ConsumerWidget {
                 final rootNav = Navigator.of(context, rootNavigator: true);
                 final engine = ref.read(activeBrowserEngineProvider);
                 if (engine == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('No page loaded yet')),
-                  );
+                  showQyxNotice('No page loaded yet');
                   return;
                 }
-                final url = ref.read(currentActiveTabProvider).url;
+                final url = ref.read(tabsProvider).safeActiveTab?.url ?? '';
                 final html = await engine.getPageHtml();
-                
+
                 final host =
                     (Uri.tryParse(url)?.host ?? 'page').replaceAll('.', '_');
                 final filename =
@@ -267,20 +262,8 @@ class MiraMenuPage extends ConsumerWidget {
                     .savePage(html, filename);
                 if (!context.mounted) return;
                 if (savedPath != null) {
-                  if (desktopOverlay) {
-                    rootNav.pop();
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (rootNav.context.mounted) {
-                        ScaffoldMessenger.of(rootNav.context).showSnackBar(
-                          SnackBar(content: Text('Saved: $filename')),
-                        );
-                      }
-                    });
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Saved: $filename')),
-                    );
-                  }
+                  if (desktopOverlay) rootNav.pop();
+                  showQyxNotice('Saved: $filename', kind: QyxToastKind.success);
                 }
               },
             ),
@@ -294,13 +277,11 @@ class MiraMenuPage extends ConsumerWidget {
 
             ListTile(
               title: Text(
-                isDesktop ? "New private window" : "New Ghost Tab",
+                "New Ghost Tab",
                 style: TextStyle(color: appTextColor),
               ),
               subtitle: Text(
-                isDesktop
-                    ? "Opens a separate private window (like Chrome)"
-                    : "Start a private session",
+                "Start a private session",
                 style: TextStyle(
                     color: appTextColor.withAlpha(128), fontSize: 12),
               ),
@@ -357,10 +338,38 @@ class MiraMenuPage extends ConsumerWidget {
                 );
 
                 if (confirm == true && context.mounted) {
-                  final engine = ref.read(activeBrowserEngineProvider);
-                  if (engine != null) {
-                    await engine.clearStorage();
-                    await engine.clearCookies();
+                  // Cookies and site storage are process-wide managers in
+                  // flutter_inappwebview, so a single direct call clears them
+                  // for every tab (normal + ghost) regardless of which
+                  // engine, if any, is currently active. Calling these
+                  // directly — rather than only via activeBrowserEngineProvider
+                  // — means Nuke Data still fully wipes cookies/storage even
+                  // if there's no active engine wired up at nuke time.
+                  try {
+                    await CookieManager.instance().deleteAllCookies();
+                    await WebStorageManager.instance().deleteAllData();
+                  } catch (e) {
+                    debugPrint('MIRA: Nuke - failed clearing cookies/storage: $e');
+                  }
+
+                  // Unlike cookies/storage, the HTTP cache is per-engine
+                  // (per native webview controller), so every currently
+                  // instantiated tab's engine needs its own explicit
+                  // clearCache() call. Reading browserEngineProvider(id) for
+                  // a tab whose webview was never mounted (e.g. still
+                  // hibernated) is safe: it only constructs the Dart wrapper,
+                  // and clearCache() no-ops internally until a native
+                  // controller is actually attached.
+                  final allTabIds = <String>{
+                    ...ref.read(tabsProvider).tabs.keys,
+                    ...ref.read(ghostTabsProvider).tabs.keys,
+                  };
+                  for (final id in allTabIds) {
+                    try {
+                      await ref.read(browserEngineProvider(id)).clearCache();
+                    } catch (e) {
+                      debugPrint('MIRA: Nuke - failed clearing cache for tab $id: $e');
+                    }
                   }
 
                   ref.read(historyProvider.notifier).clearHistory();
@@ -371,19 +380,16 @@ class MiraMenuPage extends ConsumerWidget {
                   ref.read(browserChromeProvider.notifier).setLoadingProgress(100);
 
                   final s = ref.read(tabsProvider);
-                  if (s.tabs.isNotEmpty) {
+                  final wakeTab = s.safeActiveTab;
+                  if (wakeTab != null) {
                     ref
                         .read(hibernationProvider.notifier)
-                        .wakeTab(s.tabs[s.activeIndex].id);
+                        .wakeTab(wakeTab.id);
                   }
 
                   if (context.mounted) {
                     Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text("System Purged."),
-                          backgroundColor: Colors.redAccent),
-                    );
+                    showQyxNotice('System Purged.', kind: QyxToastKind.error);
                   }
                 }
               },
@@ -415,22 +421,36 @@ class MiraMenuPage extends ConsumerWidget {
                   ref.read(securityProvider.notifier).toggleCamera(val),
             ),
 
+            // Ad blocking rides on WebKit-style ContentBlockers, which the
+            // plugin only implements on Android/iOS/macOS — on Windows/Linux
+            // _buildContentBlockers() returns an empty list, so the toggle
+            // blocks precisely nothing. Show it disabled and say so rather than
+            // reporting "Active" while doing nothing (O-89).
             SwitchListTile(
               title: Text("Ad & Tracker Block",
-                  style: TextStyle(color: appTextColor)),
+                  style: TextStyle(
+                      color: adBlockSupported
+                          ? appTextColor
+                          : appTextColor.withAlpha(97))),
               subtitle: Text(
-                securityState.isAdBlockEnabled ? "Active" : "Off",
+                !adBlockSupported
+                    ? "Not supported on desktop yet"
+                    : securityState.isAdBlockEnabled
+                        ? "Active"
+                        : "Off",
                 style: TextStyle(
                     color: appTextColor.withAlpha(128), fontSize: 12),
               ),
               secondary: Icon(Icons.shield_outlined,
-                  color: securityState.isAdBlockEnabled
+                  color: adBlockSupported && securityState.isAdBlockEnabled
                       ? Colors.greenAccent
                       : appTextColor.withAlpha(128)),
-              value: securityState.isAdBlockEnabled,
+              value: adBlockSupported && securityState.isAdBlockEnabled,
               activeThumbColor: Colors.greenAccent,
-              onChanged: (val) =>
-                  ref.read(securityProvider.notifier).toggleAdBlock(val),
+              onChanged: !adBlockSupported
+                  ? null
+                  : (val) =>
+                      ref.read(securityProvider.notifier).toggleAdBlock(val),
             ),
 
 
@@ -555,3 +575,5 @@ class MiraMenuPage extends ConsumerWidget {
     );
   }
 }
+
+

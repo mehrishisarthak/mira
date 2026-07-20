@@ -2,19 +2,19 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mira/constants/app_fonts.dart';
+import 'package:qyx/constants/app_fonts.dart';
 
-import 'package:mira/core/entities/tab_entity.dart';
-import 'package:mira/core/notifiers/bookmarks_notifier.dart';
-import 'package:mira/pages/browser_chrome_providers.dart';
-import 'package:mira/pages/mira_drawer.dart';
-import 'package:mira/pages/main_screen/browser_progress_bar.dart';
-import 'package:mira/pages/main_screen/main_screen_haptics.dart';
-import 'package:mira/pages/main_screen/main_screen_security.dart';
-import 'package:mira/pages/tab_screen.dart';
-import 'package:mira/core/services/snapshot_service.dart';
+import 'package:qyx/core/entities/tab_entity.dart';
+import 'package:qyx/core/notifiers/bookmarks_notifier.dart';
+import 'package:qyx/pages/browser_chrome_providers.dart';
+import 'package:qyx/pages/mira_drawer.dart';
+import 'package:qyx/pages/main_screen/browser_progress_bar.dart';
+import 'package:qyx/pages/main_screen/main_screen_haptics.dart';
+import 'package:qyx/pages/main_screen/main_screen_security.dart';
+import 'package:qyx/pages/tab_screen.dart';
+import 'package:qyx/core/services/snapshot_service.dart';
 
-Widget buildMobileBottomBar({
+Widget buildMobileTopBar({
   required BuildContext context,
   required WidgetRef ref,
   required TextEditingController urlController,
@@ -35,20 +35,18 @@ Widget buildMobileBottomBar({
   required VoidCallback onBackPressed,
   required VoidCallback onGhostToggle,
 }) {
-  final mediaPadBottom = MediaQuery.of(context).padding.bottom;
+  // Top-pinned bar: accommodate the top safe-area notch/status bar instead of
+  // the bottom chin, since this bar now lives at the very top of the Column
+  // (see mainscreen.dart's mobile layout pivot).
+  final mediaPadTop = MediaQuery.of(context).padding.top;
   final barColor = isGhost ? const Color(0xFF0D0D0D) : appBarColor;
 
   return Column(
     mainAxisSize: MainAxisSize.min,
     children: [
-      // Fixed 3px slot — prevents layout jump when progress bar appears/disappears
-      SizedBox(
-        height: 3,
-        child: BrowserProgressBar(color: primaryAccent),
-      ),
       Container(
         color: barColor,
-        padding: EdgeInsets.only(bottom: mediaPadBottom),
+        padding: EdgeInsets.only(top: mediaPadTop),
         child: Row(
           children: [
             // ── Back button ──────────────────────────────────────────────────
@@ -154,23 +152,38 @@ Widget buildMobileBottomBar({
               onTap: () async {
                 triggerHaptic(MainScreenHapticKind.selection);
                 final engine = ref.read(activeBrowserEngineProvider);
+                final capturedTabId = activeTab.id;
+
+                // Guards the unawaited capture below against writing state
+                // after this transition has already resolved and cleaned up.
+                // Without this: if takeSnapshot() is still in flight when the
+                // switcher closes (e.g. the user tapped a different tab and
+                // popped back quickly), the capture can resolve *after* the
+                // "resume + clear overlay" cleanup below already ran — and
+                // silently re-stamp webViewSnapshotProvider with a frozen
+                // image of this tab, and (out of order) pause an engine that
+                // was just resumed. Nothing else ever clears that stale
+                // state, so the next time the user switches back to this
+                // tab, the frozen snapshot reappears over its already-live,
+                // already-resumed engine and just sits there.
+                var transitionActive = true;
 
                 // 1. Snapshot-swap: capture the live page in parallel
                 unawaited(() async {
                   final shot = await engine?.takeSnapshot();
-                  if (!context.mounted) return;
+                  if (!context.mounted || !transitionActive) return;
                   if (shot != null) {
                     ref.read(webViewSnapshotProvider.notifier).state =
-                        WebViewSnapshot(tabId: activeTab.id, bytes: shot);
+                        WebViewSnapshot(tabId: capturedTabId, bytes: shot);
                     // Also cache it instantly in memory for the transition
                     ref.read(tabSnapshotCacheProvider.notifier).update((state) => {
                       ...state,
-                      activeTab.id: TabSnapshotData(bytes: shot),
+                      capturedTabId: TabSnapshotData(bytes: shot),
                     });
 
                     // Background disk write for normal tabs
                     if (!isGhost) {
-                      unawaited(ref.read(snapshotServiceProvider).writeSnapshot(activeTab.id, shot));
+                      unawaited(ref.read(snapshotServiceProvider).writeSnapshot(capturedTabId, shot));
                     }
                   }
                   // The snapshot stops the page *compositing*; pauseRendering() (native
@@ -182,6 +195,7 @@ Widget buildMobileBottomBar({
                 await Navigator.push(
                   context,
                   PageRouteBuilder(
+                    opaque: false,
                     pageBuilder: (context, animation, secondaryAnimation) => const TabsSheet(),
                     transitionsBuilder: (context, animation, secondaryAnimation, child) {
                       return FadeTransition(
@@ -199,7 +213,9 @@ Widget buildMobileBottomBar({
                   ),
                 );
 
-                unawaited(engine?.resumeRendering());
+                transitionActive = false;
+                final currentEngine = ref.read(activeBrowserEngineProvider);
+                unawaited(currentEngine?.resumeRendering());
                 if (!context.mounted) return;
                 ref.read(webViewSnapshotProvider.notifier).state = null;
               },
@@ -235,6 +251,13 @@ Widget buildMobileBottomBar({
           ],
         ),
       ),
+      // Fixed 3px slot — prevents layout jump when progress bar appears/disappears
+      SizedBox(
+        height: 3,
+        child: BrowserProgressBar(color: primaryAccent),
+      ),
     ],
   );
 }
+
+

@@ -5,3 +5,6 @@ Future<void> desktopWindowManagerInit() => impl.desktopWindowManagerInit();
 
 Future<void> desktopSetWindowTitle(String title) =>
     impl.desktopSetWindowTitle(title);
+
+Future<void> desktopSetFullScreen(bool fullscreen) =>
+    impl.desktopSetFullScreen(fullscreen);

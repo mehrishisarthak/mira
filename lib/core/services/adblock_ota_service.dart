@@ -7,7 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
-import 'package:mira/core/services/preferences_service.dart';
+import 'package:qyx/core/services/preferences_service.dart';
 
 /// Client half of the weekly OTA tracker-list refresh.
 ///

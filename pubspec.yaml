@@ -1,4 +1,4 @@
-name: mira
+name: qyx
 description: "A privacy-focused browser built with Flutter."
 publish_to: 'none'
 version: 1.0.0+1
@@ -66,3 +66,13 @@ flutter_launcher_icons:
   ios: true
   remove_alpha_ios: true
   image_path: "assets/icon.png"
+  # Adaptive icon (Android 8+): the system masks the foreground to a circle or
+  # squircle per OEM, so the mark is kept inside the centre 66% safe zone by
+  # tool_generate_icon.dart. Background is a flat brand matte black rather than
+  # an image — nothing to misalign under the mask.
+  adaptive_icon_background: "#282828"
+  adaptive_icon_foreground: "assets/icon_foreground.png"
+  windows:
+    generate: true
+    image_path: "assets/icon.png"
+    icon_size: 256

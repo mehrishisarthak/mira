@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mira/core/notifiers/ghost_notifier.dart';
-import 'package:mira/core/notifiers/tab_notifier.dart';
-import 'package:mira/core/entities/tab_entity.dart';
-import 'package:mira/core/notifiers/hibernation_notifier.dart';
-import 'package:mira/core/services/database_providers.dart';
-import 'package:mira/pages/browser_chrome_providers.dart';
-
+import 'package:qyx/core/notifiers/ghost_notifier.dart';
+import 'package:qyx/core/notifiers/tab_notifier.dart';
+import 'package:qyx/core/entities/tab_entity.dart';
+import 'package:qyx/core/notifiers/hibernation_notifier.dart';
+import 'package:qyx/core/services/database_providers.dart';
+import 'package:qyx/pages/browser_chrome_providers.dart';
 import '../branding_screen.dart';
 import '../custom_error_screen.dart';
 import 'hibernated_tab_placeholder.dart';
@@ -20,14 +19,11 @@ class BrowserView extends ConsumerStatefulWidget {
   ConsumerState<BrowserView> createState() => _BrowserViewState();
 }
 
-class _BrowserViewState extends ConsumerState<BrowserView>
-    with WidgetsBindingObserver {
-
+class _BrowserViewState extends ConsumerState<BrowserView> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // Run the one-time initial sync after the first frame so providers are ready.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       syncInitialEngine(ref);
@@ -41,60 +37,59 @@ class _BrowserViewState extends ConsumerState<BrowserView>
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {}
-
-  @override
   Widget build(BuildContext context) {
     final isGhost = ref.watch(isGhostModeProvider);
-
     registerBrowserViewSideEffects(ref: ref);
 
-    // Watch both providers for structural changes to either stack
-    ref.watch(tabsProvider.select((s) =>
-        '${s.activeIndex}|${s.tabs.map((t) => '${t.id}:${t.url.isEmpty}').join(',')}'));
-    ref.watch(ghostTabsProvider.select((s) =>
-        '${s.activeIndex}|${s.tabs.map((t) => '${t.id}:${t.url.isEmpty}').join(',')}'));
-
+    // Rebuild only on STRUCTURAL change — add/remove/switch, the
+    // branding<->webview flip (a tab's url emptying/filling), and webError
+    // show/hide. A url/title/canGoBack tick during load must NOT rebuild this
+    // Stack: each webview is keyed by tabId and reads initialUrl once at
+    // creation, so a plain url change is invisible here (D-29 / O-80).
+    String tabsSignature(NormalizedTabsState s) =>
+        '${s.activeIndex}|${s.tabOrder.map((id) {
+          final t = s.tabs[id]!;
+          return '$id:${t.url.isEmpty}:${t.webError}';
+        }).join(',')}';
+    ref.watch(tabsProvider.select(tabsSignature));
+    ref.watch(ghostTabsProvider.select(tabsSignature));
     final normalState = ref.read(tabsProvider);
     final ghostState = ref.read(ghostTabsProvider);
-    
-    final normalTabs = normalState.tabs;
+
+    final normalTabsMap = normalState.tabs;
+    final normalOrder = normalState.tabOrder;
     final normalActiveIndex = normalState.activeIndex;
     
-    final ghostTabs = ghostState.tabs;
+    final ghostTabsMap = ghostState.tabs;
+    final ghostOrder = ghostState.tabOrder;
     final ghostActiveIndex = ghostState.activeIndex;
-
+    
     final awakeTabIds = ref.watch(hibernationProvider);
     final webViewSnapshot = ref.watch(webViewSnapshotProvider);
-    
-    // The active tab whose custom error or URL we care about at the top level
-    final activeUrl = isGhost 
-      ? (ghostTabs.isNotEmpty ? ghostTabs[ghostActiveIndex].url : '') 
-      : (normalTabs.isNotEmpty ? normalTabs[normalActiveIndex].url : '');
-      
+
+    final activeUrl = isGhost
+       ? (ghostOrder.isNotEmpty ? ghostTabsMap[ghostOrder[ghostActiveIndex]]!.url : '')
+        : (normalOrder.isNotEmpty ? normalTabsMap[normalOrder[normalActiveIndex]]!.url : '');
+        
     final activeTabWebError = isGhost
-      ? (ghostTabs.isNotEmpty ? ghostTabs[ghostActiveIndex].webError : null)
-      : (normalTabs.isNotEmpty ? normalTabs[normalActiveIndex].webError : null);
+       ? (ghostOrder.isNotEmpty ? ghostTabsMap[ghostOrder[ghostActiveIndex]]!.webError : null)
+        : (normalOrder.isNotEmpty ? normalTabsMap[normalOrder[normalActiveIndex]]!.webError : null);
 
     return Stack(
       children: [
-        // Map over both lists simultaneously
         ...[
-          ...normalTabs.asMap().entries.map((e) => MapEntry(e.key, {'tab': e.value, 'isGhost': false})),
-          ...ghostTabs.asMap().entries.map((e) => MapEntry(e.key, {'tab': e.value, 'isGhost': true}))
+         ...normalOrder.asMap().entries.map((e) => MapEntry(e.key, {'tab': normalTabsMap[e.value]!, 'isGhost': false})),
+         ...ghostOrder.asMap().entries.map((e) => MapEntry(e.key, {'tab': ghostTabsMap[e.value]!, 'isGhost': true}))
         ].map((entry) {
           final index = entry.key;
           final tabData = entry.value;
           final tab = tabData['tab'] as BrowserTab;
           final isTabGhost = tabData['isGhost'] as bool;
-          
           final isActiveMode = isTabGhost == isGhost;
           final isShowing = isActiveMode && index == (isTabGhost ? ghostActiveIndex : normalActiveIndex);
 
-          // Inactive mode tabs get visibility: false, maintainState: true
-          
           if (tab.url.isEmpty) {
-             return Positioned.fill(
+            return Positioned.fill(
               key: ValueKey('brand_${tab.id}'),
               child: Visibility(
                 visible: isShowing,
@@ -105,44 +100,55 @@ class _BrowserViewState extends ConsumerState<BrowserView>
           }
 
           if (!awakeTabIds.contains(tab.id)) {
-            final cachedSnapshot = ref.watch(tabSnapshotCacheProvider)[tab.id];
+            // Read the SAME snapshot cache the Tab Grid uses (tab_screen.dart) —
+            // populated event-driven when a tab loses focus (mainscreen switch
+            // listener) or on Tab-Grid tap (mobile app bar), both masked by an
+            // animation. No background timer, no extra GPU readback: the readback
+            // already happened at the transition. Scoped by tab id so a capture
+            // for one tab doesn't rebuild the whole Stack (O-82).
+            final cachedSnapshot =
+                ref.watch(tabSnapshotCacheProvider.select((m) => m[tab.id]));
             return Positioned.fill(
               key: ValueKey('hib_${tab.id}'),
               child: Visibility(
                 visible: isShowing,
-                maintainState: true,
+                maintainState: false,
                 child: HibernatedTabPlaceholder(tab: tab, snapshot: cachedSnapshot),
               ),
             );
           }
 
           final engine = ref.watch(browserEngineProvider(tab.id));
-          
-          final snapshotBytes =
-              (isShowing && webViewSnapshot?.tabId == tab.id)
-                  ? webViewSnapshot!.bytes
-                  : null;
+          final snapshotBytes = (isShowing && webViewSnapshot?.tabId == tab.id) ? webViewSnapshot!.bytes : null;
 
           return Positioned.fill(
             key: ValueKey('vis_${tab.id}'),
             child: Visibility(
               visible: isShowing,
               maintainState: true,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Offstage(
-                    offstage: snapshotBytes != null || tab.webError != null,
-                    child:
-                        engine.buildWidget(tabId: tab.id, initialUrl: tab.url),
-                  ),
-                  if (snapshotBytes != null)
-                    Image.memory(
-                      snapshotBytes,
-                      fit: BoxFit.fill,
-                      gaplessPlayback: true,
-                    ),
-                ],
+              child: RepaintBoundary(
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    engine.buildWidget(tabId: tab.id, initialUrl: tab.url),
+                    if (snapshotBytes != null)
+                      Positioned.fill(
+                        child: Image.memory(
+                          snapshotBytes,
+                          fit: BoxFit.cover,
+                          gaplessPlayback: true,
+                          // Deliberately NOT cacheWidth-bounded, unlike the
+                          // grid/hibernated sites (O-47). Those cap one
+                          // persistent thumbnail *per tab*; this is a single
+                          // transient full-bleed image, cleared when the sheet
+                          // closes, against a 100 MB default image cache. Any
+                          // bound here is a visible upscale on a full-screen
+                          // transition and buys memory we are not short of.
+                          // See O-85.
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
           );
@@ -154,7 +160,7 @@ class _BrowserViewState extends ConsumerState<BrowserView>
               error: activeTabWebError,
               url: activeUrl,
               onRetry: () {
-                final tabId = isGhost ? ghostTabs[ghostActiveIndex].id : normalTabs[normalActiveIndex].id;
+                final tabId = isGhost ? ghostOrder[ghostActiveIndex] : normalOrder[normalActiveIndex];
                 if (isGhost) {
                   ref.read(ghostTabsProvider.notifier).setWebError(tabId, null);
                 } else {

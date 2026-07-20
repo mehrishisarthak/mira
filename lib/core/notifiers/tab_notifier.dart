@@ -2,52 +2,57 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
-import 'package:mira/core/entities/tab_entity.dart';
-import 'package:mira/core/services/preferences_service.dart';
-import 'package:mira/core/services/snapshot_service.dart';
+import 'package:qyx/core/entities/tab_entity.dart';
+import 'package:qyx/core/services/preferences_service.dart';
+import 'package:qyx/core/services/snapshot_service.dart';
 
-// --- 1. THE STATE CLASS ---
-class TabsState {
-  final List<BrowserTab> tabs;
+@immutable
+class NormalizedTabsState {
+  final List<String> tabOrder;
+  final Map<String, BrowserTab> tabs;
   final int activeIndex;
 
-  TabsState({required this.tabs, required this.activeIndex});
+  const NormalizedTabsState({
+    required this.tabOrder,
+    required this.tabs,
+    required this.activeIndex,
+  });
 
   BrowserTab get activeTab {
-    if (tabs.isEmpty) {
-      throw StateError('TabsState has no tabs');
+    if (tabOrder.isEmpty) {
+      throw StateError('NormalizedTabsState has no tabs');
     }
-    final i = activeIndex.clamp(0, tabs.length - 1);
-    return tabs[i];
+    final i = activeIndex.clamp(0, tabOrder.length - 1);
+    return tabs[tabOrder[i]]!;
   }
 
-  /// Used when a session may have zero tabs (ghost/private before first tab).
   BrowserTab? get safeActiveTab {
-    if (tabs.isEmpty) return null;
-    final i = activeIndex.clamp(0, tabs.length - 1);
-    return tabs[i];
+    if (tabOrder.isEmpty) return null;
+    final i = activeIndex.clamp(0, tabOrder.length - 1);
+    return tabs[tabOrder[i]];
   }
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      (other is TabsState &&
-          other.activeIndex == activeIndex &&
-          listEquals(other.tabs, tabs));
-
-  @override
-  int get hashCode => Object.hash(activeIndex, Object.hashAll(tabs));
+  NormalizedTabsState copyWith({
+    List<String>? tabOrder,
+    Map<String, BrowserTab>? tabs,
+    int? activeIndex,
+  }) {
+    return NormalizedTabsState(
+      tabOrder: tabOrder ?? this.tabOrder,
+      tabs: tabs ?? this.tabs,
+      activeIndex: activeIndex ?? this.activeIndex,
+    );
+  }
 }
 
-// --- 2. THE NOTIFIER ---
-class TabsNotifier extends StateNotifier<TabsState> {
+class TabsNotifier extends StateNotifier<NormalizedTabsState> {
   final PreferencesService _prefsService;
   final SnapshotService? _snapshotService;
   Timer? _saveDebounce;
 
-  TabsNotifier(this._prefsService, {SnapshotService? snapshotService}) 
+  TabsNotifier(this._prefsService, {SnapshotService? snapshotService})
       : _snapshotService = snapshotService,
-        super(TabsState(tabs: [BrowserTab()], activeIndex: 0)) {
+        super(const NormalizedTabsState(tabOrder: [], tabs: {}, activeIndex: 0)) {
     _loadTabs();
   }
 
@@ -60,156 +65,173 @@ class TabsNotifier extends StateNotifier<TabsState> {
   void _loadTabs() {
     final savedJsonList = _prefsService.getSavedTabs();
     final savedIndex = _prefsService.getActiveTabIndex();
+
     if (savedJsonList.isNotEmpty) {
       try {
-        final loadedTabs = savedJsonList
-            .map((str) => BrowserTab.fromJson(str))
-            .toList();
+        final loadedTabs = savedJsonList.map((str) => BrowserTab.fromJson(str)).toList();
         int safeIndex = savedIndex;
         if (safeIndex < 0 || safeIndex >= loadedTabs.length) {
           safeIndex = 0;
         }
+
         var nextTabs = loadedTabs;
         var nextIndex = safeIndex;
         var didPrependFreshDial = false;
+
         final isDesktop = !kIsWeb &&
             (defaultTargetPlatform == TargetPlatform.windows ||
                 defaultTargetPlatform == TargetPlatform.macOS ||
                 defaultTargetPlatform == TargetPlatform.linux);
-        if (isDesktop &&
-            loadedTabs.isNotEmpty &&
-            loadedTabs[safeIndex].url.isNotEmpty) {
+
+        if (isDesktop && loadedTabs.isNotEmpty && loadedTabs[safeIndex].url.isNotEmpty) {
           nextTabs = [BrowserTab(), ...loadedTabs];
           nextIndex = 0;
           didPrependFreshDial = true;
         }
-        state = TabsState(tabs: nextTabs, activeIndex: nextIndex);
+
+        final Map<String, BrowserTab> normalizedMap = {};
+        final List<String> normalizedOrder = [];
+        for (final t in nextTabs) {
+          normalizedMap[t.id] = t;
+          normalizedOrder.add(t.id);
+        }
+
+        state = NormalizedTabsState(tabOrder: normalizedOrder, tabs: normalizedMap, activeIndex: nextIndex);
+
         if (didPrependFreshDial) {
           unawaited(_saveToPrefs());
         }
       } catch (e, stack) {
-        debugPrint('[MIRA] TabNotifier corrupted data: $e\n$stack');
-        state = TabsState(
-          tabs: [BrowserTab(id: const Uuid().v4())],
+        debugPrint(' TabNotifier corrupted data: $e\n$stack');
+        final seed = BrowserTab(id: const Uuid().v4());
+        state = NormalizedTabsState(
+          tabOrder: [seed.id],
+          tabs: {seed.id: seed},
           activeIndex: 0,
         );
       }
+    } else {
+      final seed = BrowserTab(id: const Uuid().v4());
+      state = NormalizedTabsState(
+        tabOrder: [seed.id],
+        tabs: {seed.id: seed},
+        activeIndex: 0,
+      );
     }
   }
 
   Future<void> _saveToPrefs() async {
     try {
-      final jsonList = state.tabs.map((tab) => tab.toJson()).toList();
+      final jsonList = state.tabOrder.map((id) => state.tabs[id]!.toJson()).toList();
       await _prefsService.saveTabs(jsonList, state.activeIndex);
     } catch (e) {
-      debugPrint('[MIRA] TabNotifier: failed to persist tab state: $e');
+      debugPrint(' TabNotifier: failed to persist tab state: $e');
     }
   }
 
-  // Debounced save for high-frequency WebView events (URL/title updates).
   void _scheduleSave() {
     _saveDebounce?.cancel();
     _saveDebounce = Timer(const Duration(milliseconds: 500), () => unawaited(_saveToPrefs()));
   }
 
-  /// Force an immediate write of any pending debounced save. Called on app
-  /// pause/detach so a url/title change still inside the 500 ms debounce window
-  /// isn't lost if the OS kills the process before the timer fires (O-11).
   Future<void> flush() async {
     if (!(_saveDebounce?.isActive ?? false)) return;
     _saveDebounce?.cancel();
     await _saveToPrefs();
   }
 
-  // --- ACTIONS ---
-
   void addTab({String url = ''}) {
-    // If the only existing tab is a blank seed tab and no URL is being opened,
-    // reuse it rather than stacking a second blank tab on top. This prevents
-    // the tab sheet's "no tabs" empty-state message from hiding the seed tab
-    // and then revealing it alongside a new blank tab when the user taps "+".
-    if (url.isEmpty && state.tabs.length == 1 && state.tabs.first.url.isEmpty) {
+    if (url.isEmpty && state.tabOrder.length == 1 && state.tabs[state.tabOrder.first]!.url.isEmpty) {
       if (state.activeIndex != 0) {
-        state = TabsState(tabs: state.tabs, activeIndex: 0);
+        state = state.copyWith(activeIndex: 0);
         unawaited(_saveToPrefs());
       }
       return;
     }
+
     final newTab = BrowserTab(url: url);
-    final newTabs = [...state.tabs, newTab];
-    state = TabsState(tabs: newTabs, activeIndex: newTabs.length - 1);
+    final newMap = Map<String, BrowserTab>.from(state.tabs);
+    newMap[newTab.id] = newTab;
+    final newOrder = List<String>.from(state.tabOrder)..add(newTab.id);
+
+    state = NormalizedTabsState(tabOrder: newOrder, tabs: newMap, activeIndex: newOrder.length - 1);
     unawaited(_saveToPrefs());
   }
 
   void closeTab(String tabId) {
     _snapshotService?.deleteSnapshot(tabId);
-    
-    if (state.tabs.length == 1) {
-      _updateActiveTab(
-        (tab) => tab.copyWith(url: '', title: 'New Tab'),
-      );
+
+    if (state.tabOrder.length == 1) {
+      _updateActiveTab((tab) => tab.copyWith(url: '', title: 'New Tab'));
       return;
     }
 
     final currentIndex = state.activeIndex;
-    final tabToRemoveIndex = state.tabs.indexWhere((t) => t.id == tabId);
+    final tabToRemoveIndex = state.tabOrder.indexOf(tabId);
     if (tabToRemoveIndex == -1) return;
 
-    final newTabs = [...state.tabs]..removeAt(tabToRemoveIndex);
-    
+    final newOrder = List<String>.from(state.tabOrder)..removeAt(tabToRemoveIndex);
+    final newMap = Map<String, BrowserTab>.from(state.tabs)..remove(tabId);
+
     int newIndex = currentIndex;
-    if (currentIndex >= newTabs.length) {
-      newIndex = newTabs.length - 1;
+    if (currentIndex >= newOrder.length) {
+      newIndex = newOrder.length - 1;
     } else if (currentIndex > tabToRemoveIndex) {
       newIndex = currentIndex - 1;
     }
 
-    state = TabsState(tabs: newTabs, activeIndex: newIndex);
+    state = NormalizedTabsState(tabOrder: newOrder, tabs: newMap, activeIndex: newIndex);
     unawaited(_saveToPrefs());
   }
 
   void switchTab(int index) {
-    if (index >= 0 && index < state.tabs.length) {
-      state = TabsState(tabs: state.tabs, activeIndex: index);
+    if (index >= 0 && index < state.tabOrder.length) {
+      state = state.copyWith(activeIndex: index);
       unawaited(_saveToPrefs());
     }
   }
 
-  /// Reorder tabs (e.g. future drag-and-drop strip). Indices are pre-[ReorderableListView] rules.
+  /// Switches to a tab by its stable id rather than its position in
+  /// [NormalizedTabsState.tabOrder]. Prefer this over [switchTab] wherever
+  /// the caller resolves the target from a closure captured at build time
+  /// (e.g. a ListView item's tap handler) — the list can reorder between
+  /// build and tap, and a captured index would then point at the wrong tab.
+  void switchTabById(String tabId) {
+    final index = state.tabOrder.indexOf(tabId);
+    if (index != -1) {
+      switchTab(index);
+    }
+  }
+
   void reorderTab(int oldIndex, int newIndex) {
-    if (oldIndex < 0 ||
-        oldIndex >= state.tabs.length ||
-        newIndex < 0 ||
-        newIndex >= state.tabs.length) {
+    if (oldIndex < 0 || oldIndex >= state.tabOrder.length || newIndex < 0 || newIndex >= state.tabOrder.length) {
       return;
     }
     if (oldIndex < newIndex) {
       newIndex -= 1;
     }
-    final tabs = [...state.tabs];
-    final item = tabs.removeAt(oldIndex);
-    tabs.insert(newIndex, item);
+    final newOrder = List<String>.from(state.tabOrder);
+    final item = newOrder.removeAt(oldIndex);
+    newOrder.insert(newIndex, item);
 
     var active = state.activeIndex;
     if (active == oldIndex) {
       active = newIndex;
     } else if (oldIndex < newIndex) {
-      if (active > oldIndex && active <= newIndex) {
-        active--;
-      }
+      if (active > oldIndex && active <= newIndex) active--;
     } else {
-      if (active >= newIndex && active < oldIndex) {
-        active++;
-      }
+      if (active >= newIndex && active < oldIndex) active++;
     }
-    active = active.clamp(0, tabs.length - 1);
-    state = TabsState(tabs: tabs, activeIndex: active);
+    active = active.clamp(0, newOrder.length - 1);
+
+    state = state.copyWith(tabOrder: newOrder, activeIndex: active);
     unawaited(_saveToPrefs());
   }
 
   void updateUrl(String newUrl) {
-    if (state.tabs.isEmpty) return;
-    if (state.tabs[state.activeIndex].url == newUrl) return;
+    if (state.tabOrder.isEmpty) return;
+    final activeTab = state.tabs[state.tabOrder[state.activeIndex]]!;
+    if (activeTab.url == newUrl) return;
     _updateActiveTab((tab) => tab.copyWith(url: newUrl), debounce: true);
   }
 
@@ -218,86 +240,97 @@ class TabsNotifier extends StateNotifier<TabsState> {
   }
 
   void setWebError(String tabId, String? error) {
-    _updateTabById(tabId, (tab) => tab.copyWith(webError: error ?? clearWebError));
+    _updateTabById(tabId, (tab) => tab.copyWith(webError: error));
   }
 
   void updateActiveTabCanGoBack(bool canGoBack) {
-    if (state.tabs.isEmpty) return;
-    if (state.tabs[state.activeIndex].canGoBack == canGoBack) return;
+    if (state.tabOrder.isEmpty) return;
+    final activeTab = state.tabs[state.tabOrder[state.activeIndex]]!;
+    if (activeTab.canGoBack == canGoBack) return;
     _updateActiveTab((tab) => tab.copyWith(canGoBack: canGoBack));
+  }
+
+  /// Both nav flags in one write, so the toolbar's enabled state settles in a
+  /// single rebuild instead of two. Same-value guard covers the common case
+  /// where neither changed across a navigation.
+  void updateActiveTabNavState(bool canGoBack, bool canGoForward) {
+    if (state.tabOrder.isEmpty) return;
+    final activeTab = state.tabs[state.tabOrder[state.activeIndex]]!;
+    if (activeTab.canGoBack == canGoBack &&
+        activeTab.canGoForward == canGoForward) {
+      return;
+    }
+    _updateActiveTab(
+      (tab) => tab.copyWith(canGoBack: canGoBack, canGoForward: canGoForward),
+    );
   }
   
   void updateCanGoBack(String tabId, bool canGoBack) {
-    final idx = state.tabs.indexWhere((t) => t.id == tabId);
-    if (idx != -1) {
-      final oldTab = state.tabs[idx];
-      if (oldTab.canGoBack == canGoBack) return; // avoid rebuilds if no change
-      
-      final updatedTab = oldTab.copyWith(canGoBack: canGoBack);
-      final newTabs = List<BrowserTab>.from(state.tabs)..[idx] = updatedTab;
-      state = TabsState(tabs: newTabs, activeIndex: state.activeIndex);
-    }
+    if (!state.tabs.containsKey(tabId)) return;
+    final oldTab = state.tabs[tabId]!;
+    if (oldTab.canGoBack == canGoBack) return;
+    _updateTabById(tabId, (tab) => tab.copyWith(canGoBack: canGoBack));
   }
 
   void updateTitle(String newTitle) {
-    if (state.tabs.isEmpty) return;
-    if (state.tabs[state.activeIndex].title == newTitle) return;
+    if (state.tabOrder.isEmpty) return;
+    final activeTab = state.tabs[state.tabOrder[state.activeIndex]]!;
+    if (activeTab.title == newTitle) return;
     _updateActiveTab((tab) => tab.copyWith(title: newTitle), debounce: true);
   }
 
   void updateTitleForTab(String tabId, String newTitle) {
-    final index = state.tabs.indexWhere((tab) => tab.id == tabId);
-    if (index == -1 || state.tabs[index].title == newTitle) return;
+    final targetTab = state.tabs[tabId];
+    if (targetTab == null || targetTab.title == newTitle) return;
     _updateTabById(tabId, (tab) => tab.copyWith(title: newTitle), debounce: true);
   }
 
-  // This resets the persistent tabs to a single blank tab
   void nuke() {
     if (_snapshotService != null) {
-      for (final tab in state.tabs) {
-        _snapshotService!.deleteSnapshot(tab.id);
+      for (final tabId in state.tabOrder) {
+        _snapshotService.deleteSnapshot(tabId);
       }
     }
-    final newTabs = [BrowserTab()];
-    state = TabsState(tabs: newTabs, activeIndex: 0);
+    final seed = BrowserTab();
+    state = NormalizedTabsState(tabOrder: [seed.id], tabs: {seed.id: seed}, activeIndex: 0);
     unawaited(_saveToPrefs());
   }
 
   void _updateActiveTab(BrowserTab Function(BrowserTab) updater, {bool debounce = false}) {
-    final currentTabs = [...state.tabs];
-    final activeTab = currentTabs[state.activeIndex];
-    currentTabs[state.activeIndex] = updater(activeTab);
-    state = TabsState(tabs: currentTabs, activeIndex: state.activeIndex);
-    debounce ? _scheduleSave() : unawaited(_saveToPrefs());
+    if (state.tabOrder.isEmpty) return;
+    final activeId = state.tabOrder[state.activeIndex];
+    _updateTabById(activeId, updater, debounce: debounce);
   }
 
-  void _updateTabById(
-    String tabId,
-    BrowserTab Function(BrowserTab) updater, {
-    bool debounce = false,
-  }) {
-    final index = state.tabs.indexWhere((tab) => tab.id == tabId);
-    if (index == -1) return;
-
-    final currentTabs = [...state.tabs];
-    currentTabs[index] = updater(currentTabs[index]);
-    state = TabsState(tabs: currentTabs, activeIndex: state.activeIndex);
+  void _updateTabById(String tabId, BrowserTab Function(BrowserTab) updater, {bool debounce = false}) {
+    if (!state.tabs.containsKey(tabId)) return;
+    final newMap = Map<String, BrowserTab>.from(state.tabs);
+    newMap[tabId] = updater(newMap[tabId]!);
+    state = state.copyWith(tabs: newMap);
     debounce ? _scheduleSave() : unawaited(_saveToPrefs());
   }
 }
 
-// --- 3. THE PROVIDER ---
-final tabsProvider = StateNotifierProvider<TabsNotifier, TabsState>((ref) {
+final tabsProvider = StateNotifierProvider<TabsNotifier, NormalizedTabsState>((ref) {
   final prefsService = ref.watch(preferencesServiceProvider);
   final snapshotService = ref.watch(snapshotServiceProvider);
   return TabsNotifier(prefsService, snapshotService: snapshotService);
 });
 
-// --- 4. HELPER ---
 final activeUrlProvider = Provider<String>((ref) {
-  // safeActiveTab avoids a StateError crash during the transient empty-tabs
-  // window (e.g. mid-nuke before the blank tab is added).
-  return ref.watch(
-    tabsProvider.select((s) => s.safeActiveTab?.url ?? ''),
-  );
+  return ref.watch(tabsProvider.select((s) => s.safeActiveTab?.url ?? ''));
 });
+
+final specificTabProvider = Provider.family<BrowserTab?, String>((ref, id) {
+  return ref.watch(tabsProvider.select((s) => s.tabs[id]));
+});
+
+final currentActiveTabProvider = Provider<BrowserTab?>((ref) {
+  return ref.watch(tabsProvider.select((s) => s.safeActiveTab));
+});
+
+final tabCountProvider = Provider<int>((ref) {
+  return ref.watch(tabsProvider.select((s) => s.tabOrder.length));
+});
+
+

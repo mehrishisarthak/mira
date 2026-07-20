@@ -1,8 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mira/core/notifiers/ghost_notifier.dart';
-import 'package:mira/core/notifiers/tab_notifier.dart';
-import 'package:mira/core/services/browser_engine_blueprints.dart';
+import 'package:qyx/core/notifiers/ghost_notifier.dart';
+import 'package:qyx/core/notifiers/tab_notifier.dart';
+import 'package:qyx/core/services/browser_engine_blueprints.dart';
 
 /// Single source of truth for the active tab's BrowserEngine: engine handle,
 /// top-level load progress (0–100), and main-frame error text.
@@ -102,13 +102,27 @@ final activeTabIdProvider = Provider<String>((ref) {
 
 final desktopFindBarVisibleProvider = StateProvider<bool>((ref) => false);
 
+/// True while the ACTIVE tab's page is in HTML5 Fullscreen (a page's own
+/// `requestFullscreen()`, e.g. a YouTube video's fullscreen button) — not our
+/// zoom controls. Desktop hides the sidebar/toolbar/window-controls and
+/// requests real OS-level fullscreen while this is true; see mainscreen.dart.
+final isDesktopFullscreenProvider = StateProvider<bool>((ref) => false);
+
 /// Screenshot of a specific tab's webview, captured when a Flutter overlay (the
-/// tab sheet) opens over the live page. While set, [BrowserView] Offstages that
-/// tab's live Hybrid-Composition surface and paints this image instead —
-/// dropping the platform-view from the composite so the overlay animates
-/// without the HC tax, while keeping the native view alive (no reload on
-/// restore). Scoped by [tabId] so switching tabs from the sheet shows the new
-/// tab live, not this stale screenshot. Null = show the live webview.
+/// tab sheet) opens over the live page. While set, [BrowserView] paints this
+/// image *over* that tab's live Hybrid-Composition surface, so the overlay
+/// animates against a cheap Flutter texture instead of the page.
+///
+/// NOTE: the surface underneath is still mounted and still composited every
+/// frame — Flutter does not occlusion-cull an opaque-covered platform view, so
+/// the HC tax is masked, not dropped. Dropping it needs an `Offstage` around
+/// the live child; that is tracked as **O-81** and is gated on a `--profile`
+/// trace. `pauseRendering()` at the call site stops frame *production*, which
+/// is a different saving. Do not read this doc as claiming the layer leaves
+/// the composite.
+///
+/// Scoped by [tabId] so switching tabs from the sheet shows the new tab live,
+/// not this stale screenshot. Null = show the live webview.
 @immutable
 class WebViewSnapshot {
   const WebViewSnapshot({required this.tabId, required this.bytes});

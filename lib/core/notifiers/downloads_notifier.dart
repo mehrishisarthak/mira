@@ -5,9 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
-import 'package:mira/core/entities/download_entity.dart';
-import 'package:mira/core/services/download_service.dart';
-import 'package:mira/core/services/isar_database_repository.dart';
+import 'package:qyx/core/entities/download_entity.dart';
+import 'package:qyx/core/services/download_service.dart';
+import 'package:qyx/core/services/isar_database_repository.dart';
 
 class DownloadsNotifier extends StateNotifier<List<MiraDownloadTask>> {
   final DownloadService _service;

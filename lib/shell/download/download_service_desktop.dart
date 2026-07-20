@@ -5,9 +5,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
-import 'package:mira/core/entities/download_entity.dart';
-import 'package:mira/core/services/isar_database_repository.dart';
-import 'package:mira/core/services/download_service.dart';
+import 'package:qyx/core/entities/download_entity.dart';
+import 'package:qyx/core/services/isar_database_repository.dart';
+import 'package:qyx/core/services/download_service.dart';
 
 class _DesktopTransfer {
   _DesktopTransfer({required this.url, required this.savePath, this.headers});
@@ -39,6 +39,15 @@ class DesktopDownloadService implements DownloadService {
 
   void _removeActive(String taskId) {
     _active.remove(taskId);
+  }
+
+  static String _formatBytes(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    if (bytes < 1024 * 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
+    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
   }
 
   Future<void> _abortTransfer(
@@ -236,7 +245,7 @@ class DesktopDownloadService implements DownloadService {
       request.followRedirects = false;
       request.headers.set(
         HttpHeaders.userAgentHeader,
-        'Mozilla/5.0 (compatible; MIRABrowser/1.0)',
+        'Mozilla/5.0 (compatible; QyxBrowser/1.0)',
       );
 
       // FIXED: Inject the authentication headers if they exist
@@ -276,6 +285,8 @@ class DesktopDownloadService implements DownloadService {
       }
 
       final totalBytes = response.contentLength;
+      var lastPublishedPct = -1;
+      var lastPublishedBytes = 0;
       int receivedBytes = 0;
 
       final file = File(t.savePath);
@@ -312,7 +323,25 @@ class DesktopDownloadService implements DownloadService {
         if (totalBytes > 0) {
           final pct =
               ((receivedBytes / totalBytes) * 100).round().clamp(0, 100);
-          onTaskUpdated(taskId, (x) => x.copyWith(progress: pct));
+          // Only publish on a whole-percent change. Chunks arrive every few KB,
+          // and each update copies the whole task list and schedules a catalog
+          // persist — the same throttling rationale as O-70 on the engine
+          // bridge.
+          if (pct != lastPublishedPct) {
+            lastPublishedPct = pct;
+            onTaskUpdated(taskId, (x) => x.copyWith(progress: pct));
+          }
+        } else if (receivedBytes - lastPublishedBytes >= 262144) {
+          // No Content-Length (chunked transfer): a percentage is genuinely
+          // unknowable, so the row would sit at "0%" for the whole download.
+          // Publish bytes-received every 256 KB instead, which is what the user
+          // actually wants to see. The UI already renders an indeterminate bar
+          // while progress is 0.
+          lastPublishedBytes = receivedBytes;
+          onTaskUpdated(
+            taskId,
+            (x) => x.copyWith(fileSizeString: _formatBytes(receivedBytes)),
+          );
         }
       }
 

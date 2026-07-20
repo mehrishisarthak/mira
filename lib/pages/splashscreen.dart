@@ -3,21 +3,37 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:mira/constants/app_fonts.dart';
+import 'package:qyx/constants/app_fonts.dart';
+import 'package:qyx/core/ui/qyx_mark.dart';
 import 'package:http/http.dart' as http;
 
-import 'package:mira/core/entities/theme_entity.dart';
-import 'package:mira/core/services/update_service.dart';
-import 'package:mira/core/services/database_providers.dart';
-import 'package:mira/core/services/snapshot_service.dart';
-import 'package:mira/shell/browser/in_app_webview_engine.dart';
-import 'package:mira/pages/update_screen.dart';
+import 'package:qyx/core/entities/theme_entity.dart';
+import 'package:qyx/core/services/update_service.dart';
+import 'package:qyx/core/services/browser_engine_blueprints.dart';
+import 'package:qyx/core/services/database_providers.dart';
+import 'package:qyx/core/services/snapshot_service.dart';
+import 'package:qyx/shell/browser/in_app_webview_engine.dart';
+import 'package:qyx/pages/update_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   final Widget nextScreen;
   final http.Client? httpClient;
 
-  const SplashScreen({super.key, required this.nextScreen, this.httpClient});
+  /// Builds the engine pre-warmed during the splash animation (O-48).
+  ///
+  /// Injectable for the same reason [httpClient] is: the default constructs a
+  /// real [InAppWebViewEngine], which throws under `flutter_test` because no
+  /// `InAppWebViewPlatform` implementation is registered — that took the whole
+  /// splash build down with it (O-88). Tests pass `() => null`, which the
+  /// null-guard in [build] already handles.
+  final BrowserEngine? Function()? preWarmEngineFactory;
+
+  const SplashScreen({
+    super.key,
+    required this.nextScreen,
+    this.httpClient,
+    this.preWarmEngineFactory,
+  });
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();
@@ -45,7 +61,7 @@ class _SplashScreenState extends State<SplashScreen>
   Widget? _destination;
   bool _navigating = false;
 
-  static const List<String> _letters = ['M', 'I', 'R', 'A'];
+  static const List<String> _letters = ['Q', 'Y', 'X'];
   static const Color _accent = Colors.greenAccent;
 
   @override
@@ -55,7 +71,9 @@ class _SplashScreenState extends State<SplashScreen>
     unawaited(SnapshotService.clearStaleSnapshots());
     
     // Pre-warm the WebView engine during splash
-    globalPreWarmedEngine = InAppWebViewEngine(isPrivate: false);
+    globalPreWarmedEngine = widget.preWarmEngineFactory != null
+        ? widget.preWarmEngineFactory!()
+        : InAppWebViewEngine(isPrivate: false);
 
     _buildAnimations();
     _runAnimation();
@@ -64,7 +82,7 @@ class _SplashScreenState extends State<SplashScreen>
 
   void _buildAnimations() {
     _letterCtrls = List.generate(
-      4,
+      _letters.length,
       (_) => AnimationController(
         vsync: this,
         duration: const Duration(milliseconds: 260),
@@ -114,13 +132,13 @@ class _SplashScreenState extends State<SplashScreen>
     if (!mounted) return;
 
     // Staggered letter reveal — each letter slides up and fades in
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < _letters.length; i++) {
       unawaited(_letterCtrls[i].forward());
       await Future.delayed(const Duration(milliseconds: 80));
     }
 
     // Wait for the last letter to fully land
-    await _letterCtrls[3].forward(from: _letterCtrls[3].value);
+    await _letterCtrls.last.forward(from: _letterCtrls.last.value);
     await Future.delayed(const Duration(milliseconds: 55));
     if (!mounted) return;
 
@@ -203,6 +221,15 @@ class _SplashScreenState extends State<SplashScreen>
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
+                // ── MARK ──────────────────────────────────────────────────────
+                // Rides the first letter's fade so it leads the wordmark in.
+                FadeTransition(
+                  opacity: _letterFade.first,
+                  child: QyxMark(size: 56, color: _accent),
+                ),
+
+                const SizedBox(height: 26),
+
                 // ── WORDMARK ──────────────────────────────────────────────────
                 Stack(
                   alignment: Alignment.center,
@@ -211,7 +238,7 @@ class _SplashScreenState extends State<SplashScreen>
                     // Letters
                     Row(
                       mainAxisSize: MainAxisSize.min,
-                      children: List.generate(4, _buildLetter),
+                      children: List.generate(_letters.length, _buildLetter),
                     ),
                     // Scan line rendered on top via CustomPaint
                     Positioned.fill(

@@ -1,14 +1,14 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
-import 'package:mira/core/services/browser_engine_blueprints.dart'; // BrowserEngine, BrowserEngineConfig, AdBlockRule
-import 'package:mira/core/config/desktop_user_agent.dart';
-import 'package:mira/core/app_globals.dart';
+import 'package:qyx/core/services/browser_engine_blueprints.dart'; // BrowserEngine, BrowserEngineConfig, AdBlockRule
+import 'package:qyx/core/config/desktop_user_agent.dart';
+import 'package:qyx/core/ui/qyx_toast.dart';
 import 'package:flutter/gestures.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:qyx/shell/browser/desktop_pointer_bridge.dart';
 
 /// The concrete implementation of [BrowserEngine] using the flutter_inappwebview plugin.
 class InAppWebViewEngine implements BrowserEngine {
@@ -24,6 +24,24 @@ class InAppWebViewEngine implements BrowserEngine {
   InAppWebViewController? _controller;
   final bool _isPrivate;
   final GlobalKey _webViewKey = GlobalKey();
+
+  // Mobile only (see buildWidget): pull-down-to-refresh. Built once per
+  // engine, not per build, since InAppWebView requires the same controller
+  // instance across rebuilds to keep the gesture wired to this webview.
+  late final PullToRefreshController? _pullToRefreshController =
+      (!kIsWeb && (Platform.isAndroid || Platform.isIOS))
+          ? PullToRefreshController(
+              settings: PullToRefreshSettings(
+                // Matches the app's tactical-green default accent
+                // (MiraStyle.tacticalGreen); the indicator can't reach the
+                // user's live theme since it's native chrome constructed once,
+                // not a rebuildable widget.
+                color: const Color(0xFF69F0AE),
+                backgroundColor: const Color(0xFF282828),
+              ),
+              onRefresh: () => _controller?.reload(),
+            )
+          : null;
 
   // Mutable permission flags — updated live via updateSettings()
   bool _isCameraBlocked = true;
@@ -255,6 +273,11 @@ class InAppWebViewEngine implements BrowserEngine {
     await CookieManager.instance().deleteAllCookies();
   }
 
+  @override
+  Future<void> clearCache() async {
+    await _controller?.clearCache();
+  }
+
   // --- Zoom Capabilities ---
 
   @override
@@ -288,6 +311,9 @@ class InAppWebViewEngine implements BrowserEngine {
     }
   }
 
+  static final bool _isDesktop =
+      !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
+
   @override
   Widget buildWidget({required String tabId, String? initialUrl}) {
     // Prevent double-load: if the pending URL matches what initialUrlRequest will load,
@@ -297,8 +323,9 @@ class InAppWebViewEngine implements BrowserEngine {
       _pendingHeaders = null;
     }
 
-    return InAppWebView(
+    final webView = InAppWebView(
       key: _webViewKey,
+      pullToRefreshController: _pullToRefreshController,
       initialUrlRequest: (initialUrl != null && initialUrl.isNotEmpty)
           ? URLRequest(url: WebUri(initialUrl))
           : null,
@@ -343,14 +370,20 @@ class InAppWebViewEngine implements BrowserEngine {
         // custom app schemes (market://, whatsapp://, etc.)
         return NavigationActionPolicy.CANCEL;
       },
-      gestureRecognizers: <Factory<OneSequenceGestureRecognizer>>{
-        Factory<VerticalDragGestureRecognizer>(
-          () => VerticalDragGestureRecognizer(),
-        ),
-        Factory<HorizontalDragGestureRecognizer>(
-          () => HorizontalDragGestureRecognizer(),
-        ),
-      },
+      // Mobile only (O-61): these exist to let the native view win touch
+      // drags against Flutter's gesture arena. Desktop input is pointer /
+      // pan-zoom, not touch drags, so claiming the arena there only competes
+      // with the pointer stream DesktopPointerBridge needs.
+      gestureRecognizers: _isDesktop
+          ? const <Factory<OneSequenceGestureRecognizer>>{}
+          : <Factory<OneSequenceGestureRecognizer>>{
+              Factory<VerticalDragGestureRecognizer>(
+                () => VerticalDragGestureRecognizer(),
+              ),
+              Factory<HorizontalDragGestureRecognizer>(
+                () => HorizontalDragGestureRecognizer(),
+              ),
+            },
       onWebViewCreated: (controller) {
         setController(controller);
       },
@@ -364,11 +397,10 @@ class InAppWebViewEngine implements BrowserEngine {
           final host = request.origin.host;
           if (!_alertedDomains.contains(host)) {
             _alertedDomains.add(host);
-            scaffoldMessengerKey.currentState?.showSnackBar(
-              const SnackBar(
-                content: Text('Camera/Mic access blocked by Privacy Shields.'),
-                duration: Duration(seconds: 2),
-              ),
+            showQyxNotice(
+              'Camera/Mic access blocked by Privacy Shields.',
+              kind: QyxToastKind.error,
+              duration: const Duration(seconds: 2),
             );
           }
           return PermissionResponse(
@@ -387,11 +419,10 @@ class InAppWebViewEngine implements BrowserEngine {
           final host = Uri.tryParse(origin)?.host ?? origin;
           if (!_alertedDomains.contains(host)) {
             _alertedDomains.add(host);
-            scaffoldMessengerKey.currentState?.showSnackBar(
-              const SnackBar(
-                content: Text('Location access blocked by Privacy Shields.'),
-                duration: Duration(seconds: 2),
-              ),
+            showQyxNotice(
+              'Location access blocked by Privacy Shields.',
+              kind: QyxToastKind.error,
+              duration: const Duration(seconds: 2),
             );
           }
         }
@@ -423,6 +454,37 @@ class InAppWebViewEngine implements BrowserEngine {
       onDownloadStartRequest: (controller, request) {
         handleDownloadRequest(request);
       },
+      // A page's own HTML5 Fullscreen API call (e.g. a YouTube video's
+      // fullscreen button), not our own zoomIn/zoomOut. WebView2 grows to fill
+      // its Flutter parent, but nothing told the app chrome around it to get
+      // out of the way — the sidebar, toolbar, and window controls all kept
+      // rendering over/around the "fullscreen" video.
+      onEnterFullscreen: (controller) {
+        if (!_isDesktop) return;
+        _eventController.add(const BrowserPageEvent(
+          type: BrowserPageEventType.fullscreenChanged,
+          isFullscreen: true,
+        ));
+      },
+      onExitFullscreen: (controller) {
+        if (!_isDesktop) return;
+        _eventController.add(const BrowserPageEvent(
+          type: BrowserPageEventType.fullscreenChanged,
+          isFullscreen: false,
+        ));
+      },
+    );
+
+    if (!_isDesktop) return webView;
+
+    // Desktop trackpads emit PointerPanZoom events, which WebView2 via this
+    // plugin ignores entirely — so a trackpad does nothing while a mouse wheel
+    // works. Upstream closed that as not-planned, so translate here (O-38).
+    return DesktopPointerBridge(
+      runJs: (source) async {
+        await _controller?.evaluateJavascript(source: source);
+      },
+      child: webView,
     );
   }
 
@@ -451,6 +513,11 @@ class InAppWebViewEngine implements BrowserEngine {
   void handleLoadStop(WebUri? url) {
     _lastProgress = 100;
     _currentUrl = url?.toString();
+    // Stop the indicator even on a page that never triggered it (e.g. the
+    // active tab reloaded from elsewhere) — endRefreshing() is a no-op if
+    // nothing was spinning, but a load finishing with no matching call would
+    // otherwise leave a user-triggered pull spinner stuck forever.
+    unawaited(_pullToRefreshController?.endRefreshing());
     _eventController.add(BrowserPageEvent(
       type: BrowserPageEventType.loadStop,
       url: url?.toString(),
@@ -478,6 +545,9 @@ class InAppWebViewEngine implements BrowserEngine {
   }
 
   void handleReceivedError(WebResourceRequest request, WebResourceError error) {
+    // A pull-triggered refresh that fails still needs its spinner stopped —
+    // handleLoadStop won't fire for a failed main-frame load.
+    unawaited(_pullToRefreshController?.endRefreshing());
     // Default ambiguous (null) frame to non-main: a blocked-ad/subframe error
     // should not trigger the full-screen error page, especially with ad-block on.
     if (request.isForMainFrame ?? false) {
@@ -506,3 +576,5 @@ class InAppWebViewEngine implements BrowserEngine {
     ));
   }
 }
+
+

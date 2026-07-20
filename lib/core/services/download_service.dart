@@ -1,4 +1,4 @@
-import 'package:mira/core/entities/download_entity.dart';
+import 'package:qyx/core/entities/download_entity.dart';
 
 abstract class DownloadService {
   /// Starts a new download. 

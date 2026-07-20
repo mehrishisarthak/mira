@@ -1,11 +1,11 @@
-# MERIS — Issue Tracker
+# Qyx — Issue Tracker
 
 > **Living document.** Single source of truth for known issues, fixes, and
 > dismissed findings. Supersedes and replaces the prior scattered audit files
 > (`audit_report.md`, `definitive_audit_report.md`, `MERIS_DEFINITIVE_AUDIT.md`,
 > `ISSUES_AUDIT.md`, `FULL_CODEBASE_VALIDATOR_REPORT.md`), all now deleted.
 >
-> **Last updated:** 2026-06-30
+> **Last updated:** 2026-07-20
 > **Legend:** 🔴 high · 🟠 medium · 🟡 low · ⚪ info/cosmetic · ✅ done · ❌ rejected
 
 ---
@@ -30,7 +30,6 @@ UI-shell rendering pass focused on the Flutter↔native WebView bridge.
 |----|----|-------|----------|-------|
 | O-43 | 🟠❔ | **INCONCLUSIVE — likely NOT EXERCISED, must re-run.** Test B showed no jank, but the resize path only runs if a **heavy page was loaded** during the capture, and the evidence suggests it wasn't. **Do not reject yet; do not build the fix yet.** | `Test_B_Performance.json`, `AndroidManifest.xml:32` | **Evidence (Test B, 54 frames):** 0 build-janky, 1/54 raster-janky, **raster p50 4.1 ms** — vs **10–13 ms** in both webview-present traces. That low raster baseline implies the active `InAppWebView` was **not compositing** during the test (start page / no page), so the keyboard-resize-over-live-HC path was never triggered. **Re-run: load a heavy page, THEN focus the omnibox**, and confirm page state via logcat. Only then confirm-or-reject. |
 | O-46 | 🟠 | **Edge-swipe back vs web horizontal scroll + predictive back.** `PopScope(canPop:false)` consumes the Android system back gesture for app/page nav; on Android 13+ the back gesture is an **edge swipe** that collides with horizontal scroll/carousels at the screen edge inside the page. With `targetSdk 35` (R-02) the predictive-back animation is also suppressed by `canPop:false`. Mobile gesture. | `mainscreen.dart:396-401`, `_handlePop` | Audit on-device with a horizontally-scrollable page. Consider predictive-back-aware `PopScope` once on SDK 35; evaluate gesture-exclusion at edges. |
-| O-44 | 🟡 | **No `RepaintBoundary` around the active platform-view webview.** Best-practice isolation is missing, but the marginal win is **small** here: an Android HC webview is already its own `PlatformViewLayer`, and the mobile progress/skeleton/chrome are in sibling subtrees (separate Column branches), so cross-repaint is mostly already bounded. Honest low. | `browser_view.dart:95-102` | Wrap each `Positioned.fill` webview child in `RepaintBoundary` only if a profile trace shows the Stack's other children (skeleton overlay, ghost flash) repainting on page paint. Don't add speculatively. |
 | O-45 | ⚪ | **DEPRIORITIZED by profile.** Mainscreen shell full-rebuilds on active-tab url/title tick — residual after D-29. Profiling shows **build time is not the bottleneck** (p50 ~0.9 ms; jank is raster/platform-view-bound), so this is now a micro-cleanup, not a perf fix — and it isn't the safe one-liner first thought: desktop's address field reads `activeTab.url` in 5 places and both bars need `activeTab.title` for bookmark callbacks. | `mainscreen.dart:327`, `currentActiveTabProvider` | Only worth doing as hygiene: `select((t) => t.url)` + read `title` fresh in the bookmark callbacks. No measurable frame win expected. |
 
 #### State-management & rebuild audit (2026-07-09)
@@ -40,6 +39,74 @@ Riverpod rebuild-scope audit focused on high-frequency state cascades from nativ
 |----|----|-------|----------|-------|
 | O-65 | 🟡 | **`buildMobileBottomBar` / `buildDesktopToolbar` are functions, not widgets — no rebuild isolation.** Called from `Mainscreen.build()`, they don't create separate `Element` boundaries. Every Mainscreen rebuild reconstructs the entire bar widget tree. | `mobile_main_app_bar.dart:16`, `desktop_browser_chrome.dart:39` | Fix: Convert to `ConsumerWidget` classes. |
 | O-74 | 🟡 | **`_DesktopAddressBar` stores `BuildContext` and `WidgetRef` as widget fields.** Anti-pattern — the context can become stale if the parent rebuilds. Should be a `ConsumerStatefulWidget`. | `desktop_browser_chrome.dart:237-238` | Fix: Refactor to `ConsumerStatefulWidget` with its own `ref`. |
+
+#### Council / graphify raster & platform-view audit (2026-07-18)
+Four-persona audit remainder, cross-validated against the `lib/` knowledge graph.
+The **rebuild-scope half (O-79/O-80) is CLOSED** and **O-82 is CLOSED** (both in
+DONE) — the remainder are raster / native-layer findings. O-81 is
+**[NEEDS PROFILING]**: we believe it is a raster-thread bottleneck, but **do not
+touch the code until a baseline `--profile` trace on a physical Android device
+proves the delta** (per the perf caveat at the top of this section). O-83/O-84
+are standard polish — no deep profiling required; pick them up on a
+UI-optimization run.
+
+| ID | Sev | Issue | Location | Notes |
+|----|----|-------|----------|-------|
+| O-81 | 🟠 **[NEEDS PROFILING]** | **Snapshot-swap does not `Offstage` the live webview.** On sheet-open / omnibox-focus, `Image.memory` is layered *over* a still-mounted Hybrid-Composition surface, so D-32's "drop the surface out of the composite" is **not** achieved — only `pauseRendering()` stops frame *production*; the `PlatformViewLayer` is still composited every frame (Flutter does not occlusion-cull an opaque-covered platform view). | `browser_view.dart:127-131` (live-view Stack), D-32 | **Do not build the fix until a baseline `--profile` trace proves the raster delta.** Then: `Offstage(offstage: snapshotBytes != null, child: engine.buildWidget())` so the layer leaves the composite while staying alive. |
+| O-83 | 🟡 | **`canGoBack()` IPC round-trip on every loadStart/loadStop/updateVisitedHistory.** Each async native hop then mutates `tabsProvider`; multiplies on SPA / redirect-heavy pages. No deep profiling needed. | `browser_side_effects.dart:29-39` | Coalesce to `loadStop` only, or gate the write behind an earlier same-value check. UI-optimization-run fodder. |
+| O-84 | 🟡 | **`_GhostModeFlash` uses `Opacity` over the live surface.** `saveLayer` on every frame of the 550 ms flash, compositing a full-screen layer over the desktop WebView2 surface. One-shot, desktop-only. No profiling needed. | `mainscreen.dart:614` (`_GhostModeFlash`) | Animate a `ColoredBox` alpha via `Color.withValues(alpha:)`; drop the `Opacity` wrapper. |
+
+#### Council / graphify dual-mode-stack raster pass (2026-07-19)
+Post-`5f159bd` audit. Graph was current (no rebuild). **O-44 closed as stale.**
+Rebuild-scope layer re-verified clean — no new state findings.
+
+| ID | Sev | Issue | Location | Notes |
+|----|----|-------|----------|-------|
+| O-87 | 🟠 | **`onTabsClosed` evicted the *other* mode's awake tabs.** `_mruSet` is global across both pools (dual-mode stack, `5f159bd`), but both listeners passed only their own pool's *surviving* ids while the method retained by `!contains`. Closing one normal tab tore down every live ghost webview → incognito session reloads and **loses state**. Latent before the dual-mode overhaul (only one pool mounted). | `hibernation_notifier.dart:27`, `browser_side_effects.dart:173,192` | **FIXED.** Method now takes `closedTabIds` + `removeAll`; both call sites already computed `closedIds`. Regression test added — old test only passed single-pool sets, which is why it never caught this. |
+| O-85 | ❌ | **OVERSTATED — WITHDRAWN.** Claimed the snapshot-swap `Image.memory` needed a `cacheWidth` like every other snapshot site (**O-47**). It does not: those sites cap one *persistent thumbnail per tab*, whereas this is a **single transient full-bleed image**, cleared on sheet close, against Flutter's 100 MB default image cache. ~10 MB for ~1 s is not the O-47 OOM scenario — the finding pattern-matched the shape of the fix without checking the risk transferred. **Mis-sized twice:** first framed as a UI-thread decode stall (Flutter decodes off-thread — wrong mechanism), then "fixed" with a logical-width bound that decoded at ~360 px and upscaled 3× to full screen — **visibly blurry during the tab-sheet fade**, caught on device. Reverted; a comment at the call site now records why this site is deliberately unbounded. | `browser_view.dart:136` | **REVERTED.** Lesson: a guardrail that holds for N persistent images does not automatically hold for 1 transient one — check the risk, not the pattern. |
+| O-86 | 🟡 | **`WebViewSnapshot` doc claimed `BrowserView` Offstages the HC surface.** It does not — the image layers over a still-composited surface. Likely why O-81 survived review. | `browser_chrome_providers.dart:105` | **FIXED (doc).** Rewritten to state the surface is masked, not dropped, with an explicit pointer to O-81 and the `pauseRendering()` distinction. |
+
+**Closed by this pass:**
+
+| ID | Resolution |
+|----|-----------|
+| O-44 | **STALE — CLOSED.** `browser_view.dart:129` now wraps the live engine in `RepaintBoundary`, added incidentally during the `5f159bd` dual-mode overhaul. Issue text no longer matches code. |
+
+**O-81 addendum:** confirmed still open at `browser_view.dart:133-141`. The fix is
+already the in-file pattern — the outer `Visibility(maintainState: true)` at
+line 126 is the offstage-but-alive mechanism, applied one level inward. Remains
+**[NEEDS PROFILING]**: do not build until a physical-device `--profile` trace
+proves the raster delta.
+
+**Verified non-findings (checked, no action):**
+- Dual-mode stack does **not** double raster cost. `Visibility(visible:false,
+  maintainState:true)` → `Offstage` → laid out but not painted, so the inactive
+  mode's HC surface does leave the composite.
+- State/rebuild layer clean post-O-79/O-80/O-82: `tabsSignature` structural
+  watch, `.select((m) => m[tab.id])` hibernated scoping, and the
+  `transitionActive` guard on the async `takeSnapshot()` all hold.
+
+#### Council / graphify post-fullscreen-fix pass (2026-07-20)
+Delta review of `b460fe2` (desktop fullscreen/drag/sidebar) and `446b731`
+(mobile pull-to-refresh) — the two commits since the 2026-07-19 pass.
+Rendering pipeline clean: O-44/O-81 status unchanged, no new HC-compositing
+cost introduced. Rebuild-scope layer clean — `isDesktopFullscreenProvider`
+does not leak into mobile rebuilds (`isDesktop &&` short-circuit holds).
+Both fixes below applied and verified (`flutter analyze` 4 pre-existing;
+`flutter test` 34/34 green); the widget-tree fix (O-89) still needs a live
+Windows build to confirm the hit-test claim itself, per the standing
+desktop-runtime-verification convention.
+
+| ID | Sev | Issue | Location | Notes |
+|----|----|-------|----------|-------|
+| O-89 | ✅ | **Sidebar outside-click-to-collapse barrier covered the toolbar, not just the content area.** While `desktopSidebarExpandedProvider` was true, a `Positioned.fill` barrier in the outer `Stack` sat above the toolbar (address bar, nav buttons, window min/max/close) and below the sidebar's own 240px band. First click on those controls collapsed the sidebar and was consumed, not forwarded — needed a second click. Desktop-only preview (O-39); self-corrected. | `mainscreen.dart:588` (pre-fix) | **FIXED.** Moved the barrier from the outer `Stack` into the content-scoped inner `Stack` (the one already confined to `Expanded`, below the toolbar `Column` entry) — no new constants, sidebar's fixed-gutter `Padding` pattern (`b3ecb8e`) untouched. **Needs live-build confirmation** — this was reasoned from the widget tree, not exercised on the .exe. |
+| O-90 | ✅ | **`onEnterFullscreen`/`onExitFullscreen` wired before the desktop early-return, so mobile fullscreen video also wrote the desktop-named `isDesktopFullscreenProvider` and fired `desktopSetFullScreen()`.** Confirmed **not** a rebuild leak (Mainscreen's `isDesktop &&` watch short-circuits on mobile, so nothing subscribes) and **not** a crash (`desktopSetFullScreen` is `Platform.is*`-guarded in `desktop_windowing_io.dart`). Cosmetic: one no-op async call + one provider write per mobile fullscreen toggle. | `in_app_webview_engine.dart:462-473` | **FIXED.** Added `if (!_isDesktop) return;` to both callback bodies — same gating idiom already used for `gestureRecognizers` and the `DesktopPointerBridge` wrap in this file (`a4b3dd3`), just extended to the two callbacks `b460fe2` missed. |
+
+#### Test suite (2026-07-19)
+
+| ID | Sev | Issue | Location | Notes |
+|----|----|-------|----------|-------|
+| O-88 | ✅ | **FIXED — `app_startup_smoke_test` had 3 failing tests; the suite was NOT green.** D-28's "25/25 green" was stale. `SplashScreen.initState` constructed `InAppWebViewEngine` directly for the O-48 pre-warm, which throws `A platform implementation for flutter_inappwebview has not been set` under `flutter_test`, taking the whole splash build down — so every wordmark/branding assertion found nothing. Verified pre-existing at both `64e0819` and `79d9eab`: **not** caused by the Qyx rename or the logo work. Found only because a *full* `flutter test` was finally run instead of the five suites the branch had been gating on. | `splashscreen.dart`, `test/app_startup_smoke_test.dart` | **FIXED:** added an optional `preWarmEngineFactory` injection seam, mirroring the existing `httpClient` one; tests pass `() => null`, which the pre-existing null-guard in `build()` already handled. Production path unchanged. **Suite now 30/30 green.** |
 
 ### Memory / Lifecycle
 | ID | Sev | Issue | Location | Notes |
@@ -51,8 +118,8 @@ Riverpod rebuild-scope audit focused on high-frequency state cascades from nativ
 |----|----|-------|----------|-------|
 | O-17 | 🟡 | Desktop "resume"/"retry" deletes the partial and restarts from byte 0 (no HTTP `Range`). | `download_service_desktop.dart:127-130` | Rename to "restart" or implement range-resume. Desktop. |
 | O-36 | 🟠 | **Desktop: address bar can't be focused/clicked once a page is loaded.** Loaded+unfocused renders the domain as `Text`+`GestureDetector`; tapping `requestFocus()`s the field but native WebView2 retains OS keyboard focus, so it never becomes editable. *(found in runtime pass — Windows)* | `desktop_browser_chrome.dart:234` | Likely `flutter_inappwebview_windows` limitation (see O-39). Force OS focus back to the Flutter view on tap; needs on-Windows iteration. |
-| O-37 | 🟠 | **Desktop: back/forward buttons do nothing.** MERIS calls the correct API (`engine.goBack()/goForward()` → `_controller?.goBack()/goForward()`); the no-op is in the Windows webview backend. *(runtime pass — Windows)* | `desktop_browser_chrome.dart:67-80` | See O-39. Optionally gate buttons on `canGoBack/canGoForward` for an honest disabled state. |
-| O-38 | 🟠 | **Desktop: trackpad scroll & pinch-zoom don't reach the page.** Standard `InAppWebView`, no gesture suppression in MERIS; trackpad gestures aren't forwarded to the native WebView2. *(runtime pass — Windows)* | `in_app_webview_engine.dart:292` | See O-39. Investigate gesture forwarding / `gestureRecognizers`; may be upstream. |
+| O-37 | 🟠 | **Desktop: back/forward buttons do nothing.** Qyx calls the correct API (`engine.goBack()/goForward()` → `_controller?.goBack()/goForward()`); the no-op is in the Windows webview backend. *(runtime pass — Windows)* | `desktop_browser_chrome.dart:67-80` | See O-39. Optionally gate buttons on `canGoBack/canGoForward` for an honest disabled state. |
+| O-38 | 🟠 | **Desktop: trackpad scroll & pinch-zoom don't reach the page.** Standard `InAppWebView`, no gesture suppression in Qyx; trackpad gestures aren't forwarded to the native WebView2. *(runtime pass — Windows)* | `in_app_webview_engine.dart:292` | See O-39. Investigate gesture forwarding / `gestureRecognizers`; may be upstream. |
 | O-39 | 🔴 | **Root cause: `flutter_inappwebview_windows` is materially incomplete** vs Android/iOS — proven by the boot-time `MissingPluginException` for `getDefaultUserAgent`. O-36/37/38 are symptoms. **Desktop is a tech-preview gated by this plugin; Android/iOS is the mature path.** | — (dependency) | **DECIDED (2026-06-22): defer.** Build a **custom desktop engine API** — our own bindings to a real browser engine (e.g. CEF/Chromium), *not* an existing plugin — behind the existing `BrowserEngine` abstraction. **Sequencing: only AFTER the Android stable build is live on the Play Store.** Until then desktop stays a preview and O-36/37/38 are accepted preview limitations. |
 
 ### Code health / Cleanup
@@ -163,6 +230,26 @@ fixes add zero features; these are the second leg of the path. Severity here =
 | O-76 | **O-76**: Converted the eager `ListView` in `desktop_sidebar.dart` to a true lazy `ListView.builder` utilizing a list of dynamic closures instead of complex index math. This drastically cuts layout overhead for power users with 20+ tabs. |
 | O-77 | **O-77**: Tracked `_lastDomain` in the `_DesktopAddressBar` and guarded `setState` within `_onControllerChange`, preventing wasted DOM repaints when the URL updates behind an unfocused address bar. |
 
+### Merged to `master` — 2026-07-18 rebuild-audit re-close (D-29 regression)
+Surfaced by a graphify AST pass: `tabsProvider` is the single most-connected node
+in the `lib/` knowledge graph (39 edges), so its watch-scoping is load-bearing for
+the whole reactive tree. The `5f159bd` dual-mode-stack overhaul had silently
+reverted **D-29** — both build roots watched `tabsProvider` unscoped again. Traced
+the crossfire in-graph (only 2 of 39 referencing sites were actual unscoped
+`watch`; Sidebar/ProgressBar/Skeleton were already `.select`-scoped), re-closed,
+and verified (`flutter analyze` clean; `browser_navigation_smoke` + `tab_reorder`
++ `browser_history_recording` all green).
+
+| ID | Item (issue → approach taken) |
+|----|-------------------------------|
+| O-79 | **Mainscreen watched `tabsProvider` unscoped (×2).** Swapped `ref.watch(tabsProvider).safeActiveTab` → `currentActiveTabProvider` and `.tabOrder.length` → `tabCountProvider` — value-identical, narrower rebuild trigger (background-tab mutations no longer rebuild the shell/omnibox). `mainscreen.dart`. |
+| O-80 | **BrowserView watched `tabsProvider` + `ghostTabsProvider` unscoped.** Restored the D-29 structural-signature pattern, adapted to the dual-mode stack + per-tab `webError`: `.select` an `(activeIndex \| per-tab id:url-empty:webError)` signature on both providers, then `ref.read` the full state for the build. url/title/canGoBack ticks during load no longer rebuild the platform-view `Stack`. `browser_view.dart`. |
+
+### Merged to `master` — 2026-07-19 O-82 close (snapshot service deleted)
+| ID | Item (issue → approach taken) |
+|----|-------------------------------|
+| O-82 | **`preemptiveSnapshotProvider` inert + latent rebuild bomb → DELETED, not rewritten.** Review found the wanted event-driven capture *already exists*: `tabSnapshotCacheProvider` is populated on tab-loses-focus (`mainscreen.dart:370` switch listener) and Tab-Grid tap (`mobile_main_app_bar.dart:179`), both masked by animation, and it's the same cache the Tab Grid reads (`tab_screen.dart:287`). The only defect was that `HibernatedTabPlaceholder` read a **different, never-fed** provider. **Approach:** deleted `preemptive_snapshot_service.dart` entirely (the 15 s timer, the unhandled `try/catch`, the redundant store), and repointed `browser_view.dart`'s hibernated branch to `tabSnapshotCacheProvider.select((m) => m[tab.id])`. Fixes the functional gap (hibernated tabs now show the real captured thumbnail) **and** the rebuild bomb (scoped read) in one line, unifies grid + hibernated thumbnails to one source of truth, and adds **zero** new `takeScreenshot()` calls — so the [NEEDS PROFILING] concern is moot (no new GPU readback to profile). Verified: `flutter analyze` clean; `browser_navigation_smoke` + `tab_reorder` + `ghost_mode_isolation` + `nuke_data` green. |
+
 ### Merged to `master` — 2026-06-30 perf / lifecycle pass
 Found in the platform-view audit (mobile-first). Approaches recorded for each.
 
@@ -203,7 +290,7 @@ Found in the platform-view audit (mobile-first). Approaches recorded for each.
 |----|-------------------------------|
 | O-03 / R-03 | **O-03 / R-03**: Resolved excessive Android storage permissions. Configured `flutter_downloader` to use `saveInPublicStorage: true` for Android 10+ (using MediaStore), and capped `WRITE_EXTERNAL_STORAGE` to `maxSdkVersion="28"`. Users can find their files without the app demanding broad storage permissions. |
 | O-56 | **O-56**: Handled permission blindspots for downloads. Configured downloads to silently fall back and continue seamlessly even if the user denies notification permissions, preventing broken UX. |
-| O-33 | **O-33**: Resolved the bloated `mira_drawer.dart` by implementing a dedicated, dual-pane `SettingsScreen` (native Flutter overlay). Migrated Theme, Search Engine, and Privacy settings out of the drawer. |
+| O-33 | **O-33**: Deleted `settings_screen.dart` entirely. Consolidated Theme, Search Engine, and Privacy settings back into an Opera GX-style, high-performance responsive `mira_drawer.dart` utilizing `LayoutBuilder` for desktop/mobile fluid layout. |
 | D-36 | **Download UI Performance**: Implemented `cacheWidth: 100` trick for image thumbnails in the `DownloadsScreen` `ListView.builder`, keeping the list buttery smooth without memory overhead. |
 | D-37 | **Downloads Orphan Trap**: Plugged the `savePage` storage leak. Offline HTML pages bypassing the download manager are now manually tracked and deleted during a "Clear History (with files)" operation. |
 | D-38 | **Native DB Lock Guardrail**: `flutter_downloader` `remove()` calls are now chunked in batches of 25 during `clearHistory` to prevent DDOS-ing the native SQLite lock queue. |

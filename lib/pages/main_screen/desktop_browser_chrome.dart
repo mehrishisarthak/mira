@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mira/constants/app_fonts.dart';
+import 'package:qyx/constants/app_fonts.dart';
 import 'package:window_manager/window_manager.dart';
 
-import 'package:mira/core/entities/tab_entity.dart';
-import 'package:mira/core/notifiers/bookmarks_notifier.dart';
-import 'package:mira/pages/browser_chrome_providers.dart';
-import 'package:mira/pages/mira_drawer.dart';
-import 'package:mira/pages/main_screen/browser_progress_bar.dart';
-import 'package:mira/pages/main_screen/main_screen_security.dart';
+import 'package:qyx/core/entities/tab_entity.dart';
+import 'package:qyx/core/notifiers/bookmarks_notifier.dart';
+import 'package:qyx/pages/browser_chrome_providers.dart';
+import 'package:qyx/pages/mira_drawer.dart';
+import 'package:qyx/pages/main_screen/browser_progress_bar.dart';
+import 'package:qyx/pages/main_screen/main_screen_security.dart';
 
 Future<void> showDesktopMiraMenuPopup(BuildContext context) async {
   await showDialog<void>(
@@ -63,21 +63,49 @@ Widget buildDesktopToolbar({
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          child: Row(
+          // The native title bar is hidden (TitleBarStyle.hidden), and nothing
+          // ever made this custom one draggable — the window could only be
+          // moved via OS-level Win+drag or a taskbar action, not by grabbing
+          // the toolbar the way every other app's title bar works.
+          //
+          // DragToMoveArea behind the Row, not wrapping it: it uses
+          // HitTestBehavior.translucent, so a real tap/drag that starts on a
+          // button or the address bar is still won by that widget's own
+          // recognizer (a Tap resolves before Pan's slop threshold is
+          // crossed) — only gestures starting on the toolbar's empty space
+          // (padding, the gaps between icons) fall through to it and move the
+          // window. Also gives a free double-click-to-maximize on that same
+          // empty space, matching a normal title bar.
+          child: Stack(
             children: [
-              IconButton(
-                icon: Icon(Icons.arrow_back, color: contentColor, size: 20),
+              const Positioned.fill(child: DragToMoveArea(child: SizedBox.expand())),
+              Row(
+            children: [
+              _NavButton(
+                icon: Icons.arrow_back,
                 tooltip: 'Back',
-                onPressed: hasWebView
-                    ? () => ref.read(browserChromeProvider).engine?.goBack()
-                    : null,
+                contentColor: contentColor,
+                // Gated on real history, not just "a webview exists", so the
+                // greyed state actually means "nowhere to go".
+                enabled: hasWebView && activeTab.canGoBack,
+                onPressed: () =>
+                    ref.read(browserChromeProvider).engine?.goBack(),
               ),
-              IconButton(
-                icon: Icon(Icons.arrow_forward, color: contentColor, size: 20),
+              _NavButton(
+                icon: Icons.arrow_forward,
                 tooltip: 'Forward',
-                onPressed: hasWebView
-                    ? () => ref.read(browserChromeProvider).engine?.goForward()
-                    : null,
+                contentColor: contentColor,
+                enabled: hasWebView && activeTab.canGoForward,
+                onPressed: () =>
+                    ref.read(browserChromeProvider).engine?.goForward(),
+              ),
+              _NavButton(
+                icon: Icons.refresh,
+                tooltip: 'Reload',
+                contentColor: contentColor,
+                enabled: hasWebView,
+                onPressed: () =>
+                    ref.read(browserChromeProvider).engine?.reload(),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -111,6 +139,8 @@ Widget buildDesktopToolbar({
               // The native title bar is hidden (TitleBarStyle.hidden in main.dart),
               // so the window has no min/max/close affordance without these.
               _WindowControls(color: contentColor),
+            ],
+              ),
             ],
           ),
         ),
@@ -346,11 +376,28 @@ class _DesktopAddressBarState extends State<_DesktopAddressBar> {
             child: showDomain
                 ? GestureDetector(
                     onTap: () {
-                      widget.urlFocusNode.requestFocus();
-                      widget.urlController.selection = TextSelection(
-                        baseOffset: 0,
-                        extentOffset: widget.urlController.text.length,
-                      );
+                      // Mount the TextField BEFORE asking for focus.
+                      //
+                      // While showDomain is true the TextField is not in the
+                      // tree at all, so urlFocusNode has no attachment and
+                      // requestFocus() silently does nothing. _hasFocus then
+                      // never flips, showDomain stays true, and the field can
+                      // never be reached — the bar is permanently uneditable
+                      // once a page has loaded (O-36).
+                      //
+                      // Flipping _hasFocus ourselves builds the TextField this
+                      // frame; the focus request goes in a post-frame callback
+                      // so the node has something to attach to by the time it
+                      // runs.
+                      setState(() => _hasFocus = true);
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (!mounted) return;
+                        widget.urlFocusNode.requestFocus();
+                        widget.urlController.selection = TextSelection(
+                          baseOffset: 0,
+                          extentOffset: widget.urlController.text.length,
+                        );
+                      });
                     },
                     child: Text(
                       _domain,
@@ -405,6 +452,71 @@ class _DesktopAddressBarState extends State<_DesktopAddressBar> {
                       widget.activeTab.url, widget.activeTab.title),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// Toolbar icon button with a real disabled state and a pointer hover cue.
+///
+/// Material's IconButton does highlight on hover, but at this icon size against
+/// the dark chrome the default overlay is close to invisible — the toolbar read
+/// as inert. This draws an explicit hover pill and dims the icon when disabled,
+/// so "greyed" reliably means "no history in that direction".
+class _NavButton extends StatefulWidget {
+  const _NavButton({
+    required this.icon,
+    required this.tooltip,
+    required this.contentColor,
+    required this.enabled,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final Color contentColor;
+  final bool enabled;
+  final VoidCallback onPressed;
+
+  @override
+  State<_NavButton> createState() => _NavButtonState();
+}
+
+class _NavButtonState extends State<_NavButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = widget.enabled;
+    return Tooltip(
+      message: widget.tooltip,
+      waitDuration: const Duration(milliseconds: 500),
+      child: MouseRegion(
+        cursor: active ? SystemMouseCursors.click : SystemMouseCursors.basic,
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: GestureDetector(
+          onTap: active ? widget.onPressed : null,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            width: 34,
+            height: 34,
+            margin: const EdgeInsets.symmetric(horizontal: 2),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: (_hovered && active)
+                  ? widget.contentColor.withValues(alpha: 0.10)
+                  : Colors.transparent,
+            ),
+            child: Icon(
+              widget.icon,
+              size: 20,
+              color: active
+                  ? widget.contentColor
+                  : widget.contentColor.withValues(alpha: 0.28),
+            ),
+          ),
+        ),
       ),
     );
   }

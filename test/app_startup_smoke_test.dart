@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mira/main.dart';
-import 'package:mira/core/services/preferences_service.dart';
-import 'package:mira/pages/splashscreen.dart';
+import 'package:qyx/main.dart';
+import 'package:qyx/core/services/preferences_service.dart';
+import 'package:qyx/pages/splashscreen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:http/http.dart' as http;
@@ -70,6 +70,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: SplashScreen(
+          preWarmEngineFactory: () => null,
           httpClient: mockClient,
           nextScreen: const Scaffold(
             body: Center(child: Text('Startup Target Screen')),
@@ -79,8 +80,8 @@ void main() {
     );
 
     // Splash renders the wordmark as individual animated letters.
-    expect(find.text('M'), findsOneWidget);
-    expect(find.text('R'), findsOneWidget);
+    expect(find.text('Q'), findsOneWidget);
+    expect(find.text('X'), findsOneWidget);
 
     await _drainSplash(tester);
 
@@ -100,6 +101,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: SplashScreen(
+          preWarmEngineFactory: () => null,
           httpClient: mockClient,
           nextScreen: const Scaffold(
             body: Center(child: Text('Startup Target Screen')),
@@ -111,7 +113,7 @@ void main() {
     await _drainSplash(tester);
 
     expect(find.text('REQUIRED UPDATE'), findsOneWidget);
-    expect(find.text('UPDATE MIRA'), findsOneWidget);
+    expect(find.text('UPDATE QYX'), findsOneWidget);
   });
 
   testWidgets('app shell boots and shows splash branding', (tester) async {
@@ -127,6 +129,7 @@ void main() {
         child: MyApp(
           httpClient: mockClient,
           home: SplashScreen(
+          preWarmEngineFactory: () => null,
             httpClient: mockClient,
             nextScreen:
                 const Scaffold(body: Center(child: Text('Target Screen'))),
@@ -136,8 +139,8 @@ void main() {
     );
 
     // Splash renders the wordmark as individual animated letters.
-    expect(find.text('M'), findsOneWidget);
-    expect(find.text('R'), findsOneWidget);
+    expect(find.text('Q'), findsOneWidget);
+    expect(find.text('X'), findsOneWidget);
 
     await _drainSplash(tester);
   });
